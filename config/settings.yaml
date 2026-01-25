@@ -1,5 +1,11 @@
 # claude-shogun 設定ファイル
 
+# 言語設定
+# ja: 日本語（戦国風日本語のみ、併記なし）
+# en: 英語（戦国風日本語 + 英訳併記）
+# その他の言語コード（es, zh, ko, fr, de 等）も対応
+language: ja
+
 # スキル設定
 skill:
   # スキル保存先（生成されたスキルはここに保存）
@@ -7,12 +13,6 @@ skill:
 
   # ローカルスキル保存先（このプロジェクト専用）
   local_path: "~/claude-shogun/skills/"
-
-# ポーリング間隔（秒）
-polling_interval:
-  shogun: 10
-  karo: 5
-  ashigaru: 5
 
 # ログ設定
 logging:

@@ -1,5 +1,5 @@
-worker_id: ashigaru4
+worker_id: null
 task_id: null
-timestamp: ""
+timestamp: null
 status: idle
 result: null

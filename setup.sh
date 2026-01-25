@@ -134,6 +134,7 @@ echo ""
 log_war "👑 将軍の本陣を構築中..."
 tmux new-session -d -s shogun
 tmux send-keys -t shogun "cd $(pwd) && export PS1='(\[\033[1;35m\]将軍\[\033[0m\]) \[\033[1;32m\]\w\[\033[0m\]\$ ' && clear" Enter
+tmux select-pane -t shogun:0.0 -P 'bg=#002b36'  # 将軍の Solarized Dark
 
 log_success "  └─ 将軍の本陣、構築完了"
 echo ""

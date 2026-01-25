@@ -3,3 +3,13 @@ claude-shogun-orders.md
 
 # Claude Code settings
 .claude/
+
+# Test outputs (generated during testing)
+test_output/
+
+# Generated skills (local development)
+skills/
+
+# Temporary files
+*.tmp
+*.bak
