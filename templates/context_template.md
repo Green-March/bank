@@ -1,31 +1,38 @@
-# {project_id}
+# {request_id}
 最終更新: YYYY-MM-DD
 
-## What（これは何か）
-{1-2文で説明}
+## What
+- 分析対象: {ticker or universe}
+- 分析種別: {earnings_review / valuation / peer_comparison / event_driven}
 
-## Why（なぜやるのか）
+## Why
 - 目的:
-- 成功の定義:
+- 成功条件:
 
-## Who（誰が関係するか）
-- 責任者:
-- 関係者:
+## Scope
+- 期間: {例: 過去5年 + 直近四半期}
+- 対象市場: {TSE Prime / Standard / Growth}
+- 除外条件:
 
-## Constraints（制約は何か）
-- 期限:
-- 予算:
-- その他:
+## Data Sources
+- EDINET:
+- J-Quants:
+- Price Source:
+- Other:
 
-## Current State（今どこにいるか）
+## Constraints
+- 納期:
+- 使用可能データ:
+- 禁止事項:
+
+## Current State
 - ステータス: {未着手/進行中/レビュー中/完了}
-- 進捗:
 - 次のアクション:
 - ブロッカー:
 
-## Decisions（決まったこと）
-| 日付 | 決定事項 | 理由 |
-|------|----------|------|
+## Key Decisions
+| 日付 | 決定 | 理由 |
+|------|------|------|
 
-## Notes（メモ・気づき）
-{自由記述}
+## Notes
+-

@@ -1,0 +1,1 @@
+# disclosure-collector scripts package

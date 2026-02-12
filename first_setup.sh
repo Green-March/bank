@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# first_setup.sh - multi-agent-shogun 初回セットアップスクリプト
+# first_setup.sh - BANK 初回セットアップスクリプト
 # Ubuntu / WSL / Mac 用環境構築ツール
 # ============================================================
 # 実行方法:
@@ -50,7 +50,7 @@ HAS_ERROR=false
 
 echo ""
 echo "  ╔══════════════════════════════════════════════════════════════╗"
-echo "  ║  🏯 multi-agent-shogun インストーラー                         ║"
+echo "  ║  BANK インストーラー                               ║"
 echo "  ║     Initial Setup Script for Ubuntu / WSL                    ║"
 echo "  ╚══════════════════════════════════════════════════════════════╝"
 echo ""
@@ -326,6 +326,24 @@ else
 fi
 
 # ============================================================
+# STEP 5.5: Codex CLI チェック
+# ============================================================
+log_step "STEP 5.5: Codex CLI チェック"
+
+if command -v codex &> /dev/null; then
+    CODEX_VERSION=$(codex --version 2>/dev/null || echo "unknown")
+    log_success "Codex CLI がインストール済みです"
+    log_info "バージョン: $CODEX_VERSION"
+    RESULTS+=("Codex CLI: OK")
+else
+    log_warn "Codex CLI がインストールされていません"
+    echo ""
+    echo "  Codex CLI をインストールして PATH に通してください。"
+    RESULTS+=("Codex CLI: 未インストール")
+    HAS_ERROR=true
+fi
+
+# ============================================================
 # STEP 6: ディレクトリ構造作成
 # ============================================================
 log_step "STEP 6: ディレクトリ構造作成"
@@ -334,6 +352,7 @@ log_step "STEP 6: ディレクトリ構造作成"
 DIRECTORIES=(
     "queue/tasks"
     "queue/reports"
+    "queue/review"
     "config"
     "status"
     "instructions"
@@ -374,28 +393,27 @@ log_step "STEP 7: 設定ファイル確認"
 if [ ! -f "$SCRIPT_DIR/config/settings.yaml" ]; then
     log_info "config/settings.yaml を作成中..."
     cat > "$SCRIPT_DIR/config/settings.yaml" << EOF
-# multi-agent-shogun 設定ファイル
+# BANK settings
 
-# 言語設定
-# ja: 日本語（戦国風日本語のみ、併記なし）
-# en: 英語（戦国風日本語 + 英訳併記）
-# その他の言語コード（es, zh, ko, fr, de 等）も対応
+# Language
+# ja: Japanese
+# en: English
 language: ja
 
-# シェル設定
-# bash: bash用プロンプト（デフォルト）
-# zsh: zsh用プロンプト
+# Shell
+# bash: bash prompt
+# zsh: zsh prompt
 shell: bash
 
-# スキル設定
+# Skill settings
 skill:
-  # スキル保存先（スキル名に shogun- プレフィックスを付けて保存）
+  # Global skill path
   save_path: "~/.claude/skills/"
 
-  # ローカルスキル保存先（このプロジェクト専用）
+  # Local skill path (project-specific)
   local_path: "$SCRIPT_DIR/skills/"
 
-# ログ設定
+# Logging
 logging:
   level: info  # debug | info | warn | error
   path: "$SCRIPT_DIR/logs/"
@@ -423,6 +441,89 @@ else
     log_info "config/projects.yaml は既に存在します"
 fi
 
+# config/target.yaml
+if [ ! -f "$SCRIPT_DIR/config/target.yaml" ]; then
+    log_info "config/target.yaml を作成中..."
+    cat > "$SCRIPT_DIR/config/target.yaml" << 'EOF'
+workspace:
+  path: "/path/to/your/workspace"
+EOF
+    log_success "target.yaml を作成しました"
+else
+    log_info "config/target.yaml は既に存在します"
+fi
+
+# config/permissions.yaml
+if [ ! -f "$SCRIPT_DIR/config/permissions.yaml" ]; then
+    log_info "config/permissions.yaml を作成中..."
+    cat > "$SCRIPT_DIR/config/permissions.yaml" << 'EOF'
+# BANK permissions policy
+
+allowed:
+  read_commands:
+    - ls
+    - rg
+    - cat
+    - sed -n
+    - find
+    - head
+    - tail
+    - awk
+    - jq
+    - tmux list-panes
+    - tmux capture-pane
+  edit_tools:
+    - apply_patch
+  exec_commands:
+    - python3
+    - pytest
+    - tmux send-keys
+    - ./go.sh
+    - ./first_setup.sh
+    - pip install -e
+    - pip install -r
+    - curl
+  network:
+    mode: allowlist
+    allowed_domains:
+      - disclosure.edinet-fsa.go.jp
+      - api.jquants.com
+      - www.jpx.co.jp
+      - api.jpx-jquants.com
+
+denied:
+  destructive:
+    - rm -rf
+    - git reset --hard
+    - git checkout --
+
+write_scope:
+  allowed_paths:
+    - /tmp
+    - ./queue
+    - ./dashboard.md
+    - ./config
+    - ./memory
+    - ./logs
+    - ./README.md
+    - ./README_ja.md
+    - ./CLAUDE.md
+    - ./instructions
+    - ./templates
+    - ./go.sh
+    - ./first_setup.sh
+    - ./setup.sh
+    - ./install.bat
+    - ./skills
+    - ./data
+    - ./projects
+    - ./.env.example
+EOF
+    log_success "permissions.yaml を作成しました"
+else
+    log_info "config/permissions.yaml は既に存在します"
+fi
+
 # memory/global_context.md（システム全体のコンテキスト）
 if [ ! -f "$SCRIPT_DIR/memory/global_context.md" ]; then
     log_info "memory/global_context.md を作成中..."
@@ -431,7 +532,7 @@ if [ ! -f "$SCRIPT_DIR/memory/global_context.md" ]; then
 最終更新: (未設定)
 
 ## システム方針
-- (殿の好み・方針をここに記載)
+- (ユーザーの好み・方針をここに記載)
 
 ## プロジェクト横断の決定事項
 - (複数プロジェクトに影響する決定をここに記載)
@@ -447,42 +548,87 @@ fi
 RESULTS+=("設定ファイル: OK")
 
 # ============================================================
-# STEP 8: 足軽用タスク・レポートファイル初期化
+# STEP 8: Junior用タスク・レポートファイル初期化
 # ============================================================
 log_step "STEP 8: キューファイル初期化"
 
-# 足軽用タスクファイル作成
-for i in {1..8}; do
-    TASK_FILE="$SCRIPT_DIR/queue/tasks/ashigaru${i}.yaml"
+# Junior用タスクファイル作成
+for i in {1..3}; do
+    TASK_FILE="$SCRIPT_DIR/queue/tasks/junior${i}.yaml"
     if [ ! -f "$TASK_FILE" ]; then
         cat > "$TASK_FILE" << EOF
-# 足軽${i}専用タスクファイル
+# Junior ${i} task file
 task:
   task_id: null
   parent_cmd: null
   description: null
-  target_path: null
+  ticker: null
+  universe: null
+  analysis_type: null
+  timeframe: null
+  output_path: null
+  priority: medium
   status: idle
   timestamp: ""
 EOF
     fi
 done
-log_info "足軽タスクファイル (1-8) を確認/作成しました"
+log_info "Juniorタスクファイル (1-3) を確認/作成しました"
 
-# 足軽用レポートファイル作成
-for i in {1..8}; do
-    REPORT_FILE="$SCRIPT_DIR/queue/reports/ashigaru${i}_report.yaml"
+# Junior用レポートファイル作成
+for i in {1..3}; do
+    REPORT_FILE="$SCRIPT_DIR/queue/reports/junior${i}_report.yaml"
     if [ ! -f "$REPORT_FILE" ]; then
         cat > "$REPORT_FILE" << EOF
-worker_id: ashigaru${i}
+worker_id: junior${i}
 task_id: null
+ticker: null
+analysis_type: null
 timestamp: ""
 status: idle
 result: null
+quality_check_required: true
 EOF
     fi
 done
-log_info "足軽レポートファイル (1-8) を確認/作成しました"
+log_info "Juniorレポートファイル (1-3) を確認/作成しました"
+
+# Manager → Senior queue
+COMMAND_QUEUE="$SCRIPT_DIR/queue/paper_to_senior.yaml"
+if [ ! -f "$COMMAND_QUEUE" ]; then
+    cat > "$COMMAND_QUEUE" << EOF
+queue: []
+EOF
+fi
+
+# Review queue files
+REVIEW_DIR="$SCRIPT_DIR/queue/review"
+mkdir -p "$REVIEW_DIR"
+
+if [ ! -f "$REVIEW_DIR/junior_to_reviewer.yaml" ]; then
+    cat > "$REVIEW_DIR/junior_to_reviewer.yaml" << EOF
+review_request: null
+review_followup: null
+EOF
+fi
+
+if [ ! -f "$REVIEW_DIR/reviewer_to_junior.yaml" ]; then
+    cat > "$REVIEW_DIR/reviewer_to_junior.yaml" << EOF
+review_response: null
+EOF
+fi
+
+if [ ! -f "$REVIEW_DIR/senior_to_reviewer.yaml" ]; then
+    cat > "$REVIEW_DIR/senior_to_reviewer.yaml" << EOF
+plan_review_request: null
+EOF
+fi
+
+if [ ! -f "$REVIEW_DIR/reviewer_to_senior.yaml" ]; then
+    cat > "$REVIEW_DIR/reviewer_to_senior.yaml" << EOF
+plan_review_response: null
+EOF
+fi
 
 RESULTS+=("キューファイル: OK")
 
@@ -493,7 +639,7 @@ log_step "STEP 9: 実行権限設定"
 
 SCRIPTS=(
     "setup.sh"
-    "shutsujin_departure.sh"
+    "go.sh"
     "first_setup.sh"
 )
 
@@ -517,47 +663,47 @@ BASHRC_FILE="$HOME/.bashrc"
 # aliasが既に存在するかチェックし、なければ追加
 ALIAS_ADDED=false
 
-# css alias (将軍ウィンドウの起動)
+# cba alias (multiagentセッションの起動)
 if [ -f "$BASHRC_FILE" ]; then
-    EXPECTED_CSS="alias css='tmux attach-session -t shogun'"
-    if ! grep -q "alias css=" "$BASHRC_FILE" 2>/dev/null; then
+    EXPECTED_CSS="alias cba='tmux attach-session -t multiagent'"
+    if ! grep -q "alias cba=" "$BASHRC_FILE" 2>/dev/null; then
         # alias が存在しない → 新規追加
         echo "" >> "$BASHRC_FILE"
-        echo "# multi-agent-shogun aliases (added by first_setup.sh)" >> "$BASHRC_FILE"
+        echo "# BANK aliases (added by first_setup.sh)" >> "$BASHRC_FILE"
         echo "$EXPECTED_CSS" >> "$BASHRC_FILE"
-        log_info "alias css を追加しました（将軍ウィンドウの起動）"
+        log_info "alias cba を追加しました（multiagentセッションの起動）"
         ALIAS_ADDED=true
     elif ! grep -qF "$EXPECTED_CSS" "$BASHRC_FILE" 2>/dev/null; then
         # alias は存在するがパスが異なる → 更新
-        if sed -i "s|alias css=.*|$EXPECTED_CSS|" "$BASHRC_FILE" 2>/dev/null; then
-            log_info "alias css を更新しました（パス変更検出）"
+        if sed -i "s|alias cba=.*|$EXPECTED_CSS|" "$BASHRC_FILE" 2>/dev/null; then
+            log_info "alias cba を更新しました（パス変更検出）"
         else
-            log_warn "alias css の更新に失敗しました"
+            log_warn "alias cba の更新に失敗しました"
         fi
         ALIAS_ADDED=true
     else
-        log_info "alias css は既に正しく設定されています"
+        log_info "alias cba は既に正しく設定されています"
     fi
 
-    # csm alias (家老・足軽ウィンドウの起動)
-    EXPECTED_CSM="alias csm='tmux attach-session -t multiagent'"
-    if ! grep -q "alias csm=" "$BASHRC_FILE" 2>/dev/null; then
+    # cbw alias (起動スクリプトの起動)
+    EXPECTED_CSM="alias cbw='cd $SCRIPT_DIR && ./go.sh'"
+    if ! grep -q "alias cbw=" "$BASHRC_FILE" 2>/dev/null; then
         if [ "$ALIAS_ADDED" = false ]; then
             echo "" >> "$BASHRC_FILE"
-            echo "# multi-agent-shogun aliases (added by first_setup.sh)" >> "$BASHRC_FILE"
+            echo "# BANK aliases (added by first_setup.sh)" >> "$BASHRC_FILE"
         fi
         echo "$EXPECTED_CSM" >> "$BASHRC_FILE"
-        log_info "alias csm を追加しました（家老・足軽ウィンドウの起動）"
+        log_info "alias cbw を追加しました（起動スクリプトの起動）"
         ALIAS_ADDED=true
     elif ! grep -qF "$EXPECTED_CSM" "$BASHRC_FILE" 2>/dev/null; then
-        if sed -i "s|alias csm=.*|$EXPECTED_CSM|" "$BASHRC_FILE" 2>/dev/null; then
-            log_info "alias csm を更新しました（パス変更検出）"
+        if sed -i "s|alias cbw=.*|$EXPECTED_CSM|" "$BASHRC_FILE" 2>/dev/null; then
+            log_info "alias cbw を更新しました（パス変更検出）"
         else
-            log_warn "alias csm の更新に失敗しました"
+            log_warn "alias cbw の更新に失敗しました"
         fi
         ALIAS_ADDED=true
     else
-        log_info "alias csm は既に正しく設定されています"
+        log_info "alias cbw は既に正しく設定されています"
     fi
 else
     log_warn "$BASHRC_FILE が見つかりません"
@@ -586,7 +732,7 @@ if command -v claude &> /dev/null; then
     else
         log_info "Memory MCP を設定中..."
         if claude mcp add memory \
-            -e MEMORY_FILE_PATH="$SCRIPT_DIR/memory/shogun_memory.jsonl" \
+            -e MEMORY_FILE_PATH="$SCRIPT_DIR/memory/bank_memory.jsonl" \
             -- npx -y @modelcontextprotocol/server-memory 2>/dev/null; then
             log_success "Memory MCP 設定完了"
             RESULTS+=("Memory MCP: 設定完了")
@@ -630,7 +776,7 @@ if [ "$HAS_ERROR" = true ]; then
     echo "  すべての依存関係が揃ったら、再度このスクリプトを実行して確認できます。"
 else
     echo "  ╔══════════════════════════════════════════════════════════════╗"
-    echo "  ║  ✅ セットアップ完了！準備万端でござる！                      ║"
+    echo "  ║  ✅ セットアップ完了！                                      ║"
     echo "  ╚══════════════════════════════════════════════════════════════╝"
 fi
 
@@ -639,21 +785,21 @@ echo "  ┌───────────────────────
 echo "  │  📜 次のステップ                                             │"
 echo "  └──────────────────────────────────────────────────────────────┘"
 echo ""
-echo "  出陣（全エージェント起動）:"
-echo "     ./shutsujin_departure.sh"
+echo "  起動（全エージェント起動）:"
+echo "     ./go.sh"
 echo ""
 echo "  オプション:"
-echo "     ./shutsujin_departure.sh -s            # セットアップのみ（Claude手動起動）"
-echo "     ./shutsujin_departure.sh -t            # Windows Terminalタブ展開"
-echo "     ./shutsujin_departure.sh -shell bash   # bash用プロンプトで起動"
-echo "     ./shutsujin_departure.sh -shell zsh    # zsh用プロンプトで起動"
+echo "     ./go.sh -s            # セットアップのみ（Claude手動起動）"
+echo "     ./go.sh -t            # Windows Terminalタブ展開"
+echo "     ./go.sh -shell bash   # bash用プロンプトで起動"
+echo "     ./go.sh -shell zsh    # zsh用プロンプトで起動"
 echo ""
 echo "  ※ シェル設定は config/settings.yaml の shell: でも変更可能です"
 echo ""
 echo "  詳細は README.md を参照してください。"
 echo ""
 echo "  ════════════════════════════════════════════════════════════════"
-echo "   天下布武！ (Tenka Fubu!)"
+echo "  Ready."
 echo "  ════════════════════════════════════════════════════════════════"
 echo ""
 

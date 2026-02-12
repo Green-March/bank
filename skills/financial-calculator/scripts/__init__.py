@@ -1,0 +1,2 @@
+"""financial-calculator scripts package."""
+

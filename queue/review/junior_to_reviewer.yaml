@@ -1,0 +1,32 @@
+review_request:
+  request_id: review_T5_20260212_001
+  task_id: req_20260212_001_T5
+  worker_id: junior1
+  task_type: documentation_update
+  summary: |
+    CLAUDE.md と instructions/senior.md に report 自動初期化ルールを追加。
+    req_20260211_002 T4 で3回発生した障害（レポート残留）の再発防止策。
+
+  deliverables:
+    - path: "CLAUDE.md"
+      description: "Notification obligations テーブルに Task assigned (prep) 行追加 + Report reset rule (mandatory) セクション追加"
+    - path: "instructions/senior.md"
+      description: "Report リセット手順（必須）セクション追加（3ステップ手順 + 障害事例参照）"
+
+  verification_by_senior:
+    claude_md_table_row: "行90: Task assigned (prep) | Senior | junior{N}_report | テンプレートリセット — 追加確認済み"
+    claude_md_section: "行92-106: Report reset rule (mandatory) セクション — テンプレート内容が go.sh 行154-163 と一致"
+    claude_md_placement: "Two-step send-keys (mandatory) の直前に配置 — マークダウン構造維持"
+    senior_md_section: "行152-157: Report リセット手順（必須）セクション — 3ステップ手順 + req_20260211_002 T4 障害参照"
+    template_consistency: "テンプレート8フィールド（worker_id, task_id, ticker, analysis_type, timestamp, status, result, quality_check_required）が go.sh と一致"
+    existing_content_preserved: "既存の内容に削除・変更なし（追記のみ）"
+
+  review_criteria:
+    - "CLAUDE.md に Report reset rule セクションが存在するか"
+    - "instructions/senior.md に Report リセット手順セクションが存在するか"
+    - "テンプレートが go.sh の行154-163 と一致するか"
+    - "既存の内容が保持されているか（追記のみ）"
+    - "Reviewer が障害再発防止策として妥当と判断するか"
+
+  full_report: "queue/reports/junior1_report.yaml（注: レポート未更新だが成果物は確認済み）"
+review_followup: null

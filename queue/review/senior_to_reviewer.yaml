@@ -1,0 +1,369 @@
+plan_review_request:
+  request_id: req_20260212_001
+  revision: 1
+  objective: "BANKインフラ改善5施策の順次実装。quality-gate, context-checkpoint, 共通スキーマ, pipeline-runner, report初期化ルール"
+  analysis_type: infrastructure_improvement
+  priority: high
+
+  background: |
+    req_20260211_001/002 で発生した3つの障害を根本的に解決し、
+    今後の分析パイプライン（収集→パース→指標計算→レポート生成）をスムーズにするためのインフラ整備:
+    1. 成果物検証の手動負担（Reviewer の機械的チェック）→ T1 quality-gate で自動化
+    2. エージェントの context compaction 後の作業継続困難 → T2 context-checkpoint で解決
+    3. スキル間の入出力契約が暗黙的 → T3 共通スキーマで明示化
+    4. 収集→パース→計算→レポートの手動チェーン → T4 pipeline-runner で自動化
+    5. Junior のレポート未更新障害（T4 で3回発生）→ T5 report 初期化ルールで再発防止
+
+  environment:
+    python: ">=3.11"
+    pydantic: "v2.6.1 (installed)"
+    existing_skills: ["disclosure-collector", "disclosure-parser", "financial-calculator", "financial-reporter", "pdf-reader", "excel-handler", "word-handler"]
+    src_current: "src/__init__.py のみ（空）"
+    skill_structure: "Anthropic Skills 準拠: SKILL.md (YAML frontmatter) + scripts/ + tests/"
+
+  dependencies: "T1 → T2 → T3 → T4 → T5（厳密な順次実行）"
+
+  workplan:
+    - id: T1
+      title: "skills/quality-gate/ スキル新規開発"
+      owner: junior1
+      action: "成果物の自動検証スキルを新規開発"
+      deliverables:
+        - "skills/quality-gate/SKILL.md"
+        - "skills/quality-gate/scripts/main.py"
+        - "skills/quality-gate/scripts/validators.py"
+        - "skills/quality-gate/references/default_gates.yaml"
+        - "skills/quality-gate/tests/test_validators.py"
+
+      design:
+        skill_md:
+          frontmatter: "name: quality-gate, description: 成果物の自動品質検証..."
+          instructions: "CLIツールとして acceptance_gates 定義YAML + データファイルを受け取り、PASS/FAIL判定結果JSONを出力"
+
+        main_py:
+          cli: "python3 scripts/main.py --gates <gates.yaml> --data-dir <dir> --output <gate_results.json>"
+          flow:
+            - "1. gates.yaml を読み込み（検証ルール定義）"
+            - "2. data-dir 内のファイルを検証対象として読み込み"
+            - "3. validators.py の各検証関数を実行"
+            - "4. 判定結果を gate_results.json に出力"
+
+        validators_py:
+          functions:
+            - "validate_json_schema(data, schema) → SchemaResult: JSON構造の検証"
+            - "validate_null_rate(data, threshold) → NullRateResult: null率チェック"
+            - "validate_value_range(data, rules) → RangeResult: 数値範囲チェック（負の資産総額等）"
+            - "validate_file_exists(paths) → FileResult: ファイル存在・サイズ確認"
+            - "validate_key_coverage(data, requirements) → CoverageResult: 科目カバレッジ"
+            - "run_all_gates(gates_config, data_dir) → GateResults: 全ゲート実行・集約"
+
+        default_gates_yaml:
+          description: "req_20260211_002 の acceptance_gates をYAML形式で定義（汎用テンプレート）"
+          structure: |
+            gates:
+              - id: key_coverage
+                type: key_coverage
+                params:
+                  bs: {keys: [total_assets, total_liabilities, total_equity], min_required: 2}
+                  pl: {keys: [revenue, operating_income, net_income], min_required: 2}
+                  cf: {keys: [operating_cf, investing_cf, financing_cf], min_required: 2}
+              - id: null_rate
+                type: null_rate
+                params: {threshold: 0.5}
+              - id: value_range
+                type: value_range
+                params:
+                  total_assets: {min: 0}
+                  revenue: {min: 0}
+              - id: file_check
+                type: file_exists
+                params:
+                  required_files: ["financials.json"]
+
+        gate_results_json:
+          structure: |
+            {
+              "timestamp": "...",
+              "gates_file": "...",
+              "data_dir": "...",
+              "overall_pass": true/false,
+              "gates": [
+                {"id": "key_coverage", "pass": true, "detail": {...}},
+                {"id": "null_rate", "pass": true, "detail": {...}},
+                ...
+              ]
+            }
+
+      tests:
+        - "test_validate_null_rate: 閾値超過/以下のケース"
+        - "test_validate_key_coverage: 全非null/部分null/全nullのケース"
+        - "test_validate_value_range: 正常値/異常値（負の資産）"
+        - "test_validate_file_exists: 存在/不在"
+        - "test_run_all_gates: default_gates.yaml + サンプルデータで統合テスト"
+        - "test_gate_results_json_format: 出力JSON構造の検証"
+
+      acceptance_criteria:
+        - "default_gates.yaml で req_20260211_002 の parsing_accuracy.json 相当の検証が再現可能"
+        - "全テスト PASS"
+        - "汎用設計（特定銘柄ハードコードなし）"
+
+    - id: T2
+      title: "skills/context-checkpoint/ スキル新規開発"
+      owner: junior2
+      action: "エージェントのコンテキスト引き継ぎスキルを新規開発"
+      depends_on: [T1]
+      deliverables:
+        - "skills/context-checkpoint/SKILL.md"
+        - "skills/context-checkpoint/scripts/main.py"
+        - "skills/context-checkpoint/tests/test_checkpoint.py"
+        - "memory/checkpoints/ ディレクトリ（初期作成）"
+
+      design:
+        skill_md:
+          frontmatter: "name: context-checkpoint, description: エージェントのコンテキスト引き継ぎ..."
+
+        main_py:
+          subcommands:
+            save: |
+              python3 scripts/main.py save --agent senior --task-id req_20260212_001_T1 \
+                --status completed --key-findings "quality-gate実装完了" \
+                --output-files "skills/quality-gate/" --next-steps "T2割り当て"
+              → memory/checkpoints/senior_req_20260212_001_T1.yaml に保存
+            load: |
+              python3 scripts/main.py load --agent senior --task-id req_20260212_001_T1
+              → 該当checkpoint内容を標準出力にYAMLで表示
+            list: |
+              python3 scripts/main.py list [--agent senior]
+              → memory/checkpoints/ 内のcheckpoint一覧を表示
+
+          checkpoint_schema:
+            fields:
+              - "task_id: str"
+              - "agent_id: str"
+              - "status: str (in_progress | completed | blocked)"
+              - "key_findings: list[str]"
+              - "output_files: list[str]"
+              - "next_steps: list[str]"
+              - "context_summary: str (optional, フリーテキスト)"
+              - "timestamp: str (ISO 8601)"
+
+      tests:
+        - "test_save_checkpoint: ファイル生成・内容確認"
+        - "test_load_checkpoint: 保存→読み込み往復"
+        - "test_list_checkpoints: 複数checkpoint一覧"
+        - "test_list_filter_by_agent: エージェント絞り込み"
+        - "test_overwrite_checkpoint: 同一task_id上書き"
+        - "test_missing_checkpoint: 存在しないcheckpoint読み込み時のエラー"
+
+      acceptance_criteria:
+        - "save/load/list の3サブコマンドが動作"
+        - "memory/checkpoints/ にYAMLが正常保存される"
+        - "全テスト PASS"
+
+    - id: T3
+      title: "src/schemas/ 共通スキーマ定義"
+      owner: junior1
+      action: "Pydantic v2 で共通スキーマを定義"
+      depends_on: [T2]
+      deliverables:
+        - "src/schemas/__init__.py"
+        - "src/schemas/financials.py"
+        - "src/schemas/documents.py"
+        - "src/schemas/review.py"
+        - "src/schemas/checkpoint.py"
+        - "src/schemas/tests/test_schemas.py"
+        - "pyproject.toml 更新（pydantic依存追加）"
+
+      design:
+        financials_py:
+          models:
+            - "BSData(BaseModel): total_assets, current_assets, total_liabilities, current_liabilities, total_equity, net_assets (all Optional[int])"
+            - "PLData(BaseModel): revenue, gross_profit, operating_income, ordinary_income, net_income (all Optional[int])"
+            - "CFData(BaseModel): operating_cf, investing_cf, financing_cf, free_cash_flow (all Optional[int])"
+            - "PeriodFinancial(BaseModel): period_end, period_start, period_type, fiscal_year, bs: BSData, pl: PLData, cf: CFData"
+            - "ParsedDocument(BaseModel): ticker, document_id, source_zip, company_name, periods: list[PeriodFinancial]"
+            - "FinancialsJson(BaseModel): ticker, generated_at, document_count, source_format, documents: list[ParsedDocument], period_index: list[PeriodFinancial], schema: dict"
+
+        documents_py:
+          models:
+            - "PdfMetadata(BaseModel): doc_id, source_pdf, period_start, period_end, extraction_pages, parser_version, extraction_method, unit_detected, unit_multiplier, strategy_used, concept_score"
+            - "DocumentMetadata(BaseModel): ticker, document_id, doc_type, filing_date, edinet_code (all Optional)"
+
+        review_py:
+          models:
+            - "GateResult(BaseModel): id, gate_type, passed: bool, detail: dict"
+            - "ReviewResult(BaseModel): verdict: Literal['ok', 'revise', 'reject'], comments: dict, suggested_changes: list[str]"
+
+        checkpoint_py:
+          models:
+            - "Checkpoint(BaseModel): task_id, agent_id, status, key_findings, output_files, next_steps, context_summary, timestamp"
+
+        compatibility: |
+          既存の financials.json, parsing_accuracy.json をPydanticモデルで
+          model_validate() できることを統合テストで検証。
+          フィールドの Optional 設定により後方互換性を維持。
+
+      tests:
+        - "test_financials_model: FinancialsJson の model_validate で既存 financials.json をパース"
+        - "test_pdf_metadata_model: PdfMetadata の検証"
+        - "test_period_financial: 正常値/null含みのケース"
+        - "test_review_result: verdict enum 検証"
+        - "test_checkpoint_model: Checkpoint の round-trip"
+        - "test_backward_compatibility: 実データ（2780 financials.json）での検証"
+
+      acceptance_criteria:
+        - "既存 financials.json を FinancialsJson.model_validate() でパース可能"
+        - "全モデルの JSON Schema 出力が可能（model_json_schema()）"
+        - "pyproject.toml に pydantic>=2.6.0 追加"
+        - "全テスト PASS"
+
+    - id: T4
+      title: "skills/pipeline-runner/ スキル新規開発"
+      owner: junior2
+      action: "スキル間パイプライン実行エンジンを新規開発"
+      depends_on: [T3]
+      deliverables:
+        - "skills/pipeline-runner/SKILL.md"
+        - "skills/pipeline-runner/scripts/main.py"
+        - "skills/pipeline-runner/scripts/pipeline.py"
+        - "skills/pipeline-runner/references/example_pipeline.yaml"
+        - "skills/pipeline-runner/tests/test_pipeline.py"
+
+      design:
+        pipeline_yaml:
+          structure: |
+            pipeline:
+              name: "disclosure_analysis"
+              description: "収集→パース→指標計算→レポート生成"
+              steps:
+                - id: collect
+                  skill: disclosure-collector
+                  command: "python3 skills/disclosure-collector/scripts/main.py edinet {edinet_code} --ticker {ticker}"
+                  output_dir: "data/{ticker}/raw/edinet"
+                  gates: null
+                - id: parse
+                  skill: disclosure-parser
+                  command: "python3 skills/disclosure-parser/scripts/main.py --ticker {ticker} --input-dir {prev_output} --output-dir data/{ticker}/parsed"
+                  output_dir: "data/{ticker}/parsed"
+                  depends_on: [collect]
+                  gates: "skills/quality-gate/references/default_gates.yaml"
+                - id: calculate
+                  skill: financial-calculator
+                  command: "python3 skills/financial-calculator/scripts/main.py --input data/{ticker}/parsed/financials.json --output data/{ticker}/metrics/"
+                  output_dir: "data/{ticker}/metrics"
+                  depends_on: [parse]
+                  gates: null
+                - id: report
+                  skill: financial-reporter
+                  command: "python3 skills/financial-reporter/scripts/main.py --input data/{ticker}/metrics/ --output projects/{ticker}/report.md"
+                  output_dir: "projects/{ticker}"
+                  depends_on: [calculate]
+                  gates: null
+
+        main_py:
+          cli: "python3 scripts/main.py run --pipeline <pipeline.yaml> --vars ticker=2780,edinet_code=E05765"
+          subcommands:
+            run: "パイプライン実行"
+            validate: "pipeline.yaml の構文チェック（依存関係のDAG検証含む）"
+            status: "実行中パイプラインの進捗表示"
+
+        pipeline_py:
+          classes:
+            - "PipelineStep: ステップ定義（id, skill, command, output_dir, depends_on, gates）"
+            - "PipelineConfig: パイプライン定義の読み込み・変数展開・DAG構築"
+            - "PipelineRunner: ステップの順次実行、quality-gate 呼び出し、ログ出力"
+          features:
+            - "変数展開: {ticker}, {edinet_code}, {prev_output} を実行時に解決"
+            - "DAG検証: 循環依存検出"
+            - "各ステップ完了後に quality-gate 自動実行（gates指定時のみ）"
+            - "実行ログ: pipeline_log.json に各ステップの開始/完了/所要時間/検証結果を記録"
+            - "エラー時は該当ステップで停止、エラー詳細をログに記録"
+
+      tests:
+        - "test_pipeline_config_load: YAML読み込み・変数展開"
+        - "test_dag_validation: 正常DAG / 循環依存検出"
+        - "test_pipeline_step_execution: 単一ステップの実行（mockコマンド）"
+        - "test_quality_gate_integration: ステップ後のgate実行（PASS/FAIL）"
+        - "test_pipeline_log_format: ログJSON構造の検証"
+        - "test_error_handling: コマンド失敗時の停止・ログ記録"
+
+      acceptance_criteria:
+        - "example_pipeline.yaml で disclosure分析パイプラインが定義可能"
+        - "validate サブコマンドでDAG検証が動作"
+        - "quality-gate 統合が動作（T1スキル呼び出し）"
+        - "全テスト PASS"
+
+    - id: T5
+      title: "CLAUDE.md / instructions にreport自動初期化ルール追加"
+      owner: junior1
+      action: "report自動初期化ルールをドキュメントに追加"
+      depends_on: [T4]
+      deliverables:
+        - "CLAUDE.md（Notification obligations セクション更新）"
+        - "instructions/senior.md（具体的手順追記）"
+
+      design:
+        claude_md_changes:
+          section: "Notification obligations テーブル"
+          add_row: |
+            | Task assigned | Senior | junior{N}_report | タスク割り当て前に queue/reports/junior{N}_report.yaml をテンプレートにリセット |
+          add_rule: |
+            ### Report reset rule (mandatory)
+            Senior は queue/tasks/junior{N}.yaml を書き込む際、同時に queue/reports/junior{N}_report.yaml を以下のテンプレートにリセットすること:
+            ```yaml
+            worker_id: junior{N}
+            task_id: null
+            ticker: null
+            analysis_type: null
+            timestamp: ""
+            status: idle
+            result: null
+            quality_check_required: true
+            ```
+            これは go.sh の reset 処理（行154-163）と同一テンプレート。
+
+        senior_md_changes:
+          section: "Junior への委任"
+          add: |
+            ### Report リセット手順（必須）
+            1. queue/tasks/junior{N}.yaml にタスクを書き込む
+            2. 同時に queue/reports/junior{N}_report.yaml をテンプレートにリセット
+            3. tmux send-keys で Junior に通知
+            この順番を厳守すること。リセットを怠ると、前回タスクのレポートが残留し、
+            成果物レビューフローが破綻する（req_20260211_002 T4 で3回発生した障害の再発防止）。
+
+      tests:
+        - "CLAUDE.md に Report reset rule セクションが存在すること"
+        - "instructions/senior.md に Report リセット手順が存在すること"
+        - "テンプレートが go.sh の行154-163 と一致すること"
+
+      acceptance_criteria:
+        - "CLAUDE.md と instructions/senior.md の両方にルールが明記"
+        - "テンプレートが go.sh と整合"
+        - "Reviewer が障害再発防止策として妥当と判断"
+
+  junior_assignment_plan:
+    strategy: "junior1 と junior2 に交互割り当て（コンテキスト管理のため）"
+    assignment:
+      T1: junior1
+      T2: junior2
+      T3: junior1
+      T4: junior2
+      T5: junior1
+    note: |
+      各juniorが最大3タスクまで（junior1: T1,T3,T5 / junior2: T2,T4）。
+      順次実行のため並列化は不可。各タスク完了→レビュー承認後に次タスク割り当て。
+
+  role_boundaries_compliance:
+    senior: "計画策定・タスク分割・進捗管理のみ。コード実装やファイル操作は行わない"
+    junior: "割り当てられたタスクの実装・テスト実行のみ"
+    reviewer: "レビューのみ。実装修正は行わない"
+    report_reset: "Senior はタスク割り当て時に junior{N}_report.yaml を必ずテンプレートリセット"
+
+  quality_criteria:
+    - "各スキルは Anthropic Skills 構造に準拠（SKILL.md + scripts/ + tests/）"
+    - "テスト必須、スキル単体で動作検証可能"
+    - "汎用設計（特定銘柄へのハードコード禁止）"
+    - "既存スキルとの互換性維持"
+    - "Pydantic v2 使用（T3）"
+    - "各タスク完了後にレビュー承認を経てから次タスクに進む"

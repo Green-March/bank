@@ -1,0 +1,27 @@
+pipeline:
+  name: "disclosure_analysis"
+  description: "収集→パース→指標計算→レポート生成"
+  steps:
+    - id: collect
+      skill: disclosure-collector
+      command: "python3 skills/disclosure-collector/scripts/main.py edinet {edinet_code} --ticker {ticker}"
+      output_dir: "data/{ticker}/raw/edinet"
+      gates: null
+    - id: parse
+      skill: disclosure-parser
+      command: "python3 skills/disclosure-parser/scripts/main.py --ticker {ticker} --input-dir {prev_output} --output-dir data/{ticker}/parsed"
+      output_dir: "data/{ticker}/parsed"
+      depends_on: [collect]
+      gates: "skills/quality-gate/references/default_gates.yaml"
+    - id: calculate
+      skill: financial-calculator
+      command: "python3 skills/financial-calculator/scripts/main.py --input data/{ticker}/parsed/financials.json --output data/{ticker}/metrics/"
+      output_dir: "data/{ticker}/metrics"
+      depends_on: [parse]
+      gates: null
+    - id: report
+      skill: financial-reporter
+      command: "python3 skills/financial-reporter/scripts/main.py --input data/{ticker}/metrics/ --output projects/{ticker}/report.md"
+      output_dir: "projects/{ticker}"
+      depends_on: [calculate]
+      gates: null

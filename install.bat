@@ -1,11 +1,11 @@
 @echo off
 chcp 65001 >nul 2>&1
-title multi-agent-shogun Installer
+title BANK Installer
 
 echo.
 echo   +============================================================+
-echo   ^|  [SHOGUN] multi-agent-shogun - WSL Installer                ^|
-echo   ^|           WSL2 + Ubuntu セットアップ                       ^|
+echo   ^|  [BANK] BANK - WSL Installer                              ^|
+echo   ^|         WSL2 + Ubuntu セットアップ                         ^|
 echo   +============================================================+
 echo.
 
@@ -20,7 +20,6 @@ if %ERRORLEVEL% NEQ 0 (
     echo   WSL2 が見つかりません。自動インストール中...
     echo.
 
-    REM 管理者権限で実行されているか確認
     net session >nul 2>&1
     if %ERRORLEVEL% NEQ 0 (
         echo   +============================================================+
@@ -57,15 +56,12 @@ REM ===== Step 2: Check/Install Ubuntu =====
 echo   [2/2] Checking Ubuntu...
 echo         Ubuntu 確認中...
 
-REM Ubuntu check: use -d Ubuntu directly (avoids UTF-16LE pipe issue with findstr)
 wsl.exe -d Ubuntu -- echo test >nul 2>&1
 if %ERRORLEVEL% EQU 0 goto :ubuntu_ok
 
-REM echo test failed - check if Ubuntu distro exists but needs initial setup
 wsl.exe -d Ubuntu -- exit 0 >nul 2>&1
 if %ERRORLEVEL% EQU 0 goto :ubuntu_needs_setup
 
-REM Ubuntu not installed
 echo.
 echo   Ubuntu not found. Installing automatically...
 echo   Ubuntu が見つかりません。自動インストール中...
@@ -86,7 +82,6 @@ pause
 exit /b 0
 
 :ubuntu_needs_setup
-REM Ubuntu exists but initial setup not completed
 echo.
 echo   +============================================================+
 echo   ^|  [WARN] Ubuntu initial setup required!                     ^|
@@ -109,7 +104,6 @@ exit /b 1
 echo   [OK] Ubuntu OK
 echo.
 
-REM Set Ubuntu as default WSL distribution
 wsl --set-default Ubuntu
 
 echo.
@@ -126,12 +120,12 @@ echo   ^|                                                            ^|
 echo   ^|  First time only / 初回のみ:                               ^|
 echo   ^|    1. Set username and password when prompted              ^|
 echo   ^|       ユーザー名とパスワードを設定                        ^|
-echo   ^|    2. cd /mnt/c/tools/feature-shogun                      ^|
-echo   ^|    3. ./first_setup.sh                                    ^|
+echo   ^|    2. cd /mnt/c/tools/bank                                 ^|
+echo   ^|    3. ./first_setup.sh                                     ^|
 echo   ^|                                                            ^|
 echo   ^|  Every time you use / 使うたびに:                          ^|
-echo   ^|    cd /mnt/c/tools/feature-shogun                          ^|
-echo   ^|    ./shutsujin_departure.sh                                ^|
+echo   ^|    cd /mnt/c/tools/bank                                    ^|
+echo   ^|    ./go.sh                                                 ^|
 echo   ^|                                                            ^|
 echo   +------------------------------------------------------------+
 echo.

@@ -1,6 +1,3 @@
-# Order file (internal use only)
-claude-shogun-orders.md
-
 # Claude Code settings
 .claude/*
 !.claude/settings.json
@@ -9,8 +6,8 @@ claude-shogun-orders.md
 # Test outputs (generated during testing)
 test_output/
 
-# Generated skills (local development)
-skills/
+# Generated skills (local development) - exclude specific patterns, not all skills
+skills/skill-creator/test_output/
 
 # Temporary files
 *.tmp
@@ -40,3 +37,40 @@ logs/
 
 # Project details (contains client/confidential info)
 projects/
+
+# ============================================================
+# Python
+# ============================================================
+
+# Virtual environment
+venv/
+.venv/
+ENV/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Environment variables (keep .env.example)
+.env
+!.env.example
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# pytest
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+
+# Coverage
+.coverage
+htmlcov/

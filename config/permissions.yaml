@@ -1,0 +1,66 @@
+# BANK permissions policy
+
+allowed:
+  read_commands:
+    - ls
+    - rg
+    - cat
+    - sed -n
+    - find
+    - head
+    - tail
+    - awk
+    - jq
+    - tmux list-panes
+    - tmux capture-pane
+  edit_tools:
+    - apply_patch
+  exec_commands:
+    - python3
+    - pytest
+    - tmux send-keys
+    - ./go.sh
+    - ./first_setup.sh
+    - pip install -e
+    - pip install -r
+    - curl
+  network:
+    mode: allowlist
+    allowed_domains:
+      - disclosure.edinet-fsa.go.jp
+      - api.jquants.com
+      - www.jpx.co.jp
+      - api.jpx-jquants.com
+      - www.nikkei.com
+      - finance.yahoo.co.jp
+
+denied:
+  destructive:
+    - rm -rf
+    - git reset --hard
+    - git checkout --
+  dangerous_commands:
+    - sudo rm
+    - mkfs
+
+write_scope:
+  allowed_paths:
+    - /tmp
+    - ./queue
+    - ./dashboard.md
+    - ./config
+    - ./memory
+    - ./logs
+    - ./README.md
+    - ./README_ja.md
+    - ./CLAUDE.md
+    - ./instructions
+    - ./templates
+    - ./go.sh
+    - ./first_setup.sh
+    - ./setup.sh
+    - ./install.bat
+    - ./skills
+    - ./data
+    - ./projects
+    - ./.env.example

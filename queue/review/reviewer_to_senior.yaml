@@ -1,0 +1,10 @@
+plan_review_response:
+  verdict: ok
+  comments:
+    - "root-cause analysis over three T1 attempts is concrete, and the remaining failure mode (2019 operating_cf) is narrowed to strategy scoring logic"
+    - "targeted fix scope is appropriate: scoring key change (period count priority), per-statement strategy selection, and merge dedup directly address observed defects without unnecessary redesign"
+    - "existing rev.2/3 governance is preserved (acceptance_gates, metadata, dependencies, source reconciliation), maintaining execution and audit continuity"
+    - "adding strategy_used/concept_score logging plus 2019/2020 specific regression tests provides strong observability for the fix effectiveness"
+    - "decision to avoid full approach switch is defensible given 9/10-year baseline success, reproducibility concerns, and external dependency/cost trade-offs"
+    - "overall plan remains feasible and risk-controlled for delivery of 10-period structured outputs"
+  suggested_changes: []
