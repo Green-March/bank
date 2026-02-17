@@ -1,1 +1,43 @@
-plan_review_request: null
+plan_review_request:
+  request_id: "plan_req_20260217_004_005"
+  objective: "7685 financials.json の metadata 正規化と FY通期PL 欠損6セル補完を同日完了する"
+  scope:
+    ticker: "7685"
+    requests:
+      - "req_20260217_004"
+      - "req_20260217_005"
+    timeframe: "FY2023-FY2024"
+  workplan:
+    - id: "req_20260217_004_T1"
+      owner: "junior1"
+      action: "disclosure-expansion の metadata 関連ステップのみ再実行し、financials.json の metadata を補完する。修正前後 diff を記録する"
+      output: "data/7685/processed/financials.json, data/7685/qa/metadata_diff_req_20260217_004.patch"
+      depends_on: []
+    - id: "req_20260217_005_T2"
+      owner: "junior2"
+      action: "EDINET から FY2023-FY2024 年次有報を追加取得し、disclosure-parser で FY通期PL 候補値 (revenue, operating_income, net_income) を抽出する。取得不可は理由を記録する"
+      output: "data/7685/raw/edinet/annual/, data/7685/processed/annual_pl_supplement_candidate.json"
+      depends_on: []
+    - id: "req_20260217_005_T3"
+      owner: "junior1"
+      action: "T2 候補値を financials.json にマージし、confirmed_absent と source_reconciliation.json を最終状態に更新する"
+      output: "data/7685/processed/financials.json, data/7685/qa/source_reconciliation.json"
+      depends_on:
+        - "req_20260217_004_T1"
+        - "req_20260217_005_T2"
+    - id: "req_20260217_005_T4"
+      owner: "junior3"
+      action: "欠損セル解消数・対象外セル維持・periods 非破壊を QA し、検証メモを作成する"
+      output: "data/7685/qa/qa_req_20260217_005.md"
+      depends_on:
+        - "req_20260217_005_T3"
+  quality_criteria:
+    - "data/7685/processed/financials.json の既存 periods を破壊しない"
+    - "confirmed_absent 対象6セルの補完可否をセル単位で記録する"
+    - "operating_income 取得不可時は出典探索結果と理由を明記する"
+    - "source_reconciliation.json を financials.json と整合させる"
+    - "metadata 補完の差分をファイルとして残す"
+  risk_controls:
+    - "RACE-001 対応: financials.json を直接編集するタスクは junior1 のみ実施し同時編集を禁止"
+    - "中間成果 annual_pl_supplement_candidate.json を経由してマージ手順を分離"
+    - "Reviewer 指摘発生時は T3/T4 を再実行して整合性を再確認"

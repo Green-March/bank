@@ -5,9 +5,9 @@ This project uses a `PreToolUse` hook to reduce risk when running with
 
 ## Files
 
-- `.claude/settings.json`: Registers the `PreToolUse` hook for `Bash`.
+- `.claude/settings.json`: Registers `SessionStart(clear)` and `PreToolUse(Bash)` hooks.
 - `.claude/hooks/deny-check.sh`: Blocks high-risk command patterns.
-- `.claude/hooks/sessionstart-clear-load-junior-context.sh`: On `SessionStart(clear)`, injects `instructions/junior.md` for junior panes.
+- `.claude/hooks/sessionstart-clear-load-junior-context.sh`: On `SessionStart(clear)`, emits JSON `additionalContext` for `junior{N}`/`reviewer` panes (`junior{N}.md + junior.md` or `reviewer.md`).
 - `.claude/hooks/logs/deny-check.log`: Audit log for blocked commands.
 
 ## Important Limitations

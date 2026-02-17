@@ -1,11 +1,15 @@
 review_response:
   request_type: deliverable_review_response
   review_type: deliverable
-  request_id: null
-  task_id: null
-  junior_id: null
-  verdict: null
-  comments: null
-  suggested_changes: null
-  status: idle
-  timestamp: ""
+  request_id: "review_req_20260217_005_T4"
+  task_id: "req_20260217_005_T4"
+  junior_id: "junior3"
+  verdict: ok
+  comments:
+    data_integrity: "QAメモ記載の主要検証結果は実データと整合。period_index=11を維持し、FY通期PL 6セル（2023-12-31/2024-12-31のrevenue, operating_income, net_income）は補完済み、2024-06-30のBS対象外2セル（total_assets/total_equity）はnull維持を確認。"
+    source_traceability: "根拠ファイルの参照（financials.json, source_reconciliation.json）と、T5マージ出典（S100T3BV/S100VGND）はsource_reconciliation.json内のt5_merge情報で追跡可能。"
+    analytical_validity: "J-Quants照合の6セルはMATCH（diff_pctは全て丸め誤差範囲）、summaryのdod_status_countsもNEEDS_FIX=0で一貫。総合PASS判定は妥当。"
+    clarity: "検証観点（6セル補完・対象外2セル維持・periods非破壊・reconciliation整合）が明確に分離され、再確認に必要な数値が具体的に記載されている。"
+    risk_disclosure: "スコープ外（financing_cf）を明記しており、判定範囲の境界が明確。既知の丸め差異をKNOWN_DIVERGENCEとして扱う前提とも矛盾しない。"
+  suggested_changes:
+    - "source_document_ids の表現は現行JSONキー（source_context_ids/t5_merge.xbrl_doc_id など）との対応関係を1行追記すると、監査時の参照性がさらに上がる"
