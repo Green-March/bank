@@ -193,13 +193,21 @@ plan_review_request:
 
 ### `verdict: ok` 受領時の完了処理（必須）
 1. `dashboard.md` に当該タスクの完了を反映する（`Completed Today` へ移動）。
-2. 当該 Junior のペインに `/clear` を送信して Enter を送る。
-3. `dashboard.md` を読み直し、次に割り当てるタスクがあれば即時に指示する。なければ待機させる。
+2. `dashboard.md` を読み直し、次に割り当てるタスクの有無を確認する。
+3. ヘルパースクリプトで `/clear` + フォローアップメッセージを送信する:
 
-送信例（single chained command）:
-```bash
-tmux send-keys -t <junior_pane_id> "/clear" && sleep 1 && tmux send-keys -t <junior_pane_id> Enter
-```
+   **次タスクがある場合**（report リセット・task YAML 書き込み後）:
+   ```bash
+   ./templates/senior_clear_junior.sh <junior_pane_id> "タスクを割り当てました。queue/tasks/junior{N}.yaml を読んでください"
+   ```
+
+   **次タスクがない場合**:
+   ```bash
+   ./templates/senior_clear_junior.sh <junior_pane_id> "タスク完了。次の指示があるまで待機してください。"
+   ```
+
+**重要**: `/clear` 後にフォローアップメッセージがないと Junior は空プロンプトで停止する。
+`/clear` 単独での送信は禁止。必ず `senior_clear_junior.sh` を使用すること。
 
 ## 共通レビューキュー運用（必須）
 - `queue/review/junior_to_reviewer.yaml` は単一スロット運用。Senior だけが書き込み、同時に1件のみ処理する。

@@ -70,7 +70,7 @@ Senior → queue/review/junior_to_reviewer.yaml → Reviewer (成果物レビュ
 Reviewer → queue/review/reviewer_to_junior.yaml → Senior
 Senior → Junior{N} (レビュー結果中継: verdict: revise のみ)
 Senior → dashboard.md (verdict: ok を即時反映)
-Senior → Junior{N} (/clear)
+Senior → Junior{N} (/clear + 待機指示 or 次タスク通知)
 Senior → Manager (全タスク完了報告)
 ```
 
@@ -88,7 +88,8 @@ Every YAML write that changes another agent's state MUST be followed by a send-k
 | Deliverable review request | Senior | Reviewer | 「成果物レビュー依頼です。queue/review/junior_to_reviewer.yaml を読んでください」 |
 | Deliverable review completed | Reviewer | Senior | 「成果物レビュー完了。queue/review/reviewer_to_junior.yaml を読んでください」 |
 | Review result relay (`verdict: revise`) | Senior | Junior{N} | 「レビュー結果です。queue/review/reviewer_to_junior.yaml を読んでください」 |
-| Task close (`verdict: ok`) | Senior | Junior{N} | `/clear` |
+| Task close (`verdict: ok`) | Senior | Junior{N} | `./templates/senior_clear_junior.sh` で `/clear` + フォローアップ |
+| Task close (no next task) | Senior | Junior{N} | 「タスク完了。次の指示があるまで待機してください。」 |
 | Final completion | Senior | Manager | 「全タスク完了。dashboard.md を確認してください」 |
 | Task assigned (prep) | Senior | junior{N}_report | タスク割り当て前に queue/reports/junior{N}_report.yaml をテンプレートにリセット |
 
@@ -217,7 +218,7 @@ Common-queue correlation keys (`request_id`, `task_id`, `junior_id`) are mandato
 2. Senior relays review request via `queue/review/junior_to_reviewer.yaml`
 3. Reviewer writes review via `queue/review/reviewer_to_junior.yaml`
 4. If `verdict: revise`, Senior relays review results to Junior and repeats from step 2
-5. If `verdict: ok`, Senior updates `dashboard.md`, sends `/clear` to that Junior, then reads `dashboard.md` and issues the next task
+5. If `verdict: ok`, Senior updates `dashboard.md`, then uses `./templates/senior_clear_junior.sh` to send `/clear` + follow-up message to that Junior (next task notification or standby instruction)
 
 ### Reviewer completion contract (mandatory)
 - Review request is complete only when response YAML is non-null:

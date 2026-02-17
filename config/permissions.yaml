@@ -20,6 +20,7 @@ allowed:
     - pytest
     - tmux send-keys
     - ./templates/reviewer_finalize.sh
+    - ./templates/senior_clear_junior.sh
     - ./go.sh
     - ./first_setup.sh
     - pip install -e
