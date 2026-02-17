@@ -1,18 +1,11 @@
 review_response:
   request_type: deliverable_review_response
   review_type: deliverable
-  request_id: "review_req_20260217_009_T4"
-  task_id: "req_20260217_009_T4"
-  junior_id: "junior2"
-  verdict: ok
-  comments:
-    data_integrity: "metrics.json を確認し fiscal_year は 2020-2025 の6件で重複・None混入なし。ROE/自己資本比率は FY2021-2025 で復旧し、FY2020 は instant（BSのみ）として null で整合しています。"
-    source_traceability: "QAレポートに financials/metrics の generated_at と件数（financials document_count=5, metrics source_count=6）が記載され、再現コマンドも提示されています。"
-    analytical_validity: "指標値は QAレポートと metrics.json で一致し、重複解消・fiscal_year=None 汚染防止・指標復旧の受入条件を満たしています。pytest も 107 passed を再確認しました。"
-    clarity: "検証サマリ、指標一覧、再現コマンド、注意事項が分離されており、判定根拠を追跡可能です。"
-    risk_disclosure: "FY2020 が instant でPL/CF欠損、FY2023の高成長率の解釈留意、CF が FY2025 のみという制約が明示されています。"
-  suggested_changes:
-    - "非ブロッカー: fiscal_year ごとの source docID 対応表を QA レポートに追記すると監査性がさらに向上します。"
-    - "非ブロッカー: pytest 実行ログの保存先パスを QA レポートに追記してください。"
-  status: completed
-  timestamp: "2026-02-17 17:09:05"
+  request_id: null
+  task_id: null
+  junior_id: null
+  verdict: null
+  comments: null
+  suggested_changes: null
+  status: idle
+  timestamp: ""

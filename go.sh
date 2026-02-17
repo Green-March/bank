@@ -13,17 +13,14 @@ cd "$SCRIPT_DIR"
 
 LANG_SETTING="ja"
 SHELL_SETTING="bash"
-CODEX_MODEL_SETTING="high"
 SETUP_ONLY=false
 OPEN_TERMINAL=false
 SHELL_OVERRIDE=""
 TARGET_OVERRIDE=""
-CODEX_MODEL_OVERRIDE=""
 
 if [ -f "./config/settings.yaml" ]; then
     LANG_SETTING=$(grep "^language:" ./config/settings.yaml 2>/dev/null | awk '{print $2}' || echo "ja")
     SHELL_SETTING=$(grep "^shell:" ./config/settings.yaml 2>/dev/null | awk '{print $2}' || echo "bash")
-    CODEX_MODEL_SETTING=$(grep "^codex_model:" ./config/settings.yaml 2>/dev/null | awk '{print $2}' || echo "high")
 fi
 
 log_info() { echo -e "[INFO] $1"; }
@@ -39,7 +36,6 @@ usage() {
     echo "  -s, --setup-only       Create tmux layout only"
     echo "  -t, --terminal         Open Windows Terminal tab (WSL)"
     echo "  -shell, --shell <sh>   Override shell (bash|zsh)"
-    echo "  --codex-model <m>      Codex model for senior/reviewer (high|xhigh, default: high)"
     echo "  --target <dir>         Target workspace directory"
     echo "  -h, --help             Show this help"
     echo ""
@@ -74,15 +70,6 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             ;;
-        --codex-model)
-            if [[ -n "$2" && "$2" != -* ]]; then
-                CODEX_MODEL_OVERRIDE="$2"
-                shift 2
-            else
-                echo "Error: --codex-model requires high or xhigh"
-                exit 1
-            fi
-            ;;
         -h|--help)
             usage
             ;;
@@ -114,15 +101,6 @@ else
     fi
 fi
 
-if [ -n "$CODEX_MODEL_OVERRIDE" ]; then
-    CODEX_MODEL_SETTING="$CODEX_MODEL_OVERRIDE"
-fi
-
-if [[ "$CODEX_MODEL_SETTING" != "high" && "$CODEX_MODEL_SETTING" != "xhigh" ]]; then
-    echo "Error: codex model must be high or xhigh (current: $CODEX_MODEL_SETTING)"
-    exit 1
-fi
-
 if [ ! -d "$TARGET_DIR" ]; then
     echo "Error: target directory does not exist: $TARGET_DIR"
     exit 1
@@ -135,7 +113,6 @@ workspace:
 EOF_TARGET
 
 log_info "Workspace target: $TARGET_DIR"
-log_info "Codex model (senior/reviewer): $CODEX_MODEL_SETTING"
 
 log_info "Cleaning existing tmux session..."
 tmux kill-session -t multiagent 2>/dev/null && log_info "  - multiagent removed" || log_info "  - no existing session"
@@ -153,7 +130,7 @@ if [ "$NEED_BACKUP" = true ]; then
     cp -r "./queue/reports" "$BACKUP_DIR/" 2>/dev/null || true
     cp -r "./queue/tasks" "$BACKUP_DIR/" 2>/dev/null || true
     cp -r "./queue/review" "$BACKUP_DIR/" 2>/dev/null || true
-    cp "./queue/paper_to_senior.yaml" "$BACKUP_DIR/" 2>/dev/null || true
+    cp "./queue/manager_to_senior.yaml" "$BACKUP_DIR/" 2>/dev/null || true
     log_info "Backup created: $BACKUP_DIR"
 fi
 
@@ -198,7 +175,7 @@ quality_check_required: true
 EOF
 done
 
-cat > ./queue/paper_to_senior.yaml <<'EOF_QUEUE'
+cat > ./queue/manager_to_senior.yaml <<'EOF_QUEUE'
 queue: []
 EOF_QUEUE
 
@@ -365,9 +342,8 @@ if [ "$SETUP_ONLY" = false ]; then
     # Codex needs unsandboxed execution to access tmux sockets on macOS.
     # Minimize risk by scrubbing common credential env vars and pinning cwd.
     build_codex_cmd() {
-        local target_q model_q env_unset var
+        local target_q env_unset var
         target_q="$(printf '%q' "$TARGET_DIR")"
-        model_q="$(printf '%q' "$CODEX_MODEL_SETTING")"
         env_unset=""
         for var in \
             OPENAI_API_KEY ANTHROPIC_API_KEY \
@@ -377,7 +353,7 @@ if [ "$SETUP_ONLY" = false ]; then
             SSH_AUTH_SOCK; do
             env_unset="${env_unset} -u ${var}"
         done
-        echo "env${env_unset} codex --model ${model_q} -s danger-full-access -a never -C ${target_q}"
+        echo "env${env_unset} codex -s danger-full-access -a never -C ${target_q}"
     }
     CODEX_CMD="$(build_codex_cmd)"
 
@@ -389,7 +365,7 @@ if [ "$SETUP_ONLY" = false ]; then
     tmux send-keys -t "$reviewer_pane" "${CODEX_CMD}" Enter
 
     log_success "Agents launched"
-    log_warn "Senior/Reviewer Codex uses --model ${CODEX_MODEL_SETTING} and danger-full-access for tmux compatibility; common credential env vars are scrubbed."
+    log_warn "Senior/Reviewer Codex uses danger-full-access for tmux compatibility; common credential env vars are scrubbed."
 
     sleep 5
 

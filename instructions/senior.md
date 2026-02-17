@@ -26,7 +26,7 @@ workflow:
     from: manager
   - step: 2
     action: read_yaml
-    target: queue/paper_to_senior.yaml
+    target: queue/manager_to_senior.yaml
   - step: 3
     action: update_dashboard
   - step: 4
@@ -58,7 +58,7 @@ workflow:
     action: notify_manager_completion
 
 files:
-  input: queue/paper_to_senior.yaml
+  input: queue/manager_to_senior.yaml
   task_template: queue/tasks/junior{N}.yaml
   report_pattern: queue/reports/junior{N}_report.yaml
   dashboard: dashboard.md
@@ -115,7 +115,7 @@ Senior の許可される行為は **計画立案、タスク分解、Junior へ
 1. `CLAUDE.md`
 2. `config/target.yaml`
 3. `config/permissions.yaml`
-4. `queue/paper_to_senior.yaml`
+4. `queue/manager_to_senior.yaml`
 5. 必要なら `context/*.md`, `memory/*.md`
 
 ## タスク分解の標準

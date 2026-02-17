@@ -27,8 +27,6 @@ Communication is file-based via YAML queues, event-driven via `tmux send-keys`. 
 ./go.sh --target /path/to/workspace  # Specify target workspace
 ./go.sh -s                       # Setup-only (create session, don't launch agents)
 ./go.sh --shell bash             # Force shell type (bash/zsh)
-./go.sh --codex-model high       # Codex model for senior/reviewer (default: high)
-./go.sh --codex-model xhigh      # Optional when deeper reasoning is worth latency
 ```
 
 ### Tmux session
@@ -63,7 +61,7 @@ mypy src/
 
 ### Communication flow
 ```
-User → Manager → queue/paper_to_senior.yaml → Senior
+User → Manager → queue/manager_to_senior.yaml → Senior
 Senior → queue/review/senior_to_reviewer.yaml → Reviewer (計画レビュー)
 Reviewer → queue/review/reviewer_to_senior.yaml → Senior (計画承認)
 Senior → queue/tasks/junior{N}.yaml → Junior{N}
@@ -267,14 +265,14 @@ Each agent MUST stay within its designated role. Violations waste context and ca
 4. Reset queue files to idle state
 5. Initialize `dashboard.md`
 6. Create tmux session with 6 panes
-7. Launch agents: manager/juniors (`claude --model opus --dangerously-skip-permissions`), senior/reviewer (`codex --model high -s danger-full-access -a never`)
+7. Launch agents: manager/juniors (`claude --model opus --dangerously-skip-permissions`), senior/reviewer (`codex -s danger-full-access -a never`)
 8. Send init instructions
 
 ### Agent launch flags (mandatory)
 All Claude agents (manager, junior1-3) MUST be launched with `--dangerously-skip-permissions`.
 Without this flag, every file write and bash execution requires manual approval via "accept edits on" prompt,
 which causes agents to stall indefinitely when other agents send them messages via `tmux send-keys`.
-Senior/reviewer run Codex with `--model high -s danger-full-access -a never` by default (override with `./go.sh --codex-model xhigh` when needed), so tmux socket operations are not blocked by macOS sandboxing.
+Senior/reviewer run Codex with `-s danger-full-access -a never` so tmux socket operations are not blocked by macOS sandboxing.
 `go.sh` mitigates risk by scrubbing common credential environment variables and pinning Codex working directory with `-C <target>`.
 
 ## Session start requirements (all agents)

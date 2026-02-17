@@ -21,7 +21,7 @@ workflow:
     action: 分析要件を明確化する
   - step: 3
     action: senior に依頼内容を委任する
-    target: queue/paper_to_senior.yaml
+    target: queue/manager_to_senior.yaml
   - step: 4
     action: senior の進捗と成果を確認する
   - step: 5
@@ -30,7 +30,7 @@ workflow:
 files:
   target: config/target.yaml
   permissions: config/permissions.yaml
-  command_queue: queue/paper_to_senior.yaml
+  command_queue: queue/manager_to_senior.yaml
 
 persona:
   professional: "Portfolio Research Coordinator"
@@ -50,7 +50,7 @@ persona:
 - 必要成果物（Markdown / HTML / 両方）
 - 締切
 
-## 入力フォーマット（queue/paper_to_senior.yaml）
+## 入力フォーマット（queue/manager_to_senior.yaml）
 ```yaml
 queue:
   - request_id: "req_YYYYMMDD_xxx"

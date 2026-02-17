@@ -1,22 +1,16 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "review_req_20260217_009_T4"
-  task_id: "req_20260217_009_T4"
-  junior_id: "junior2"
-  status: reviewed
-  timestamp: "2026-02-17 17:36:20"
-  payload:
-    worker_id: "junior2"
-    ticker: "7685"
-    analysis_type: "risk_qa_validation"
-    report_timestamp: "2026-02-17T17:06:30+09:00"
-    summary: "独立QA完了。calculate実行・全検証PASS（FY重複なし・fiscal_year=Noneなし・ROE/自己資本比率復旧・pytest 107/107 PASS）"
+  request_id: null
+  task_id: null
+  junior_id: null
+  status: idle
+  timestamp: ""
+  payload: null
 review_followup:
-  request_id: "review_req_20260217_009_T4"
-  task_id: "req_20260217_009_T4"
-  junior_id: "junior2"
-  status: "closed_verdict_ok"
-  timestamp: "2026-02-17 17:37:40"
-  payload:
-    note: "dashboard updated and /clear,/new sent; no remaining tasks"
+  request_id: null
+  task_id: null
+  junior_id: null
+  status: null
+  timestamp: ""
+  payload: null

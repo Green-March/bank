@@ -2,10 +2,10 @@
 
 ## Goal
 - Verify whether Reviewer stall is caused mainly by `write+notify` handling, output volume, or total turn duration.
-- Decide whether Reviewer stays on Codex (`high`) or switches runtime/model strategy.
+- Decide whether Reviewer stays on Codex default runtime or switches runtime strategy.
 
 ## Preconditions
-- Start with `./go.sh --codex-model high`.
+- Start with `./go.sh` (Codex default model).
 - Reviewer must use `./templates/reviewer_finalize.sh` for all review completions.
 - Senior follows single-check recovery rule (no polling loop).
 
@@ -27,7 +27,7 @@ Append each run in `memory/session_YYYYMMDD.md`:
 - timestamp
 - case id
 - request_id/task_id
-- codex model (`high` or `xhigh`)
+- codex model label shown in session (if available)
 - success/failure (`yaml_non_null`, `notify_sent`, `session_alive`)
 - token usage snapshot (if available)
 - fallback used (`minimal_revise` yes/no)
