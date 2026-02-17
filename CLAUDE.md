@@ -81,7 +81,7 @@ Every YAML write that changes another agent's state MUST be followed by a send-k
 
 | Event | Notifier | Target | Message |
 |---|---|---|---|
-| Task assigned | Senior | Junior{N} | 「タスクを割り当てました。queue/tasks/junior{N}.yaml を読んでください」 |
+| Task assigned | Senior | Junior{N} | 「instructions/junior{N}.md と instructions/junior.md を読んで役割を理解してください。新しいタスクが割り当てられているので、queue/tasks/junior{N}.yaml を読んで実装してください。」 |
 | Plan review request | Senior | Reviewer | 「計画レビュー依頼です。queue/review/senior_to_reviewer.yaml を読んでください」 |
 | Plan review completed | Reviewer | Senior | 「計画レビュー完了。queue/review/reviewer_to_senior.yaml を読んでください」 |
 | Deliverable submitted | Junior{N} | Senior | 「成果物完了。レビュー依頼をお願いします。queue/reports/junior{N}_report.yaml を読んでください」 |
@@ -89,7 +89,7 @@ Every YAML write that changes another agent's state MUST be followed by a send-k
 | Deliverable review completed | Reviewer | Senior | 「成果物レビュー完了。queue/review/reviewer_to_junior.yaml を読んでください」 |
 | Review result relay (`verdict: revise`) | Senior | Junior{N} | 「レビュー結果です。queue/review/reviewer_to_junior.yaml を読んでください」 |
 | Task close (`verdict: ok`) | Senior | Junior{N} | `./templates/senior_clear_junior.sh` で `/clear` + フォローアップ |
-| Task close (no next task) | Senior | Junior{N} | 「タスク完了。次の指示があるまで待機してください。」 |
+| Task close (no next task) | Senior | Junior{N} | 「instructions/junior{N}.md と instructions/junior.md を読んで役割を理解してください。次の指示があるまで待機してください。」 |
 | Final completion | Senior | Manager | 「全タスク完了。dashboard.md を確認してください」 |
 | Task assigned (prep) | Senior | junior{N}_report | タスク割り当て前に queue/reports/junior{N}_report.yaml をテンプレートにリセット |
 
@@ -207,11 +207,12 @@ review_response:
 Common-queue correlation keys (`request_id`, `task_id`, `junior_id`) are mandatory for deliverable review relay.
 
 ## Plan review flow (mandatory)
-1. Senior writes plan to `queue/review/senior_to_reviewer.yaml`
-2. Reviewer evaluates coverage, risk, feasibility, and data source quality
-3. Reviewer writes verdict to `queue/review/reviewer_to_senior.yaml`
-4. If `verdict: revise`, senior revises and resubmits
-5. If `verdict: ok`, senior assigns junior tasks
+1. Senior designs the plan (workplan, scope, quality_criteria)
+2. Senior executes `./templates/senior_submit_plan.sh` to write plan to `queue/review/senior_to_reviewer.yaml` and notify Reviewer (YAML write + notification in one command, mandatory)
+3. Reviewer evaluates coverage, risk, feasibility, and data source quality
+4. Reviewer writes verdict to `queue/review/reviewer_to_senior.yaml`
+5. If `verdict: revise`, senior revises and resubmits (repeat from step 2)
+6. If `verdict: ok`, senior assigns junior tasks
 
 ## Deliverable review flow (mandatory)
 1. Junior writes deliverable report to `queue/reports/junior{N}_report.yaml`

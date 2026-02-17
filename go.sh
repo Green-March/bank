@@ -380,6 +380,7 @@ if [ "$SETUP_ONLY" = false ]; then
     send_msg "$manager_pane" "instructions/manager.md を読んで役割を理解してください。"
     send_msg "$senior_pane" "instructions/senior.md を読んで役割を理解してください。"
     send_msg "$senior_pane" "重要: Senior はコード編集・テスト実行・ファイルI/O・データ処理を絶対に自分で実行してはなりません。簡単な修正でも必ず Junior に委任してください。違反した場合は Manager が変更を revert し正規フローで再実行を指示します。"
+    send_msg "$senior_pane" "義務: 計画立案後は ./templates/senior_submit_plan.sh で即座にYAML書き込み+Reviewer通知を実行してください。「提案」や「確認待ち」で停止することは禁止です。workflowの各ステップは承認なしで自律実行してください。"
     send_msg "$junior1_pane" "instructions/junior1.md を読んで役割を理解してください。"
     send_msg "$junior2_pane" "instructions/junior2.md を読んで役割を理解してください。"
     send_msg "$junior3_pane" "instructions/junior3.md を読んで役割を理解してください。"

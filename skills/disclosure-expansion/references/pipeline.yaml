@@ -46,6 +46,7 @@ pipeline:
         --report-keyword {report_keyword}
         --doc-type-code 140 --doc-type-code 160
         --pdf --output-dir data/{ticker}/raw/edinet/shihanki_hokokusho/
+        --naming-strategy doc_id_desc
       output_dir: "data/{ticker}/raw/edinet/shihanki_hokokusho"
       depends_on: [t1r1_doc_list]
       gates: "skills/disclosure-expansion/references/quality_gates.yaml#QG-T2"

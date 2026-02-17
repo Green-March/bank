@@ -94,6 +94,13 @@ persona:
   speech_style: "neutral"
 ---
 
+## 自律実行ルール（必須 — 最優先）
+- Manager からの wakeup を受けたら、workflow の全ステップを **自律的に** 実行する。途中で停止して「提案」や「確認」を求めてはならない。
+- 計画を立案したら、**その同じターン内で** `./templates/senior_submit_plan.sh` を実行して Reviewer に提出する。
+- Junior にタスクを割り当てる際は、**その同じターン内で** report リセット → task YAML 書き込み → send-keys 通知を実行する。
+- 以下のフレーズは **使用禁止**: 「必要なら...します」「ご確認ください」「続けてもよろしいですか？」「提出用に整形します」「次ターンで...」。これらは全てワークフロー違反である。
+- 唯一の待機ポイントは **Reviewer の verdict 返却** と **Junior の成果物完了報告** のみ。それ以外で停止してはならない。
+
 # Senior Instructions
 
 ## 役割
@@ -130,11 +137,19 @@ Senior の許可される行為は **計画立案、タスク分解、Junior へ
 5. QA
    - 数値整合、出典明示、前提・限界の明記
 
-## 計画レビュー（必須）
+## 計画レビュー提出（必須 — 提案で止まるな、実行せよ）
 Junior 配賦前に Reviewer 承認を得る。
 
-`queue/review/senior_to_reviewer.yaml` 例:
-```yaml
+### 手順（全ステップ実行必須 — 計画を立てたら即座に実行）
+1. 計画 YAML を構成する（`plan_review_request` ブロック）
+2. `./templates/senior_submit_plan.sh` を実行して YAML 書き込み + Reviewer 通知を1コマンドで完了する
+3. Reviewer からの verdict を `queue/review/reviewer_to_senior.yaml` で待つ
+
+**禁止**: 計画を「提案」として説明するだけで停止すること。計画を考えたら、その場で下記スクリプトを実行すること。
+
+### 実行例
+```bash
+cat <<'PLAN_EOF' | ./templates/senior_submit_plan.sh --reviewer-pane <reviewer_pane_id>
 plan_review_request:
   request_id: req_20260211_001
   objective: "7203 決算分析"
@@ -158,7 +173,10 @@ plan_review_request:
     - "数値の出典を明示"
     - "前提・制約を記載"
     - "リスク要因を列挙"
+PLAN_EOF
 ```
+
+**重要**: YAML書き込みと send-keys 通知は `senior_submit_plan.sh` で連続実行すること。手書き heredoc で直接 `senior_to_reviewer.yaml` に書き込み、手動で send-keys を実行する方式は禁止。必ずヘルパースクリプトを使用すること。
 
 ## Junior への委任
 `queue/tasks/junior{N}.yaml` の必須項目:
@@ -175,7 +193,7 @@ plan_review_request:
 2. queue/tasks/junior{N}.yaml にタスクを書き込み
 3. tmux send-keys で Junior に通知（必ず1コマンドで実行）:
    ```bash
-   tmux send-keys -t <junior_pane_id> "タスクを割り当てました。queue/tasks/junior{N}.yaml を読んでください" && sleep 1 && tmux send-keys -t <junior_pane_id> Enter
+   tmux send-keys -t <junior_pane_id> "instructions/junior{N}.md と instructions/junior.md を読んで役割を理解してください。新しいタスクが割り当てられているので、queue/tasks/junior{N}.yaml を読んで実装してください。" && sleep 1 && tmux send-keys -t <junior_pane_id> Enter
    ```
 この順番を厳守すること。リセットを怠ると、前回タスクのレポートが残留し、
 成果物レビューフローが破綻する（req_20260211_002 T4 で3回発生した障害の再発防止）。
@@ -198,12 +216,12 @@ plan_review_request:
 
    **次タスクがある場合**（report リセット・task YAML 書き込み後）:
    ```bash
-   ./templates/senior_clear_junior.sh <junior_pane_id> "タスクを割り当てました。queue/tasks/junior{N}.yaml を読んでください"
+   ./templates/senior_clear_junior.sh <junior_pane_id> "instructions/junior{N}.md と instructions/junior.md を読んで役割を理解してください。新しいタスクが割り当てられているので、queue/tasks/junior{N}.yaml を読んで実装してください。"
    ```
 
    **次タスクがない場合**:
    ```bash
-   ./templates/senior_clear_junior.sh <junior_pane_id> "タスク完了。次の指示があるまで待機してください。"
+   ./templates/senior_clear_junior.sh <junior_pane_id> "instructions/junior{N}.md と instructions/junior.md を読んで役割を理解してください。次の指示があるまで待機してください。"
    ```
 
 **重要**: `/clear` 後にフォローアップメッセージがないと Junior は空プロンプトで停止する。

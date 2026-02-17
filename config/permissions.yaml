@@ -21,6 +21,7 @@ allowed:
     - tmux send-keys
     - ./templates/reviewer_finalize.sh
     - ./templates/senior_clear_junior.sh
+    - ./templates/senior_submit_plan.sh
     - ./go.sh
     - ./first_setup.sh
     - pip install -e

@@ -386,11 +386,33 @@ _REPORT_PATTERNS = [
 def discover_pdfs(input_path: Path, ticker: str) -> list[Path]:
     """Find and sort PDFs matching the naming convention.
 
-    Supports 有価証券報告書, 四半期報告書, and 半期報告書 patterns.
+    Supports 有価証券報告書, 四半期報告書, 半期報告書 patterns and
+    doc_id naming (e.g. S100KSCU_20201231.pdf) via manifest.json fallback.
     """
     found: set[Path] = set()
     for pattern in _REPORT_PATTERNS:
         found.update(input_path.glob(pattern.format(ticker=ticker)))
+
+    if not found:
+        # Fallback: discover PDFs via manifest.json (doc_id naming convention)
+        manifest_path = input_path / "manifest.json"
+        if manifest_path.exists():
+            try:
+                with manifest_path.open("r", encoding="utf-8") as f:
+                    manifest = json.load(f)
+                for result in manifest.get("results", []):
+                    file_path = result.get("file_path")
+                    if file_path:
+                        pdf = input_path / Path(file_path).name
+                        if pdf.exists() and pdf.suffix.lower() == ".pdf":
+                            found.add(pdf)
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        if not found:
+            # Last resort: pick up all *.pdf files in the directory
+            found.update(input_path.glob("*.pdf"))
+
     return sorted(
         found,
         key=lambda p: (_extract_year(p), p.name),
@@ -1229,8 +1251,8 @@ def parse_pdf_directory(
     pdf_files = discover_pdfs(input_path, ticker)
     if not pdf_files:
         raise FileNotFoundError(
-            f"No PDF files matching pattern '{ticker}_有価証券報告書_*.pdf' "
-            f"found in {input_path}"
+            f"No PDF files found in {input_path} "
+            f"(tried report-name patterns, manifest.json, and *.pdf glob)"
         )
 
     manifest_entries = load_manifest_entries(input_path)
