@@ -48,7 +48,7 @@ workflow:
     target: queue/tasks/junior{N}.yaml
   - step: 12
     action: mediate_deliverable_reviews_and_close_on_ok
-    note: "verdict: revise は中継して再レビュー。verdict: ok は Senior が dashboard 反映・Junior/Reviewer の /clear・再初期化まで実施"
+    note: "verdict: revise は中継して再レビュー。verdict: ok は Senior が dashboard 反映・Junior の /clear と Reviewer の /new・再初期化まで実施"
   - step: 13
     action: integrate_outputs
   - step: 14
@@ -180,7 +180,7 @@ plan_review_request:
 1. `dashboard.md` に当該タスクの完了を反映する（`Completed Today` へ移動）。
 2. 当該 Junior のペインに `/clear` を送信して Enter を送る。
 3. 続けて同じ Junior に `instructions/junior{N}.md` を読む再初期化指示を送って Enter を送る。
-4. Reviewer のペインに `/clear` を送信して Enter を送る。
+4. Reviewer のペインに `/new` を送信して Enter を送る。
 5. 続けて Reviewer に `instructions/reviewer.md` を読む再初期化指示を送って Enter を送る。
 6. `dashboard.md` を読み直し、次に割り当てるタスクがあれば即時に指示する。なければ待機させる。
 
@@ -188,7 +188,7 @@ plan_review_request:
 ```bash
 tmux send-keys -t <junior_pane_id> "/clear" && sleep 1 && tmux send-keys -t <junior_pane_id> Enter
 tmux send-keys -t <junior_pane_id> "instructions/junior{N}.md を読んで役割を再確認してください。次の指示を待ってください" && sleep 1 && tmux send-keys -t <junior_pane_id> Enter
-tmux send-keys -t <reviewer_pane_id> "/clear" && sleep 1 && tmux send-keys -t <reviewer_pane_id> Enter
+tmux send-keys -t <reviewer_pane_id> "/new" && sleep 1 && tmux send-keys -t <reviewer_pane_id> Enter
 tmux send-keys -t <reviewer_pane_id> "instructions/reviewer.md を読んで役割を再確認してください。次のレビュー依頼を待ってください" && sleep 1 && tmux send-keys -t <reviewer_pane_id> Enter
 ```
 

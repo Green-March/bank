@@ -75,6 +75,7 @@ Senior 経由で受けた計画・成果物をレビューし、品質と投資�
 - リスク低減策があるか
 
 ## コードレビュー観点
+- Lint / Formatter
 - Code quality and best practices
 - Potential bugs or issues
 - Performance considerations

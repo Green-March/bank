@@ -1,6 +1,8 @@
 # Claude Code settings
 .claude/*
 !.claude/settings.json
+!.claude/hooks/
+!.claude/hooks/sessionstart-clear-load-junior-context.sh
 .mcp.json
 
 # OS files
