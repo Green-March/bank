@@ -595,16 +595,16 @@ log_info "Juniorレポートファイル (1-3) を確認/作成しました"
 
 # Manager → Senior queue
 COMMAND_QUEUE="$SCRIPT_DIR/queue/manager_to_senior.yaml"
-LEGACY_COMMAND_QUEUE="$SCRIPT_DIR/queue/paper_to_senior.yaml"
-if [ -f "$LEGACY_COMMAND_QUEUE" ] && [ ! -f "$COMMAND_QUEUE" ]; then
-    mv "$LEGACY_COMMAND_QUEUE" "$COMMAND_QUEUE"
+DEPRECATED_COMMAND_QUEUE="$SCRIPT_DIR/queue/paper_to_senior.yaml"
+if [ -f "$DEPRECATED_COMMAND_QUEUE" ] && [ ! -f "$COMMAND_QUEUE" ]; then
+    mv "$DEPRECATED_COMMAND_QUEUE" "$COMMAND_QUEUE"
 fi
 if [ ! -f "$COMMAND_QUEUE" ]; then
     cat > "$COMMAND_QUEUE" << EOF
 queue: []
 EOF
 fi
-rm -f "$LEGACY_COMMAND_QUEUE"
+rm -f "$DEPRECATED_COMMAND_QUEUE"
 
 # Review queue files
 REVIEW_DIR="$SCRIPT_DIR/queue/review"
