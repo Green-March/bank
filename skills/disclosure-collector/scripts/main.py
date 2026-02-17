@@ -118,6 +118,7 @@ def collect_edinet(
     form_codes: list[str] | None,
     pdf: bool = False,
     doc_type_codes: list[str] | None = None,
+    naming_strategy: str = "ticker_year",
 ) -> dict:
     """EDINET API から有価証券報告書を収集する。"""
     if output_dir is None:
@@ -144,6 +145,7 @@ def collect_edinet(
             security_code=security_code,
             ticker=ticker,
             allowed_doc_type_codes=allowed_doc_type_codes,
+            naming_strategy=naming_strategy,
         )
 
     return collect_edinet_reports(
@@ -243,6 +245,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="docTypeCode で絞り込み（複数指定可、例: --doc-type-code 120 --doc-type-code 130）",
     )
+    parser_ed.add_argument(
+        "--naming-strategy",
+        type=str,
+        choices=["ticker_year", "doc_id", "doc_id_desc"],
+        default="ticker_year",
+        help="PDF命名規則: ticker_year(既定), doc_id({docID}_{periodEnd}), doc_id_desc({docID}_{docDescription})",
+    )
 
     return parser
 
@@ -281,6 +290,7 @@ def main() -> int:
                 form_codes=args.form_code,
                 pdf=args.pdf,
                 doc_type_codes=args.doc_type_code,
+                naming_strategy=args.naming_strategy,
             )
             print(f"保存完了: {result['output_dir']}")
             print(f"manifest: {result['manifest_path']}")

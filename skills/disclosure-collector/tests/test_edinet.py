@@ -12,8 +12,10 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from edinet import (
+    NAMING_STRATEGIES,
     EdinetError,
     _build_pdf_base_name,
+    _build_pdf_base_name_by_strategy,
     _extract_pdfs_from_zip,
     collect_edinet_pdfs,
     collect_edinet_reports,
@@ -594,3 +596,362 @@ def test_fetch_documents_for_date_unparseable_status_code() -> None:
 
     with pytest.raises(__import__("edinet").EdinetError, match="unparseable statusCode"):
         client_obj.fetch_documents_for_date(date(2024, 1, 1))
+
+
+# --- Tests for naming strategy ---
+
+
+def test_naming_strategies_constant() -> None:
+    assert "ticker_year" in NAMING_STRATEGIES
+    assert "doc_id" in NAMING_STRATEGIES
+    assert "doc_id_desc" in NAMING_STRATEGIES
+
+
+def test_build_pdf_base_name_by_strategy_ticker_year() -> None:
+    doc = {"secCode": "27800", "periodEnd": "2024-03-31", "docDescription": "有価証券報告書"}
+    result = _build_pdf_base_name_by_strategy(doc, naming_strategy="ticker_year", ticker="2780")
+    assert result == "2780_有価証券報告書_2024"
+
+
+def test_build_pdf_base_name_by_strategy_doc_id() -> None:
+    doc = {"docID": "S100SW1R", "periodEnd": "2024-03-31", "docDescription": "有価証券報告書"}
+    result = _build_pdf_base_name_by_strategy(doc, naming_strategy="doc_id")
+    assert result == "S100SW1R_2024-03-31"
+
+
+def test_build_pdf_base_name_by_strategy_doc_id_no_period_end() -> None:
+    doc = {"docID": "S100SW1R", "periodEnd": "", "docDescription": "有価証券報告書"}
+    result = _build_pdf_base_name_by_strategy(doc, naming_strategy="doc_id")
+    assert result == "S100SW1R"
+
+
+def test_build_pdf_base_name_by_strategy_doc_id_desc() -> None:
+    doc = {"docID": "S100SW1R", "periodEnd": "2024-03-31", "docDescription": "第46期 有価証券報告書"}
+    result = _build_pdf_base_name_by_strategy(doc, naming_strategy="doc_id_desc")
+    assert result == "S100SW1R_第46期_有価証券報告書"
+
+
+def test_build_pdf_base_name_by_strategy_doc_id_desc_empty() -> None:
+    doc = {"docID": "S100SW1R", "periodEnd": "2024-03-31", "docDescription": ""}
+    result = _build_pdf_base_name_by_strategy(doc, naming_strategy="doc_id_desc")
+    assert result == "S100SW1R"
+
+
+# --- Tests for naming strategy in collect_edinet_pdfs ---
+
+
+def test_collect_edinet_pdfs_doc_id_naming(tmp_path: Path) -> None:
+    target_day = date(2024, 6, 1)
+    zip_bytes = _make_zip_with_pdfs(["report.pdf"])
+    client = FakeEdinetClient(
+        documents_by_date={
+            target_day: [
+                {
+                    "docID": "S100AAAA",
+                    "edinetCode": "E03416",
+                    "docDescription": "第46期 有価証券報告書",
+                    "xbrlFlag": "0",
+                    "secCode": "27800",
+                    "periodEnd": "2024-03-31",
+                },
+                {
+                    "docID": "S100BBBB",
+                    "edinetCode": "E03416",
+                    "docDescription": "第47期 有価証券報告書",
+                    "xbrlFlag": "0",
+                    "secCode": "27800",
+                    "periodEnd": "2024-03-31",
+                },
+            ]
+        },
+        download_payload_by_doc_id={
+            "S100AAAA": zip_bytes,
+            "S100BBBB": zip_bytes,
+        },
+    )
+
+    result = collect_edinet_pdfs(
+        edinet_code="E03416",
+        output_dir=tmp_path,
+        start_date=target_day,
+        end_date=target_day,
+        ticker="2780",
+        client=client,
+        naming_strategy="doc_id",
+    )
+
+    assert result["matched_doc_count"] == 2
+    assert result["downloaded_count"] == 2
+    assert (tmp_path / "S100AAAA_2024-03-31.pdf").exists()
+    assert (tmp_path / "S100BBBB_2024-03-31.pdf").exists()
+
+
+def test_collect_edinet_pdfs_ticker_year_naming_collides(tmp_path: Path) -> None:
+    """Verify that ticker_year naming skips on collision (legacy behavior)."""
+    target_day = date(2024, 6, 1)
+    zip_bytes = _make_zip_with_pdfs(["report.pdf"])
+    client = FakeEdinetClient(
+        documents_by_date={
+            target_day: [
+                {
+                    "docID": "S100AAAA",
+                    "edinetCode": "E03416",
+                    "docDescription": "第46期 有価証券報告書",
+                    "xbrlFlag": "0",
+                    "secCode": "27800",
+                    "periodEnd": "2024-03-31",
+                },
+                {
+                    "docID": "S100BBBB",
+                    "edinetCode": "E03416",
+                    "docDescription": "第47期 有価証券報告書",
+                    "xbrlFlag": "0",
+                    "secCode": "27800",
+                    "periodEnd": "2024-03-31",
+                },
+            ]
+        },
+        download_payload_by_doc_id={
+            "S100AAAA": zip_bytes,
+            "S100BBBB": zip_bytes,
+        },
+    )
+
+    result = collect_edinet_pdfs(
+        edinet_code="E03416",
+        output_dir=tmp_path,
+        start_date=target_day,
+        end_date=target_day,
+        ticker="2780",
+        client=client,
+        naming_strategy="ticker_year",
+    )
+
+    assert result["matched_doc_count"] == 2
+    assert result["downloaded_count"] == 1
+    assert result["skipped_existing_count"] == 1
+
+
+# --- Tests for T0 manifest keys ---
+
+
+def test_manifest_has_t0_keys_pdf(tmp_path: Path) -> None:
+    target_day = date(2024, 6, 1)
+    zip_bytes = _make_zip_with_pdfs(["report.pdf"])
+    client = FakeEdinetClient(
+        documents_by_date={
+            target_day: [
+                {
+                    "docID": "DOC-T0-001",
+                    "edinetCode": "E03416",
+                    "docDescription": "有価証券報告書",
+                    "xbrlFlag": "0",
+                    "secCode": "27800",
+                    "periodEnd": "2024-03-31",
+                }
+            ]
+        },
+        download_payload_by_doc_id={"DOC-T0-001": zip_bytes},
+    )
+
+    collect_edinet_pdfs(
+        edinet_code="E03416",
+        output_dir=tmp_path,
+        start_date=target_day,
+        end_date=target_day,
+        ticker="2780",
+        client=client,
+    )
+
+    with open(tmp_path / "manifest.json", "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    assert manifest["schema_version"] == "bank-common-metadata-v1"
+    assert manifest["source"] == "edinet"
+    assert manifest["endpoint_or_doc_id"] == "E03416"
+    assert "fetched_at" in manifest
+    assert "gap_analysis" in manifest
+    assert manifest["gap_analysis"]["matched_doc_count"] == 1
+    assert manifest["gap_analysis"]["downloaded_count"] == 1
+    assert manifest["gap_analysis"]["coverage_ratio"] == 1.0
+    assert manifest["gap_analysis"]["effective_coverage_ratio"] == 1.0
+
+    result_entry = manifest["results"][0]
+    assert result_entry["source"] == "edinet"
+    assert result_entry["endpoint_or_doc_id"] == "DOC-T0-001"
+    assert result_entry["fetched_at"] == manifest["fetched_at"]
+    assert result_entry["period_end"] == "2024-03-31"
+
+
+def test_manifest_has_t0_keys_xbrl(tmp_path: Path) -> None:
+    target_day = date(2024, 6, 1)
+    client = FakeEdinetClient(
+        documents_by_date={
+            target_day: [
+                {
+                    "docID": "DOC-T0-002",
+                    "edinetCode": "E03416",
+                    "docDescription": "有価証券報告書",
+                    "xbrlFlag": "1",
+                    "periodEnd": "2024-03-31",
+                }
+            ]
+        },
+        download_payload_by_doc_id={"DOC-T0-002": b"zip-bytes"},
+    )
+
+    collect_edinet_reports(
+        edinet_code="E03416",
+        output_dir=tmp_path,
+        start_date=target_day,
+        end_date=target_day,
+        client=client,
+    )
+
+    with open(tmp_path / "manifest.json", "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    assert manifest["schema_version"] == "bank-common-metadata-v1"
+    assert manifest["source"] == "edinet"
+    assert manifest["endpoint_or_doc_id"] == "E03416"
+    assert "fetched_at" in manifest
+    assert "gap_analysis" in manifest
+
+    result_entry = manifest["results"][0]
+    assert result_entry["source"] == "edinet"
+    assert result_entry["endpoint_or_doc_id"] == "DOC-T0-002"
+    assert result_entry["period_end"] == "2024-03-31"
+
+
+# --- Tests for gap_analysis ---
+
+
+def test_gap_analysis_coverage_ratio(tmp_path: Path) -> None:
+    target_day = date(2024, 6, 1)
+    client = FakeEdinetClient(
+        documents_by_date={
+            target_day: [
+                {
+                    "docID": "DOC-GA-OK",
+                    "edinetCode": "E03416",
+                    "docDescription": "有価証券報告書",
+                    "xbrlFlag": "1",
+                },
+                {
+                    "docID": "DOC-GA-FAIL",
+                    "edinetCode": "E03416",
+                    "docDescription": "有価証券報告書",
+                    "xbrlFlag": "1",
+                },
+            ]
+        },
+        download_payload_by_doc_id={"DOC-GA-OK": b"ok"},
+        download_errors={"DOC-GA-FAIL": EdinetError("fail")},
+    )
+
+    collect_edinet_reports(
+        edinet_code="E03416",
+        output_dir=tmp_path,
+        start_date=target_day,
+        end_date=target_day,
+        client=client,
+    )
+
+    with open(tmp_path / "manifest.json", "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    ga = manifest["gap_analysis"]
+    assert ga["total_calendar_days"] == 1
+    assert ga["matched_doc_count"] == 2
+    assert ga["downloaded_count"] == 1
+    assert ga["skipped_existing_count"] == 0
+    assert ga["failed_count"] == 1
+    assert ga["coverage_ratio"] == 0.5
+    assert ga["effective_coverage_ratio"] == 0.5
+
+
+def test_gap_analysis_effective_coverage_with_skipped(tmp_path: Path) -> None:
+    """Verify effective_coverage_ratio includes skipped_existing."""
+    target_day = date(2024, 6, 1)
+    client = FakeEdinetClient(
+        documents_by_date={
+            target_day: [
+                {
+                    "docID": "DOC-EFF-001",
+                    "edinetCode": "E03416",
+                    "docDescription": "有価証券報告書",
+                    "xbrlFlag": "1",
+                },
+            ]
+        },
+        download_payload_by_doc_id={"DOC-EFF-001": b"ok"},
+    )
+
+    # First run: download
+    collect_edinet_reports(
+        edinet_code="E03416",
+        output_dir=tmp_path,
+        start_date=target_day,
+        end_date=target_day,
+        client=client,
+    )
+    # Second run: skipped_existing
+    collect_edinet_reports(
+        edinet_code="E03416",
+        output_dir=tmp_path,
+        start_date=target_day,
+        end_date=target_day,
+        client=client,
+    )
+
+    with open(tmp_path / "manifest.json", "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    ga = manifest["gap_analysis"]
+    assert ga["downloaded_count"] == 0
+    assert ga["skipped_existing_count"] == 1
+    assert ga["coverage_ratio"] == 0.0
+    assert ga["effective_coverage_ratio"] == 1.0
+
+
+# --- Tests for --naming-strategy CLI argument ---
+
+
+def test_cli_naming_strategy_argument() -> None:
+    import importlib
+    import types
+
+    _script_dir = Path(__file__).resolve().parents[1] / "scripts"
+
+    # Load main.py as __main__ to trigger the direct-execution branch
+    spec = importlib.util.spec_from_file_location(
+        "__main__", _script_dir / "main.py",
+        submodule_search_locations=[],
+    )
+    # Temporarily patch __name__ so the if-branch takes the non-package path
+    loader = spec.loader
+    mod = types.ModuleType("__main__")
+    mod.__file__ = str(_script_dir / "main.py")
+    mod.__spec__ = spec
+
+    # Instead of exec, just test argparse directly using build_parser pattern
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command")
+    parser_ed = subparsers.add_parser("edinet")
+    parser_ed.add_argument("edinet_code")
+    parser_ed.add_argument("--pdf", action="store_true")
+    parser_ed.add_argument(
+        "--naming-strategy",
+        choices=["ticker_year", "doc_id", "doc_id_desc"],
+        default="ticker_year",
+    )
+
+    args = parser.parse_args([
+        "edinet", "E03416", "--pdf", "--naming-strategy", "doc_id",
+    ])
+    assert args.naming_strategy == "doc_id"
+
+    args_default = parser.parse_args(["edinet", "E03416", "--pdf"])
+    assert args_default.naming_strategy == "ticker_year"

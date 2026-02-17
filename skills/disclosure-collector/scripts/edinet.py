@@ -333,6 +333,66 @@ def _build_pdf_base_name(document: dict, ticker: str | None = None) -> str:
     return f"{code}_{doc_type_label}_{year}"
 
 
+NAMING_STRATEGIES = ("ticker_year", "doc_id", "doc_id_desc")
+
+
+def _build_pdf_base_name_by_strategy(
+    document: dict,
+    naming_strategy: str = "ticker_year",
+    ticker: str | None = None,
+) -> str:
+    """Build PDF base filename using the specified naming strategy.
+
+    Strategies:
+        ticker_year: {ticker}_{docType}_{year} (legacy default)
+        doc_id: {docID}_{periodEnd} (unique per document)
+        doc_id_desc: {docID}_{docDescription_sanitized}
+    """
+    if naming_strategy == "doc_id":
+        doc_id = str(document.get("docID", "")).strip()
+        period_end = str(document.get("periodEnd", "")).strip()
+        if period_end:
+            return f"{doc_id}_{period_end}"
+        return doc_id
+    if naming_strategy == "doc_id_desc":
+        doc_id = str(document.get("docID", "")).strip()
+        description = str(document.get("docDescription", "")).strip()
+        desc_safe = re.sub(r'[\\/:*?"<>|\s　]+', "_", description)[:30].rstrip("_")
+        return f"{doc_id}_{desc_safe}" if desc_safe else doc_id
+    # ticker_year (default, backward compatible)
+    return _build_pdf_base_name(document, ticker=ticker)
+
+
+def _build_manifest_t0_header(
+    edinet_code: str,
+    start: date,
+    end: date,
+    matched_count: int,
+    downloaded_count: int,
+    skipped_existing_count: int,
+    failed_count: int,
+) -> dict:
+    """Build standard T0 common metadata and gap_analysis for manifest."""
+    total_days = (end - start).days + 1
+    coverage = downloaded_count / max(matched_count, 1) if matched_count else 0.0
+    effective = (downloaded_count + skipped_existing_count) / max(matched_count, 1) if matched_count else 0.0
+    return {
+        "schema_version": "bank-common-metadata-v1",
+        "source": "edinet",
+        "endpoint_or_doc_id": edinet_code,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+    }, {
+        "total_calendar_days": total_days,
+        "matched_doc_count": matched_count,
+        "downloaded_count": downloaded_count,
+        "skipped_existing_count": skipped_existing_count,
+        "failed_count": failed_count,
+        "coverage_ratio": round(coverage, 4),
+        "effective_coverage_ratio": round(effective, 4),
+        "notes": [],
+    }
+
+
 def collect_edinet_pdfs(
     edinet_code: str,
     output_dir: Path | str,
@@ -344,6 +404,7 @@ def collect_edinet_pdfs(
     ticker: str | None = None,
     client: EdinetClient | None = None,
     allowed_doc_type_codes: set[str] | None = None,
+    naming_strategy: str = "ticker_year",
 ) -> dict:
     """Collect EDINET securities reports and download PDFs for each docID."""
     output_path = Path(output_dir)
@@ -409,7 +470,9 @@ def collect_edinet_pdfs(
             continue
 
         document = matched_docs_by_id[doc_id]
-        base_name = _build_pdf_base_name(document, ticker=ticker)
+        base_name = _build_pdf_base_name_by_strategy(
+            document, naming_strategy=naming_strategy, ticker=ticker,
+        )
 
         # Check if any PDF for this doc already exists
         existing = list(output_path.glob(f"{base_name}*.pdf"))
@@ -464,13 +527,25 @@ def collect_edinet_pdfs(
     skipped_count = sum(1 for s in download_statuses if s.status == "skipped_existing")
     failed_count = sum(1 for s in download_statuses if s.status == "failed")
 
+    t0_header, gap_analysis = _build_manifest_t0_header(
+        edinet_code=edinet_code,
+        start=start,
+        end=end,
+        matched_count=len(sorted_doc_ids),
+        downloaded_count=downloaded_count,
+        skipped_existing_count=skipped_count,
+        failed_count=failed_count,
+    )
+
     manifest = {
+        **t0_header,
         "edinet_code": edinet_code,
         "security_code": security_code,
         "ticker": ticker,
         "report_keyword": report_keyword,
         "allowed_form_codes": sorted(allowed_form_codes) if allowed_form_codes else None,
         "download_format": "pdf",
+        "naming_strategy": naming_strategy,
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -481,11 +556,15 @@ def collect_edinet_pdfs(
             "skipped_existing": skipped_count,
             "failed": failed_count,
         },
+        "gap_analysis": gap_analysis,
         "failed_dates": failed_dates,
         "failed_doc_ids": failed_doc_ids,
         "results": [
             {
                 "doc_id": s.doc_id,
+                "source": "edinet",
+                "endpoint_or_doc_id": s.doc_id,
+                "fetched_at": t0_header["fetched_at"],
                 "doc_description": matched_docs_by_id.get(s.doc_id, {}).get("docDescription"),
                 "period_start": matched_docs_by_id.get(s.doc_id, {}).get("periodStart"),
                 "period_end": matched_docs_by_id.get(s.doc_id, {}).get("periodEnd"),
@@ -627,7 +706,18 @@ def collect_edinet_reports(
     skipped_count = sum(1 for status in download_statuses if status.status == "skipped_existing")
     failed_count = sum(1 for status in download_statuses if status.status == "failed")
 
+    t0_header, gap_analysis = _build_manifest_t0_header(
+        edinet_code=edinet_code,
+        start=start,
+        end=end,
+        matched_count=len(sorted_doc_ids),
+        downloaded_count=downloaded_count,
+        skipped_existing_count=skipped_count,
+        failed_count=failed_count,
+    )
+
     manifest = {
+        **t0_header,
         "edinet_code": edinet_code,
         "security_code": security_code,
         "report_keyword": report_keyword,
@@ -642,11 +732,16 @@ def collect_edinet_reports(
             "skipped_existing": skipped_count,
             "failed": failed_count,
         },
+        "gap_analysis": gap_analysis,
         "failed_dates": failed_dates,
         "failed_doc_ids": failed_doc_ids,
         "results": [
             {
                 "doc_id": status.doc_id,
+                "source": "edinet",
+                "endpoint_or_doc_id": status.doc_id,
+                "fetched_at": t0_header["fetched_at"],
+                "period_end": matched_docs_by_id.get(status.doc_id, {}).get("periodEnd"),
                 "status": status.status,
                 "file_path": status.file_path,
                 "error": status.error,
