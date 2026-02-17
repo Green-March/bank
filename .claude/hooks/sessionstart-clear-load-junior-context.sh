@@ -1,7 +1,38 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-project_dir="${CLAUDE_PROJECT_DIR:-$PWD}"
+resolve_project_dir() {
+  local env_dir="${CLAUDE_PROJECT_DIR:-}"
+  if [ -n "${env_dir}" ] && [ -d "${env_dir}/.claude" ]; then
+    printf '%s' "${env_dir}"
+    return 0
+  fi
+
+  local script_dir candidate
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  candidate="$(cd "${script_dir}/../.." && pwd)"
+  if [ -d "${candidate}/.claude" ]; then
+    printf '%s' "${candidate}"
+    return 0
+  fi
+
+  local cursor="${PWD}"
+  while [ -n "${cursor}" ] && [ "${cursor}" != "/" ]; do
+    if [ -d "${cursor}/.claude" ] && [ -d "${cursor}/instructions" ]; then
+      printf '%s' "${cursor}"
+      return 0
+    fi
+    cursor="$(dirname "${cursor}")"
+  done
+
+  return 1
+}
+
+project_dir="$(resolve_project_dir || true)"
+if [ -z "${project_dir}" ]; then
+  project_dir="${CLAUDE_PROJECT_DIR:-$PWD}"
+fi
+
 log_dir="${project_dir}/.claude/hooks/logs"
 log_file="${log_dir}/sessionstart-clear.log"
 runtime_map_file="${project_dir}/.claude/runtime/agent-pane-map.tsv"
@@ -9,6 +40,16 @@ runtime_map_file="${project_dir}/.claude/runtime/agent-pane-map.tsv"
 log() {
   mkdir -p "${log_dir}" 2>/dev/null || true
   printf '[%s] %s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "$*" >> "${log_file}" 2>/dev/null || true
+}
+
+json_escape() {
+  local str="${1-}"
+  str="${str//\\/\\\\}"
+  str="${str//\"/\\\"}"
+  str="${str//$'\n'/\\n}"
+  str="${str//$'\r'/\\r}"
+  str="${str//$'\t'/\\t}"
+  printf '%s' "${str}"
 }
 
 normalize_role() {
@@ -250,8 +291,10 @@ emit_json() {
     return 0
   fi
 
-  log "skip: cannot emit JSON (python3/jq not found)"
-  return 1
+  local input
+  input="$(cat || true)"
+  printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}' "$(json_escape "${input}")"
+  return 0
 }
 
 main() {

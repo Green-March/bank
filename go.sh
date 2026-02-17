@@ -13,14 +13,17 @@ cd "$SCRIPT_DIR"
 
 LANG_SETTING="ja"
 SHELL_SETTING="bash"
+CODEX_MODEL_SETTING="high"
 SETUP_ONLY=false
 OPEN_TERMINAL=false
 SHELL_OVERRIDE=""
 TARGET_OVERRIDE=""
+CODEX_MODEL_OVERRIDE=""
 
 if [ -f "./config/settings.yaml" ]; then
     LANG_SETTING=$(grep "^language:" ./config/settings.yaml 2>/dev/null | awk '{print $2}' || echo "ja")
     SHELL_SETTING=$(grep "^shell:" ./config/settings.yaml 2>/dev/null | awk '{print $2}' || echo "bash")
+    CODEX_MODEL_SETTING=$(grep "^codex_model:" ./config/settings.yaml 2>/dev/null | awk '{print $2}' || echo "high")
 fi
 
 log_info() { echo -e "[INFO] $1"; }
@@ -36,6 +39,7 @@ usage() {
     echo "  -s, --setup-only       Create tmux layout only"
     echo "  -t, --terminal         Open Windows Terminal tab (WSL)"
     echo "  -shell, --shell <sh>   Override shell (bash|zsh)"
+    echo "  --codex-model <m>      Codex model for senior/reviewer (high|xhigh, default: high)"
     echo "  --target <dir>         Target workspace directory"
     echo "  -h, --help             Show this help"
     echo ""
@@ -70,6 +74,15 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             ;;
+        --codex-model)
+            if [[ -n "$2" && "$2" != -* ]]; then
+                CODEX_MODEL_OVERRIDE="$2"
+                shift 2
+            else
+                echo "Error: --codex-model requires high or xhigh"
+                exit 1
+            fi
+            ;;
         -h|--help)
             usage
             ;;
@@ -93,7 +106,21 @@ fi
 if [ -n "$TARGET_OVERRIDE" ]; then
     TARGET_DIR="$TARGET_OVERRIDE"
 else
-    TARGET_DIR="$ORIGINAL_DIR"
+    if [ -d "$ORIGINAL_DIR/.claude" ] && [ -d "$ORIGINAL_DIR/instructions" ]; then
+        TARGET_DIR="$ORIGINAL_DIR"
+    else
+        TARGET_DIR="$SCRIPT_DIR"
+        log_warn "Defaulting workspace target to script dir ($TARGET_DIR). Use --target to override."
+    fi
+fi
+
+if [ -n "$CODEX_MODEL_OVERRIDE" ]; then
+    CODEX_MODEL_SETTING="$CODEX_MODEL_OVERRIDE"
+fi
+
+if [[ "$CODEX_MODEL_SETTING" != "high" && "$CODEX_MODEL_SETTING" != "xhigh" ]]; then
+    echo "Error: codex model must be high or xhigh (current: $CODEX_MODEL_SETTING)"
+    exit 1
 fi
 
 if [ ! -d "$TARGET_DIR" ]; then
@@ -108,6 +135,7 @@ workspace:
 EOF_TARGET
 
 log_info "Workspace target: $TARGET_DIR"
+log_info "Codex model (senior/reviewer): $CODEX_MODEL_SETTING"
 
 log_info "Cleaning existing tmux session..."
 tmux kill-session -t multiagent 2>/dev/null && log_info "  - multiagent removed" || log_info "  - no existing session"
@@ -307,7 +335,7 @@ set_pane() {
     prompt="$(generate_prompt "$label" "$color" "$SHELL_SETTING")"
     tmux set-option -pt "$pane_id" @agent_role "$label"
     tmux select-pane -t "$pane_id" -T "$label"
-    tmux send-keys -t "$pane_id" "cd \"$TARGET_DIR\" && export AGENT_ROLE='${label}' && export PS1='${prompt}' && clear" Enter
+    tmux send-keys -t "$pane_id" "cd \"$TARGET_DIR\" && export AGENT_ROLE='${label}' && export CLAUDE_PROJECT_DIR='${TARGET_DIR}' && export PS1='${prompt}' && clear" Enter
 }
 
 set_pane "$manager_pane" "manager" "magenta"
@@ -337,8 +365,9 @@ if [ "$SETUP_ONLY" = false ]; then
     # Codex needs unsandboxed execution to access tmux sockets on macOS.
     # Minimize risk by scrubbing common credential env vars and pinning cwd.
     build_codex_cmd() {
-        local target_q env_unset var
+        local target_q model_q env_unset var
         target_q="$(printf '%q' "$TARGET_DIR")"
+        model_q="$(printf '%q' "$CODEX_MODEL_SETTING")"
         env_unset=""
         for var in \
             OPENAI_API_KEY ANTHROPIC_API_KEY \
@@ -348,7 +377,7 @@ if [ "$SETUP_ONLY" = false ]; then
             SSH_AUTH_SOCK; do
             env_unset="${env_unset} -u ${var}"
         done
-        echo "env${env_unset} codex -s danger-full-access -a never -C ${target_q}"
+        echo "env${env_unset} codex --model ${model_q} -s danger-full-access -a never -C ${target_q}"
     }
     CODEX_CMD="$(build_codex_cmd)"
 
@@ -360,7 +389,7 @@ if [ "$SETUP_ONLY" = false ]; then
     tmux send-keys -t "$reviewer_pane" "${CODEX_CMD}" Enter
 
     log_success "Agents launched"
-    log_warn "Senior/Reviewer Codex uses danger-full-access for tmux compatibility; common credential env vars are scrubbed."
+    log_warn "Senior/Reviewer Codex uses --model ${CODEX_MODEL_SETTING} and danger-full-access for tmux compatibility; common credential env vars are scrubbed."
 
     sleep 5
 
@@ -374,6 +403,7 @@ if [ "$SETUP_ONLY" = false ]; then
 
     send_msg "$manager_pane" "instructions/manager.md を読んで役割を理解してください。"
     send_msg "$senior_pane" "instructions/senior.md を読んで役割を理解してください。"
+    send_msg "$senior_pane" "重要: Senior はコード編集・テスト実行・ファイルI/O・データ処理を絶対に自分で実行してはなりません。簡単な修正でも必ず Junior に委任してください。違反した場合は Manager が変更を revert し正規フローで再実行を指示します。"
     send_msg "$junior1_pane" "instructions/junior1.md を読んで役割を理解してください。"
     send_msg "$junior2_pane" "instructions/junior2.md を読んで役割を理解してください。"
     send_msg "$junior3_pane" "instructions/junior3.md を読んで役割を理解してください。"

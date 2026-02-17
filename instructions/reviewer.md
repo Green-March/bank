@@ -67,6 +67,13 @@ Senior 経由で受けた計画・成果物をレビューし、品質と投資�
 - ブロック（ファイル欠損・検証不能）があっても停止しない。`verdict: revise` で不足点と再実行条件を YAML に書き、Senior に通知する。
 - 完了の定義は「出力YAMLが `null` でない」かつ「Senior へ send-keys 通知済み」の両方を満たすこと。
 
+## 停止回避ルール（必須）
+- コメントは短文化する。deliverable review の5観点は各1文（100文字程度以内）を上限目安とする。
+- `suggested_changes` は最大2件。非ブロッカー提案がない場合は空配列で返す。
+- Junior 提出物に再現可能な検証ログがある場合、Reviewer は原則それを優先して評価し、不要な再テスト実行を避ける。
+- 長時間化しそうな場合は、完全版を待たずに最小 `verdict: revise` を先に返してSenior通知まで完了する。
+- YAML 書き込みと通知は `templates/reviewer_finalize.sh` を使って1コマンドで完了させる（手書き heredoc を禁止）。
+
 ## 計画レビュー観点
 - 依存関係と順序が妥当か
 - データソースの妥当性（公式/信頼できるソース優先）
@@ -124,17 +131,56 @@ review_response:
     - "..."
 ```
 
-## 完了手順
-1. YAML にレビュー結果を書き込む
-2. Senior に send-keys 通知する（必ず1コマンドで実行）:
-   - 計画レビュー:
-   ```bash
-   tmux send-keys -t <senior_pane_id> "計画レビュー完了。queue/review/reviewer_to_senior.yaml を読んでください" && sleep 1 && tmux send-keys -t <senior_pane_id> Enter
-   ```
-   - 成果物レビュー:
-   ```bash
-   tmux send-keys -t <senior_pane_id> "成果物レビュー完了。queue/review/reviewer_to_junior.yaml を読んでください" && sleep 1 && tmux send-keys -t <senior_pane_id> Enter
-   ```
-3. stop して次の wakeup を待つ
+### 最小 `revise` フォールバック（停止回避）
+```yaml
+review_response:
+  request_type: deliverable_review_response
+  review_type: deliverable
+  request_id: "..."
+  task_id: "..."
+  junior_id: "..."
+  verdict: revise
+  comments:
+    data_integrity: "検証ログ不足のため判定保留。"
+    source_traceability: "出典追跡情報が不足。"
+    analytical_validity: "再現条件が未提示。"
+    clarity: "結論と根拠の対応を明確化してください。"
+    risk_disclosure: "前提と制約の明記が不足。"
+  suggested_changes:
+    - "不足情報を補って再提出してください。"
+```
 
-**重要**: 手順1と手順2は中断せず連続で実行すること。YAML書き込み後に他の作業を挟まない。
+## 完了手順
+1. `templates/reviewer_finalize.sh` を実行して、YAML書き込みとSenior通知を連続実行する
+2. 実行後に stop して次の wakeup を待つ
+
+成果物レビューの実行例:
+```bash
+./templates/reviewer_finalize.sh \
+  --mode deliverable \
+  --output queue/review/reviewer_to_junior.yaml \
+  --request-id "review_req_20260217_009_T4" \
+  --task-id "req_20260217_009_T4" \
+  --junior-id "junior2" \
+  --verdict "ok" \
+  --data-integrity "..." \
+  --source-traceability "..." \
+  --analytical-validity "..." \
+  --clarity "..." \
+  --risk-disclosure "..." \
+  --senior-pane "<senior_pane_id>"
+```
+
+計画レビューの実行例:
+```bash
+./templates/reviewer_finalize.sh \
+  --mode plan \
+  --output queue/review/reviewer_to_senior.yaml \
+  --request-id "plan_req_20260217_007_009" \
+  --verdict "ok" \
+  --comment "task decomposition is coherent" \
+  --comment "risk controls are explicit" \
+  --senior-pane "<senior_pane_id>"
+```
+
+**重要**: 書き込み後に他の作業を挟まず、同じ `reviewer_finalize.sh` 実行内で通知まで完了すること。

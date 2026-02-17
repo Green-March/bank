@@ -228,6 +228,137 @@ class TestCalculateComputations:
                 assert fcf is not None
                 assert math.isclose(fcf, round(expected, 2), rel_tol=1e-9)
 
+    def test_roe_computation(self, metrics_payload, records):
+        """ROE = net_income / equity * 100; verify against raw records."""
+        for entry, rec in zip(metrics_payload["metrics_series"], records):
+            roe = entry["roe_percent"]
+            if rec.net_income is not None and rec.equity is not None and rec.equity != 0:
+                expected = round((rec.net_income / rec.equity) * 100.0, 2)
+                assert roe is not None, (
+                    f"FY{entry['fiscal_year']}: ROE should not be None"
+                )
+                assert math.isclose(roe, expected, rel_tol=1e-9), (
+                    f"FY{entry['fiscal_year']}: ROE expected={expected}, got={roe}"
+                )
+            else:
+                assert roe is None, (
+                    f"FY{entry['fiscal_year']}: ROE should be None when inputs missing"
+                )
+
+    def test_equity_ratio_computation(self, metrics_payload, records):
+        """equity_ratio = equity / total_assets * 100; verify against raw records."""
+        for entry, rec in zip(metrics_payload["metrics_series"], records):
+            eq_ratio = entry["equity_ratio_percent"]
+            if rec.equity is not None and rec.total_assets is not None and rec.total_assets != 0:
+                expected = round((rec.equity / rec.total_assets) * 100.0, 2)
+                assert eq_ratio is not None, (
+                    f"FY{entry['fiscal_year']}: equity_ratio should not be None"
+                )
+                assert math.isclose(eq_ratio, expected, rel_tol=1e-9), (
+                    f"FY{entry['fiscal_year']}: equity_ratio expected={expected}, got={eq_ratio}"
+                )
+            else:
+                assert eq_ratio is None, (
+                    f"FY{entry['fiscal_year']}: equity_ratio should be None when inputs missing"
+                )
+
+    def test_roe_at_least_one_non_none(self, metrics_payload):
+        """7685 data should produce at least one non-None ROE."""
+        roe_values = [e["roe_percent"] for e in metrics_payload["metrics_series"]]
+        non_none = [v for v in roe_values if v is not None]
+        assert len(non_none) > 0, "No non-None ROE found in 7685 data"
+
+    def test_equity_ratio_at_least_one_non_none(self, metrics_payload):
+        """7685 data should produce at least one non-None equity_ratio."""
+        eq_values = [e["equity_ratio_percent"] for e in metrics_payload["metrics_series"]]
+        non_none = [v for v in eq_values if v is not None]
+        assert len(non_none) > 0, "No non-None equity_ratio found in 7685 data"
+
+    def test_roe_range(self, metrics_payload):
+        """ROE should be within a plausible range."""
+        for entry in metrics_payload["metrics_series"]:
+            roe = entry["roe_percent"]
+            if roe is not None:
+                assert -500.0 <= roe <= 500.0, f"ROE {roe}% out of plausible range"
+
+
+# ── calculate: total_equity alias ─────────────────────────────────
+
+
+class TestTotalEquityAlias:
+    """Verify that total_equity in bs is picked up as equity."""
+
+    def test_total_equity_alias_resolves(self, tmp_path):
+        """bs with total_equity (no net_assets/equity) → equity is resolved."""
+        _write_minimal_financials(
+            tmp_path,
+            [
+                {
+                    "period_end": "2024-03-31",
+                    "fiscal_year": 2024,
+                    "period_type": "FY",
+                    "bs": {"total_assets": 10_000_000, "total_equity": 4_000_000},
+                    "pl": {"revenue": 5_000_000, "net_income": 500_000},
+                    "cf": {},
+                }
+            ],
+        )
+        payload = calculate_metrics_payload(parsed_dir=tmp_path, ticker="0000")
+        entry = payload["metrics_series"][0]
+        assert entry["roe_percent"] is not None
+        expected_roe = round((500_000 / 4_000_000) * 100.0, 2)
+        assert math.isclose(entry["roe_percent"], expected_roe, rel_tol=1e-9)
+        expected_eq_ratio = round((4_000_000 / 10_000_000) * 100.0, 2)
+        assert math.isclose(entry["equity_ratio_percent"], expected_eq_ratio, rel_tol=1e-9)
+
+    def test_equity_preferred_over_total_equity(self, tmp_path):
+        """When both equity and total_equity exist, equity takes precedence."""
+        _write_minimal_financials(
+            tmp_path,
+            [
+                {
+                    "period_end": "2024-03-31",
+                    "fiscal_year": 2024,
+                    "period_type": "FY",
+                    "bs": {
+                        "total_assets": 10_000_000,
+                        "equity": 5_000_000,
+                        "total_equity": 4_000_000,
+                    },
+                    "pl": {"net_income": 500_000},
+                    "cf": {},
+                }
+            ],
+        )
+        payload = calculate_metrics_payload(parsed_dir=tmp_path, ticker="0000")
+        entry = payload["metrics_series"][0]
+        expected_roe = round((500_000 / 5_000_000) * 100.0, 2)
+        assert math.isclose(entry["roe_percent"], expected_roe, rel_tol=1e-9)
+
+    def test_total_equity_null_falls_through(self, tmp_path):
+        """total_equity is null → falls through to net_assets."""
+        _write_minimal_financials(
+            tmp_path,
+            [
+                {
+                    "period_end": "2024-03-31",
+                    "fiscal_year": 2024,
+                    "period_type": "FY",
+                    "bs": {
+                        "total_assets": 10_000_000,
+                        "total_equity": None,
+                        "net_assets": 3_000_000,
+                    },
+                    "pl": {"net_income": 300_000},
+                    "cf": {},
+                }
+            ],
+        )
+        payload = calculate_metrics_payload(parsed_dir=tmp_path, ticker="0000")
+        entry = payload["metrics_series"][0]
+        expected_roe = round((300_000 / 3_000_000) * 100.0, 2)
+        assert math.isclose(entry["roe_percent"], expected_roe, rel_tol=1e-9)
+
 
 # ── calculate: file write ────────────────────────────────────────
 
@@ -378,16 +509,13 @@ class TestCalculateMissingKeys:
         assert entry["equity_ratio_percent"] is None
         assert entry["revenue"] == 1_000_000.0
 
-    def test_empty_period_index_falls_back_to_payload(self, tmp_path):
-        """Empty period_index → _extract_candidates returns [payload] as fallback.
-        This produces 1 record with all financial fields None."""
+    def test_empty_period_index_yields_no_records(self, tmp_path):
+        """Empty period_index → no candidates, no fiscal_year=None pollution."""
         _write_minimal_financials(tmp_path, [])
         payload = calculate_metrics_payload(parsed_dir=tmp_path, ticker="0000")
-        assert payload["source_count"] == 1
-        assert len(payload["metrics_series"]) == 1
-        entry = payload["metrics_series"][0]
-        for field in ("revenue", "operating_income", "net_income", "operating_cf"):
-            assert entry[field] is None, f"{field} should be None for empty input"
+        assert payload["source_count"] == 0
+        assert payload["metrics_series"] == []
+        assert payload["latest_snapshot"] is None
 
     def test_all_pl_null_yields_all_none_metrics(self, tmp_path):
         """Period with all pl values null → derived metrics are None."""
@@ -490,6 +618,367 @@ class TestCalculateMissingKeys:
         assert math.isclose(
             second["revenue_growth_yoy_percent"], expected_growth, rel_tol=1e-9
         )
+
+
+# ── calculate: fiscal_year deduplication ──────────────────────────
+
+
+class TestDeduplicateFiscalYear:
+    """Verify fiscal_year dedup selects the best representative per FY."""
+
+    def test_selects_highest_nonnull_count(self, tmp_path):
+        """Record with more non-null financial fields wins."""
+        _write_minimal_financials(
+            tmp_path,
+            [
+                {
+                    "period_end": "2024-03-31",
+                    "fiscal_year": 2024,
+                    "period_type": "duration",
+                    "bs": {},
+                    "pl": {"revenue": 1_000_000, "net_income": 50_000},
+                    "cf": {},
+                },
+                {
+                    "period_end": "2024-03-31",
+                    "fiscal_year": 2024,
+                    "period_type": "mixed",
+                    "bs": {"total_assets": 5_000_000, "net_assets": 2_000_000},
+                    "pl": {"revenue": 1_000_000, "operating_income": 100_000, "net_income": 50_000},
+                    "cf": {},
+                },
+            ],
+        )
+        payload = calculate_metrics_payload(parsed_dir=tmp_path, ticker="0000")
+        assert len(payload["metrics_series"]) == 1
+        entry = payload["metrics_series"][0]
+        # mixed record has BS data → roa_percent should be computable
+        assert entry["roa_percent"] is not None
+
+    def test_period_type_tiebreaker(self, tmp_path):
+        """Same nonnull count → mixed > duration > instant."""
+        _write_minimal_financials(
+            tmp_path,
+            [
+                {
+                    "period_end": "2024-03-31",
+                    "fiscal_year": 2024,
+                    "period_type": "duration",
+                    "bs": {"total_assets": 5_000_000, "net_assets": 2_000_000},
+                    "pl": {"revenue": 1_000_000, "net_income": 50_000},
+                    "cf": {},
+                },
+                {
+                    "period_end": "2024-03-31",
+                    "fiscal_year": 2024,
+                    "period_type": "mixed",
+                    "bs": {"total_assets": 5_000_000, "net_assets": 2_000_000},
+                    "pl": {"revenue": 2_000_000, "net_income": 100_000},
+                    "cf": {},
+                },
+            ],
+        )
+        payload = calculate_metrics_payload(parsed_dir=tmp_path, ticker="0000")
+        assert len(payload["metrics_series"]) == 1
+        entry = payload["metrics_series"][0]
+        assert entry["revenue"] == 2_000_000.0
+
+    def test_period_end_tiebreaker(self, tmp_path):
+        """Same nonnull count and period_type → newer period_end wins."""
+        _write_minimal_financials(
+            tmp_path,
+            [
+                {
+                    "period_end": "2024-03-31",
+                    "fiscal_year": 2024,
+                    "period_type": "mixed",
+                    "bs": {"total_assets": 5_000_000},
+                    "pl": {"revenue": 1_000_000, "net_income": 50_000},
+                    "cf": {},
+                },
+                {
+                    "period_end": "2024-12-31",
+                    "fiscal_year": 2024,
+                    "period_type": "mixed",
+                    "bs": {"total_assets": 8_000_000},
+                    "pl": {"revenue": 3_000_000, "net_income": 200_000},
+                    "cf": {},
+                },
+            ],
+        )
+        payload = calculate_metrics_payload(parsed_dir=tmp_path, ticker="0000")
+        assert len(payload["metrics_series"]) == 1
+        entry = payload["metrics_series"][0]
+        assert entry["revenue"] == 3_000_000.0
+        # Later period_end record has ta=8M, ni=200K → roa = 2.5%
+        expected_roa = round((200_000 / 8_000_000) * 100.0, 2)
+        assert math.isclose(entry["roa_percent"], expected_roa, rel_tol=1e-9)
+
+    def test_instant_loses_to_duration(self, tmp_path):
+        """instant (bs-only) loses to duration (pl-only) at equal nonnull count."""
+        _write_minimal_financials(
+            tmp_path,
+            [
+                {
+                    "period_end": "2024-12-31",
+                    "fiscal_year": 2024,
+                    "period_type": "instant",
+                    "bs": {"total_assets": 5_000_000, "net_assets": 2_000_000},
+                    "pl": {},
+                    "cf": {},
+                },
+                {
+                    "period_end": "2024-03-31",
+                    "fiscal_year": 2024,
+                    "period_type": "duration",
+                    "bs": {},
+                    "pl": {"revenue": 1_000_000, "net_income": 50_000},
+                    "cf": {},
+                },
+            ],
+        )
+        payload = calculate_metrics_payload(parsed_dir=tmp_path, ticker="0000")
+        assert len(payload["metrics_series"]) == 1
+        entry = payload["metrics_series"][0]
+        assert entry["revenue"] == 1_000_000.0
+
+    def test_unique_fiscal_years_in_real_data(self, metrics_payload):
+        """After dedup, each fiscal_year appears at most once."""
+        fiscal_years = [e["fiscal_year"] for e in metrics_payload["metrics_series"]]
+        non_none = [fy for fy in fiscal_years if fy is not None]
+        assert len(non_none) == len(set(non_none)), f"Duplicate fiscal_years: {non_none}"
+
+    def test_real_data_record_count(self, records):
+        """7685 real data: each fiscal_year represented exactly once."""
+        from collections import Counter
+
+        fy_counts = Counter(r.fiscal_year for r in records)
+        for fy, count in fy_counts.items():
+            assert count == 1, f"FY{fy} has {count} records, expected 1"
+
+    def test_none_fiscal_year_preserved(self, tmp_path):
+        """Records with fiscal_year=None are preserved (one representative)."""
+        _write_minimal_financials(
+            tmp_path,
+            [
+                {
+                    "period_end": "2024-03-31",
+                    "fiscal_year": 2024,
+                    "period_type": "FY",
+                    "bs": {"total_assets": 5_000_000},
+                    "pl": {"revenue": 1_000_000},
+                    "cf": {},
+                },
+                {
+                    "period_end": None,
+                    "fiscal_year": None,
+                    "period_type": "FY",
+                    "bs": {},
+                    "pl": {"revenue": 500_000},
+                    "cf": {},
+                },
+            ],
+        )
+        payload = calculate_metrics_payload(parsed_dir=tmp_path, ticker="0000")
+        assert len(payload["metrics_series"]) == 2
+
+    def test_three_way_dedup(self, tmp_path):
+        """Three records same FY: instant(2), duration(3), mixed(5) → mixed wins."""
+        _write_minimal_financials(
+            tmp_path,
+            [
+                {
+                    "period_end": "2024-12-31",
+                    "fiscal_year": 2024,
+                    "period_type": "instant",
+                    "bs": {"total_assets": 10_000_000, "net_assets": 4_000_000},
+                    "pl": {},
+                    "cf": {},
+                },
+                {
+                    "period_end": "2024-03-31",
+                    "fiscal_year": 2024,
+                    "period_type": "duration",
+                    "bs": {},
+                    "pl": {"revenue": 5_000_000, "operating_income": 500_000, "net_income": 300_000},
+                    "cf": {},
+                },
+                {
+                    "period_end": "2024-03-31",
+                    "fiscal_year": 2024,
+                    "period_type": "mixed",
+                    "bs": {"total_assets": 8_000_000, "net_assets": 3_000_000},
+                    "pl": {"revenue": 5_000_000, "operating_income": 500_000, "net_income": 300_000},
+                    "cf": {},
+                },
+            ],
+        )
+        payload = calculate_metrics_payload(parsed_dir=tmp_path, ticker="0000")
+        assert len(payload["metrics_series"]) == 1
+        entry = payload["metrics_series"][0]
+        assert entry["revenue"] == 5_000_000.0
+        # mixed record has BS data → equity_ratio should be computable
+        assert entry["equity_ratio_percent"] is not None
+
+    def test_same_values_different_period_type_selects_mixed(self, tmp_path):
+        """Same FY, same period_end, same financials, only period_type differs.
+        Phase1 must NOT collapse them; Phase2 must pick mixed over duration."""
+        _write_minimal_financials(
+            tmp_path,
+            [
+                {
+                    "period_end": "2024-03-31",
+                    "fiscal_year": 2024,
+                    "period_type": "duration",
+                    "bs": {"total_assets": 5_000_000, "net_assets": 2_000_000},
+                    "pl": {"revenue": 1_000_000, "operating_income": 100_000, "net_income": 50_000},
+                    "cf": {},
+                },
+                {
+                    "period_end": "2024-03-31",
+                    "fiscal_year": 2024,
+                    "period_type": "mixed",
+                    "bs": {"total_assets": 5_000_000, "net_assets": 2_000_000},
+                    "pl": {"revenue": 1_000_000, "operating_income": 100_000, "net_income": 50_000},
+                    "cf": {},
+                },
+            ],
+        )
+        payload = calculate_metrics_payload(parsed_dir=tmp_path, ticker="0000")
+        assert len(payload["metrics_series"]) == 1
+        entry = payload["metrics_series"][0]
+        assert entry["period"] == "mixed"
+        assert entry["revenue"] == 1_000_000.0
+
+    def test_same_values_different_period_type_duration_over_instant(self, tmp_path):
+        """Same FY, same financials, period_type differs: duration beats instant."""
+        _write_minimal_financials(
+            tmp_path,
+            [
+                {
+                    "period_end": "2024-12-31",
+                    "fiscal_year": 2024,
+                    "period_type": "instant",
+                    "bs": {"total_assets": 5_000_000},
+                    "pl": {"revenue": 1_000_000, "net_income": 50_000},
+                    "cf": {},
+                },
+                {
+                    "period_end": "2024-12-31",
+                    "fiscal_year": 2024,
+                    "period_type": "duration",
+                    "bs": {"total_assets": 5_000_000},
+                    "pl": {"revenue": 1_000_000, "net_income": 50_000},
+                    "cf": {},
+                },
+            ],
+        )
+        payload = calculate_metrics_payload(parsed_dir=tmp_path, ticker="0000")
+        assert len(payload["metrics_series"]) == 1
+        entry = payload["metrics_series"][0]
+        assert entry["period"] == "duration"
+
+
+# ── extract_candidates: fallback / None fiscal_year ──────────────
+
+
+class TestExtractCandidatesFallback:
+    """Verify _extract_candidates fallback prevents fiscal_year=None pollution."""
+
+    def test_payload_with_fiscal_year_used_as_fallback(self, tmp_path):
+        """Payload with valid fiscal_year but no periods/documents → used as single record."""
+        payload = {
+            "ticker": "9999",
+            "fiscal_year": 2024,
+            "period": "FY",
+            "period_end": "2024-03-31",
+            "bs": {"total_assets": 10_000_000, "net_assets": 5_000_000},
+            "pl": {"revenue": 3_000_000, "net_income": 200_000},
+            "cf": {},
+        }
+        directory = tmp_path
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "single.json").write_text(
+            json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+        )
+        result = calculate_metrics_payload(parsed_dir=directory, ticker="9999")
+        assert result["source_count"] == 1
+        entry = result["metrics_series"][0]
+        assert entry["fiscal_year"] == 2024
+        assert entry["revenue"] == 3_000_000.0
+
+    def test_payload_without_fiscal_year_skipped(self, tmp_path):
+        """Container payload (no fiscal_year, empty period_index) → 0 records."""
+        payload = {
+            "ticker": "0000",
+            "documents": [],
+            "period_index": [],
+            "schema": {"bs": [], "pl": [], "cf": []},
+        }
+        directory = tmp_path
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "container.json").write_text(
+            json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+        )
+        result = calculate_metrics_payload(parsed_dir=directory, ticker="0000")
+        assert result["source_count"] == 0
+        assert result["metrics_series"] == []
+
+    def test_none_fiscal_year_not_injected_by_fallback(self, tmp_path):
+        """Two files: one valid period_index, one empty container.
+        Only valid records appear; no fiscal_year=None pollution."""
+        valid = {
+            "ticker": "1111",
+            "period_index": [
+                {
+                    "period_end": "2024-03-31",
+                    "fiscal_year": 2024,
+                    "period_type": "FY",
+                    "bs": {"total_assets": 5_000_000},
+                    "pl": {"revenue": 1_000_000, "net_income": 50_000},
+                    "cf": {},
+                }
+            ],
+        }
+        empty_container = {
+            "ticker": "1111",
+            "documents": [],
+            "period_index": [],
+        }
+        directory = tmp_path
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "a_valid.json").write_text(
+            json.dumps(valid, ensure_ascii=False), encoding="utf-8"
+        )
+        (directory / "b_empty.json").write_text(
+            json.dumps(empty_container, ensure_ascii=False), encoding="utf-8"
+        )
+        result = calculate_metrics_payload(parsed_dir=directory, ticker="1111")
+        assert result["source_count"] == 1
+        fiscal_years = [e["fiscal_year"] for e in result["metrics_series"]]
+        assert None not in fiscal_years
+        assert fiscal_years == [2024]
+
+    def test_duplicate_periods_across_files_deduped(self, tmp_path):
+        """Same period in two files → dedup keeps one representative."""
+        period_data = {
+            "period_end": "2024-03-31",
+            "fiscal_year": 2024,
+            "period_type": "FY",
+            "bs": {"total_assets": 10_000_000, "net_assets": 4_000_000},
+            "pl": {"revenue": 5_000_000, "operating_income": 500_000, "net_income": 300_000},
+            "cf": {"operating_cf": 400_000},
+        }
+        for name in ("file1.json", "file2.json"):
+            payload = {"ticker": "2222", "period_index": [period_data]}
+            (tmp_path / name).write_text(
+                json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+            )
+        result = calculate_metrics_payload(parsed_dir=tmp_path, ticker="2222")
+        assert len(result["metrics_series"]) == 1
+        entry = result["metrics_series"][0]
+        assert entry["fiscal_year"] == 2024
+        assert entry["revenue"] == 5_000_000.0
 
 
 # ── End-to-end CLI via subprocess ────────────────────────────────

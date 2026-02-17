@@ -19,6 +19,7 @@ allowed:
     - python3
     - pytest
     - tmux send-keys
+    - ./templates/reviewer_finalize.sh
     - ./go.sh
     - ./first_setup.sh
     - pip install -e

@@ -27,6 +27,8 @@ Communication is file-based via YAML queues, event-driven via `tmux send-keys`. 
 ./go.sh --target /path/to/workspace  # Specify target workspace
 ./go.sh -s                       # Setup-only (create session, don't launch agents)
 ./go.sh --shell bash             # Force shell type (bash/zsh)
+./go.sh --codex-model high       # Codex model for senior/reviewer (default: high)
+./go.sh --codex-model xhigh      # Optional when deeper reasoning is worth latency
 ```
 
 ### Tmux session
@@ -71,7 +73,6 @@ Reviewer → queue/review/reviewer_to_junior.yaml → Senior
 Senior → Junior{N} (レビュー結果中継: verdict: revise のみ)
 Senior → dashboard.md (verdict: ok を即時反映)
 Senior → Junior{N} (/clear)
-Senior → Reviewer (/clear)
 Senior → Manager (全タスク完了報告)
 ```
 
@@ -90,7 +91,6 @@ Every YAML write that changes another agent's state MUST be followed by a send-k
 | Deliverable review completed | Reviewer | Senior | 「成果物レビュー完了。queue/review/reviewer_to_junior.yaml を読んでください」 |
 | Review result relay (`verdict: revise`) | Senior | Junior{N} | 「レビュー結果です。queue/review/reviewer_to_junior.yaml を読んでください」 |
 | Task close (`verdict: ok`) | Senior | Junior{N} | `/clear` |
-| Reviewer reset after close | Senior | Reviewer | `/clear` |
 | Final completion | Senior | Manager | 「全タスク完了。dashboard.md を確認してください」 |
 | Task assigned (prep) | Senior | junior{N}_report | タスク割り当て前に queue/reports/junior{N}_report.yaml をテンプレートにリセット |
 
@@ -128,6 +128,7 @@ Always combine into one command:
 tmux send-keys -t <pane_id> "message" && sleep 1 && tmux send-keys -t <pane_id> Enter
 ```
 Never split this into two separate bash tool invocations.
+Reviewer completion writes should use `./templates/reviewer_finalize.sh` so YAML write and notify happen in one command.
 
 ### Queue file structure
 
@@ -218,7 +219,7 @@ Common-queue correlation keys (`request_id`, `task_id`, `junior_id`) are mandato
 2. Senior relays review request via `queue/review/junior_to_reviewer.yaml`
 3. Reviewer writes review via `queue/review/reviewer_to_junior.yaml`
 4. If `verdict: revise`, Senior relays review results to Junior and repeats from step 2
-5. If `verdict: ok`, Senior updates `dashboard.md`, sends `/clear` to that Junior and Reviewer, then reads `dashboard.md` and issues the next task
+5. If `verdict: ok`, Senior updates `dashboard.md`, sends `/clear` to that Junior, then reads `dashboard.md` and issues the next task
 
 ### Reviewer completion contract (mandatory)
 - Review request is complete only when response YAML is non-null:
@@ -226,10 +227,11 @@ Common-queue correlation keys (`request_id`, `task_id`, `junior_id`) are mandato
   - Deliverable review: `queue/review/reviewer_to_junior.yaml`
 - Receipt-only responses such as "読みました/確認しました" are invalid and must not terminate the review flow.
 - If Reviewer is blocked, Reviewer must still write `verdict: revise` with blockers and required follow-up in `suggested_changes`, then notify Senior.
+- Reviewer must keep comments concise (deliverable 5観点は各1文、`suggested_changes` は最大2件) and use `./templates/reviewer_finalize.sh`.
 
 ### Reviewer stall recovery (mandatory, Senior)
 - After notifying Reviewer, Senior performs a single verification read of the expected output YAML (no polling loop).
-- If output remains `null` and Reviewer gave only an acknowledgement, Senior sends a corrective message with explicit output contract (`verdict/comments/suggested_changes`) and completion notification text.
+- If output remains `null` and Reviewer gave only an acknowledgement, Senior sends a corrective message with explicit output contract (`verdict/comments/suggested_changes`), concise-output limits, and `./templates/reviewer_finalize.sh` usage.
 - If still unresolved, Senior logs an incident in `dashboard.md` (`Action Required`) and escalates to Manager.
 
 ## Junior context management
@@ -265,14 +267,14 @@ Each agent MUST stay within its designated role. Violations waste context and ca
 4. Reset queue files to idle state
 5. Initialize `dashboard.md`
 6. Create tmux session with 6 panes
-7. Launch agents: manager/juniors (`claude --model opus --dangerously-skip-permissions`), senior/reviewer (`codex -s danger-full-access -a never`)
+7. Launch agents: manager/juniors (`claude --model opus --dangerously-skip-permissions`), senior/reviewer (`codex --model high -s danger-full-access -a never`)
 8. Send init instructions
 
 ### Agent launch flags (mandatory)
 All Claude agents (manager, junior1-3) MUST be launched with `--dangerously-skip-permissions`.
 Without this flag, every file write and bash execution requires manual approval via "accept edits on" prompt,
 which causes agents to stall indefinitely when other agents send them messages via `tmux send-keys`.
-Senior/reviewer run Codex with `-s danger-full-access -a never` so tmux socket operations are not blocked by macOS sandboxing.
+Senior/reviewer run Codex with `--model high -s danger-full-access -a never` by default (override with `./go.sh --codex-model xhigh` when needed), so tmux socket operations are not blocked by macOS sandboxing.
 `go.sh` mitigates risk by scrubbing common credential environment variables and pinning Codex working directory with `-C <target>`.
 
 ## Session start requirements (all agents)

@@ -95,4 +95,32 @@ block_if_match '(^|[;&|[:space:]])(nc|ncat|netcat|socat|telnet|ssh|scp|sftp)([[:
 block_if_match '(^|[;&|[:space:]])git[[:space:]]+config[[:space:]]+--global([[:space:]]|$)' \
   "global git config mutation is not allowed."
 
+# Senior/Reviewer role boundary enforcement: audit and block direct file writes
+# to implementation directories (skills/, src/, tests/, data/).
+# This catches cat/tee/cp/mv/sed/python writes by Senior (Codex) agents.
+AGENT_ROLE="${AGENT_ROLE:-}"
+if [[ -z "${AGENT_ROLE}" ]]; then
+  # Try to resolve role from tmux pane option if env var is not set.
+  AGENT_ROLE="$(tmux display-message -p -t "${TMUX_PANE:-}" '#{@agent_role}' 2>/dev/null || true)"
+fi
+
+if [[ "${AGENT_ROLE}" == "senior" || "${AGENT_ROLE}" == "reviewer" ]]; then
+  # Block direct file writes to implementation directories.
+  block_if_match '(cat|tee|cp|mv|sed|awk|printf|echo)[[:space:]].*>[[:space:]]*(skills/|src/|tests/|data/)' \
+    "Role boundary violation: ${AGENT_ROLE} attempted direct file write to implementation directory."
+
+  # Block python/pytest execution (Senior should delegate to Junior).
+  block_if_match '(^|[;&|[:space:]])(python3?|pytest|pip)[[:space:]]' \
+    "Role boundary violation: ${AGENT_ROLE} attempted direct code/test execution."
+
+  # Block patch/apply_patch to implementation files.
+  block_if_match '(^|[;&|[:space:]])(patch|git[[:space:]]+apply)[[:space:]]' \
+    "Role boundary violation: ${AGENT_ROLE} attempted direct patch application."
+
+  # Audit log for any write redirections to non-queue/non-dashboard paths.
+  if grep -Eiq '>[[:space:]]*(skills/|src/|tests/|data/|\.py|\.js|\.ts)' <<< "${CMD_ONE_LINE}"; then
+    log_block "AUDIT: ${AGENT_ROLE} write attempt to implementation path" "${CMD_ONE_LINE}"
+  fi
+fi
+
 exit 0

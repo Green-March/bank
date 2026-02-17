@@ -1,32 +1,22 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "review_req_20260217_005_T4"
-  task_id: "req_20260217_005_T4"
-  junior_id: "junior3"
+  request_id: "review_req_20260217_009_T4"
+  task_id: "req_20260217_009_T4"
+  junior_id: "junior2"
   status: reviewed
-  timestamp: "2026-02-17 15:03:14"
+  timestamp: "2026-02-17 17:36:20"
   payload:
-    worker_id: "junior3"
+    worker_id: "junior2"
     ticker: "7685"
     analysis_type: "risk_qa_validation"
-    report_timestamp: "2026-02-17T15:06:00+09:00"
-    summary: "QA検証完了。FY通期PL 6セル補完(PASS)、対象外2セル維持(PASS)、periods非破壊(PASS)。総合判定PASS。"
-    outputs:
-      - "data/7685/qa/qa_req_20260217_005.md"
-    validation:
-      - "pl_cells_filled=6/6"
-      - "j_quants_match_ok=6/6"
-      - "confirmed_absent_maintained=2/2"
-      - "periods_count=11_unchanged"
-      - "needs_fix=0"
-    caveats:
-      - "financing_cf(2024-06-30, 2025-06-30)はスコープ外のため未検証"
+    report_timestamp: "2026-02-17T17:06:30+09:00"
+    summary: "独立QA完了。calculate実行・全検証PASS（FY重複なし・fiscal_year=Noneなし・ROE/自己資本比率復旧・pytest 107/107 PASS）"
 review_followup:
-  request_id: "review_req_20260217_005_T4"
-  task_id: "req_20260217_005_T4"
-  junior_id: "junior3"
+  request_id: "review_req_20260217_009_T4"
+  task_id: "req_20260217_009_T4"
+  junior_id: "junior2"
   status: "closed_verdict_ok"
-  timestamp: "2026-02-17 15:05:22"
+  timestamp: "2026-02-17 17:37:40"
   payload:
-    note: "dashboard updated and /clear sent to junior3 and reviewer"
+    note: "dashboard updated and /clear,/new sent; no remaining tasks"

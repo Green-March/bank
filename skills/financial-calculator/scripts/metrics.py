@@ -131,7 +131,7 @@ def _to_financial_record(payload: dict[str, object], fallback_ticker: str) -> Fi
     )
     equity = _pick_number(
         primary=bs,
-        aliases=("equity", "net_assets", "自己資本", "純資産", "純資産合計"),
+        aliases=("equity", "total_equity", "net_assets", "自己資本", "純資産", "純資産合計"),
         fallback=all_map,
     )
     operating_cf = _pick_number(
@@ -355,7 +355,10 @@ def _extract_candidates(payload: dict[str, object], fallback_ticker: str) -> lis
 
     if candidates:
         return candidates
-    return [payload]
+    # Fallback: only use payload if it has a valid fiscal_year to prevent None pollution
+    if _to_int(payload.get("fiscal_year")) is not None or _to_int(payload.get("fiscalYear")) is not None:
+        return [payload]
+    return []
 
 
 def _merge_period(period: dict[str, object], ticker: str, company_name: str | None) -> dict[str, object]:
@@ -366,12 +369,50 @@ def _merge_period(period: dict[str, object], ticker: str, company_name: str | No
     return merged
 
 
+_PERIOD_TYPE_PRIORITY: dict[str, int] = {"mixed": 2, "duration": 1, "instant": 0}
+
+
+def _nonnull_financial_count(record: FinancialRecord) -> int:
+    """Count non-null financial fields for dedup ranking."""
+    return sum(
+        1
+        for value in (
+            record.revenue,
+            record.operating_income,
+            record.net_income,
+            record.total_assets,
+            record.equity,
+            record.operating_cf,
+            record.investing_cf,
+        )
+        if value is not None
+    )
+
+
+def _dedup_sort_key(record: FinancialRecord) -> tuple[int, int, str]:
+    """Sort key: nonnull count desc, period_type priority desc, period_end desc."""
+    return (
+        _nonnull_financial_count(record),
+        _PERIOD_TYPE_PRIORITY.get((record.period or "").lower(), -1),
+        record.period_end or "",
+    )
+
+
 def _deduplicate_records(records: list[FinancialRecord]) -> list[FinancialRecord]:
-    deduplicated: list[FinancialRecord] = []
+    """Deduplicate: remove exact duplicates, then select one representative per fiscal_year.
+
+    Selection criteria (higher wins):
+      1. Non-null financial field count
+      2. period_type priority: mixed > duration > instant
+      3. period_end (newer is better)
+    """
+    # Phase 1: remove exact duplicates
+    unique: list[FinancialRecord] = []
     seen: set[tuple[object, ...]] = set()
     for record in records:
         key = (
             record.fiscal_year,
+            record.period,
             record.period_end,
             record.revenue,
             record.operating_income,
@@ -384,5 +425,14 @@ def _deduplicate_records(records: list[FinancialRecord]) -> list[FinancialRecord
         if key in seen:
             continue
         seen.add(key)
-        deduplicated.append(record)
-    return deduplicated
+        unique.append(record)
+
+    # Phase 2: one representative per fiscal_year
+    groups: dict[int | None, list[FinancialRecord]] = {}
+    for record in unique:
+        groups.setdefault(record.fiscal_year, []).append(record)
+
+    result: list[FinancialRecord] = []
+    for group in groups.values():
+        result.append(max(group, key=_dedup_sort_key))
+    return result
