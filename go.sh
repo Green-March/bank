@@ -305,8 +305,9 @@ set_pane() {
     local color="$3"
     local prompt
     prompt="$(generate_prompt "$label" "$color" "$SHELL_SETTING")"
+    tmux set-option -pt "$pane_id" @agent_role "$label"
     tmux select-pane -t "$pane_id" -T "$label"
-    tmux send-keys -t "$pane_id" "cd \"$TARGET_DIR\" && export PS1='${prompt}' && clear" Enter
+    tmux send-keys -t "$pane_id" "cd \"$TARGET_DIR\" && export AGENT_ROLE='${label}' && export PS1='${prompt}' && clear" Enter
 }
 
 set_pane "$manager_pane" "manager" "magenta"
@@ -315,6 +316,18 @@ set_pane "$junior1_pane" "junior1" "blue"
 set_pane "$junior2_pane" "junior2" "blue"
 set_pane "$junior3_pane" "junior3" "blue"
 set_pane "$reviewer_pane" "reviewer" "yellow"
+
+map_dir="${TARGET_DIR}/.claude/runtime"
+map_file="${map_dir}/agent-pane-map.tsv"
+mkdir -p "${map_dir}"
+cat > "${map_file}" <<EOF_PANE_MAP
+${manager_pane} manager
+${senior_pane} senior
+${junior1_pane} junior1
+${junior2_pane} junior2
+${junior3_pane} junior3
+${reviewer_pane} reviewer
+EOF_PANE_MAP
 
 log_success "Tmux session ready"
 

@@ -8,6 +8,8 @@ This project uses a `PreToolUse` hook to reduce risk when running with
 - `.claude/settings.json`: Registers `SessionStart(clear)` and `PreToolUse(Bash)` hooks.
 - `.claude/hooks/deny-check.sh`: Blocks high-risk command patterns.
 - `.claude/hooks/sessionstart-clear-load-junior-context.sh`: On `SessionStart(clear)`, emits JSON `additionalContext` for `junior{N}`/`reviewer` panes (`junior{N}.md + junior.md` or `reviewer.md`).
+  - Role resolution priority: `AGENT_ROLE` env -> tmux pane option `@agent_role` -> `.claude/runtime/agent-pane-map.tsv` -> exact pane title -> tmux layout fallback.
+  - This avoids failures when Claude/Codex overwrites `pane_title` dynamically (for example `✳ ...`).
 - `.claude/hooks/logs/deny-check.log`: Audit log for blocked commands.
 
 ## Important Limitations

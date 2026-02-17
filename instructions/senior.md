@@ -179,13 +179,13 @@ plan_review_request:
 ### `verdict: ok` 受領時の完了処理（必須）
 1. `dashboard.md` に当該タスクの完了を反映する（`Completed Today` へ移動）。
 2. 当該 Junior のペインに `/clear` を送信して Enter を送る。
-3. Reviewer のペインに `/clear` を送信して Enter を送る。
+3. Reviewer のペインに `/new` を送信して Enter を送る。
 4. `dashboard.md` を読み直し、次に割り当てるタスクがあれば即時に指示する。なければ待機させる。
 
 送信例（single chained command）:
 ```bash
 tmux send-keys -t <junior_pane_id> "/clear" && sleep 1 && tmux send-keys -t <junior_pane_id> Enter
-tmux send-keys -t <reviewer_pane_id> "/clear" && sleep 1 && tmux send-keys -t <reviewer_pane_id> Enter
+tmux send-keys -t <reviewer_pane_id> "/new" && sleep 1 && tmux send-keys -t <reviewer_pane_id> Enter
 ```
 
 ## 共通レビューキュー運用（必須）
