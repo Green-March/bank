@@ -132,6 +132,13 @@ fi
 log_info "Resetting queue files..."
 mkdir -p ./queue/tasks ./queue/reports ./queue/review
 
+# Remove deprecated reviewer variant queues to keep one canonical review flow.
+rm -f \
+    ./queue/review/junior_to_reviewerN.yaml \
+    ./queue/review/junior_to_reviewerP.yaml \
+    ./queue/review/reviewerN_to_junior.yaml \
+    ./queue/review/reviewerP_to_junior.yaml
+
 for i in {1..3}; do
     cat > ./queue/tasks/junior${i}.yaml <<EOF
 # Junior ${i} task file
@@ -168,12 +175,36 @@ queue: []
 EOF_QUEUE
 
 cat > ./queue/review/junior_to_reviewer.yaml <<'EOF_R1'
-review_request: null
-review_followup: null
+review_request:
+  request_type: deliverable_review
+  review_type: deliverable
+  request_id: null
+  task_id: null
+  junior_id: null
+  status: idle
+  timestamp: ""
+  payload: null
+review_followup:
+  request_id: null
+  task_id: null
+  junior_id: null
+  status: null
+  timestamp: ""
+  payload: null
 EOF_R1
 
 cat > ./queue/review/reviewer_to_junior.yaml <<'EOF_R2'
-review_response: null
+review_response:
+  request_type: deliverable_review_response
+  review_type: deliverable
+  request_id: null
+  task_id: null
+  junior_id: null
+  verdict: null
+  comments: null
+  suggested_changes: null
+  status: idle
+  timestamp: ""
 EOF_R2
 
 cat > ./queue/review/senior_to_reviewer.yaml <<'EOF_R3'
@@ -290,14 +321,33 @@ log_success "Tmux session ready"
 if [ "$SETUP_ONLY" = false ]; then
     log_info "Launching agents..."
 
+    # Codex needs unsandboxed execution to access tmux sockets on macOS.
+    # Minimize risk by scrubbing common credential env vars and pinning cwd.
+    build_codex_cmd() {
+        local target_q env_unset var
+        target_q="$(printf '%q' "$TARGET_DIR")"
+        env_unset=""
+        for var in \
+            OPENAI_API_KEY ANTHROPIC_API_KEY \
+            AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN \
+            GOOGLE_API_KEY GOOGLE_APPLICATION_CREDENTIALS \
+            AZURE_OPENAI_API_KEY GITHUB_TOKEN GH_TOKEN GITLAB_TOKEN \
+            SSH_AUTH_SOCK; do
+            env_unset="${env_unset} -u ${var}"
+        done
+        echo "env${env_unset} codex -s danger-full-access -a never -C ${target_q}"
+    }
+    CODEX_CMD="$(build_codex_cmd)"
+
     tmux send-keys -t "$manager_pane" "MAX_THINKING_TOKENS=0 claude --model opus --dangerously-skip-permissions" Enter
-    tmux send-keys -t "$senior_pane" "claude --model opus --dangerously-skip-permissions" Enter
+    tmux send-keys -t "$senior_pane" "${CODEX_CMD}" Enter
     tmux send-keys -t "$junior1_pane" "claude --model opus --dangerously-skip-permissions" Enter
     tmux send-keys -t "$junior2_pane" "claude --model opus --dangerously-skip-permissions" Enter
     tmux send-keys -t "$junior3_pane" "claude --model opus --dangerously-skip-permissions" Enter
-    tmux send-keys -t "$reviewer_pane" "codex" Enter
+    tmux send-keys -t "$reviewer_pane" "${CODEX_CMD}" Enter
 
     log_success "Agents launched"
+    log_warn "Senior/Reviewer Codex uses danger-full-access for tmux compatibility; common credential env vars are scrubbed."
 
     sleep 5
 
@@ -311,10 +361,11 @@ if [ "$SETUP_ONLY" = false ]; then
 
     send_msg "$manager_pane" "instructions/manager.md を読んで役割を理解してください。"
     send_msg "$senior_pane" "instructions/senior.md を読んで役割を理解してください。"
-    send_msg "$junior1_pane" "instructions/junior.md を読んで役割を理解してください。あなたはjunior1です。"
-    send_msg "$junior2_pane" "instructions/junior.md を読んで役割を理解してください。あなたはjunior2です。"
-    send_msg "$junior3_pane" "instructions/junior.md を読んで役割を理解してください。あなたはjunior3です。"
+    send_msg "$junior1_pane" "instructions/junior1.md を読んで役割を理解してください。"
+    send_msg "$junior2_pane" "instructions/junior2.md を読んで役割を理解してください。"
+    send_msg "$junior3_pane" "instructions/junior3.md を読んで役割を理解してください。"
     send_msg "$reviewer_pane" "instructions/reviewer.md を読んで役割を理解してください。"
+    send_msg "$reviewer_pane" "重要: レビュー依頼を受けたら受領報告だけで停止せず、必ず queue/review/reviewer_to_senior.yaml または queue/review/reviewer_to_junior.yaml を更新し、Seniorへ完了通知まで1ターンで実行してください。"
 fi
 
 log_info "Session layout: multiagent (6 panes)"
