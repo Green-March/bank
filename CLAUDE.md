@@ -70,8 +70,8 @@ Senior → queue/review/junior_to_reviewer.yaml → Reviewer (成果物レビュ
 Reviewer → queue/review/reviewer_to_junior.yaml → Senior
 Senior → Junior{N} (レビュー結果中継: verdict: revise のみ)
 Senior → dashboard.md (verdict: ok を即時反映)
-Senior → Junior{N} (/clear + 再初期化指示)
-Senior → Reviewer (/new + 再初期化指示)
+Senior → Junior{N} (/clear)
+Senior → Reviewer (/clear)
 Senior → Manager (全タスク完了報告)
 ```
 
@@ -90,9 +90,7 @@ Every YAML write that changes another agent's state MUST be followed by a send-k
 | Deliverable review completed | Reviewer | Senior | 「成果物レビュー完了。queue/review/reviewer_to_junior.yaml を読んでください」 |
 | Review result relay (`verdict: revise`) | Senior | Junior{N} | 「レビュー結果です。queue/review/reviewer_to_junior.yaml を読んでください」 |
 | Task close (`verdict: ok`) | Senior | Junior{N} | `/clear` |
-| Junior re-init after close | Senior | Junior{N} | 「instructions/junior{N}.md を読んで役割を再確認してください。次の指示を待ってください」 |
-| Reviewer reset after close | Senior | Reviewer | `/new` |
-| Reviewer re-init after close | Senior | Reviewer | 「instructions/reviewer.md を読んで役割を再確認してください。次のレビュー依頼を待ってください」 |
+| Reviewer reset after close | Senior | Reviewer | `/clear` |
 | Final completion | Senior | Manager | 「全タスク完了。dashboard.md を確認してください」 |
 | Task assigned (prep) | Senior | junior{N}_report | タスク割り当て前に queue/reports/junior{N}_report.yaml をテンプレートにリセット |
 
@@ -220,7 +218,7 @@ Common-queue correlation keys (`request_id`, `task_id`, `junior_id`) are mandato
 2. Senior relays review request via `queue/review/junior_to_reviewer.yaml`
 3. Reviewer writes review via `queue/review/reviewer_to_junior.yaml`
 4. If `verdict: revise`, Senior relays review results to Junior and repeats from step 2
-5. If `verdict: ok`, Senior updates `dashboard.md`, resets that Junior (`/clear` + `instructions/junior{N}.md`), resets Reviewer (`/new` + `instructions/reviewer.md`), then reads `dashboard.md` and issues the next task
+5. If `verdict: ok`, Senior updates `dashboard.md`, sends `/clear` to that Junior and Reviewer, then reads `dashboard.md` and issues the next task
 
 ### Reviewer completion contract (mandatory)
 - Review request is complete only when response YAML is non-null:

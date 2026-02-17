@@ -1,32 +1,16 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: review_req_20260217_003_T3_r2
-  task_id: req_20260217_003_T3
-  junior_id: junior3
-  status: requested
-  timestamp: "2026-02-17T15:50:00+0900"
-  payload:
-    report_path: queue/reports/junior3_report.yaml
-    output_paths:
-      - projects/7685/req_20260217_003/final_diagnosis.md
-      - data/7685/qa/source_reconciliation.json
-      - projects/7685/req_20260217_003/logs/validation_edinet_null.log
-      - projects/7685/req_20260217_003/logs/pytest_t3.log
-      - projects/7685/req_20260217_003/logs/financials_state_check.log
-    summary: "T3 revise反映版。t3_update を11セルスコープで再計算、scope/out_of_scope分離、final_diagnosis §2 を実体キーへ修正。"
-    key_checks:
-      - "t3_update.scope=11_cells"
-      - "t3_update.edinet_null_total_current=8"
-      - "t3_update.confirmed_absent=8"
-      - "t3_update.parser_failure_historical=3"
-      - "t3_update.reason_updated_fields=8"
+  request_id: null
+  task_id: null
+  junior_id: null
+  status: idle
+  timestamp: ""
+  payload: null
 review_followup:
-  request_id: "review_req_20260217_003_T3"
-  task_id: "req_20260217_003_T3"
-  junior_id: "junior3"
-  status: revised_resubmission
-  timestamp: "2026-02-17T15:50:00+0900"
-  payload:
-    prior_verdict: revise
-    notes: "t3_update集計不整合・スコープ不明瞭・diagnosis記述不一致を是正"
+  request_id: null
+  task_id: null
+  junior_id: null
+  status: null
+  timestamp: ""
+  payload: null

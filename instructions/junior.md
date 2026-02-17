@@ -103,4 +103,4 @@ quality_check_required: true
 - Senior のみへ send-keys 通知する
 - Reviewer / Manager / User へ直接連絡しない
 - send-keys は必ず 2 回呼び出し（メッセージ -> Enter）
-- Reviewer の `verdict: ok` 後は追加の完了通知を送らず、Senior からの `/clear` と再初期化指示（`instructions/junior{N}.md`）に従って待機する
+- Reviewer の `verdict: ok` 後は追加の完了通知を送らず、Senior からの `/clear` に従って待機する（`instructions/junior.md` は hook で再読込される）
