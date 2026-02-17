@@ -32,7 +32,7 @@ Communication is file-based via YAML queues, event-driven via `tmux send-keys`. 
 ### Tmux session
 ```bash
 tmux attach-session -t multiagent
-tmux list-panes -t multiagent:0 -F '#{pane_id} #{pane_title} #{pane_left} #{pane_top}'
+tmux list-panes -t multiagent:0 -F '#{pane_id} #{pane_title} #{@agent_role} #{pane_left} #{pane_top}'
 ```
 
 `setup.sh` is a compatibility wrapper that forwards all args to `go.sh`.

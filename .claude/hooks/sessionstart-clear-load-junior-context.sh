@@ -70,6 +70,15 @@ resolve_pane_id() {
     return 0
   fi
 
+  if command -v tmux >/dev/null 2>&1; then
+    local active_pane
+    active_pane="$(tmux display-message -p '#{pane_id}' 2>/dev/null || true)"
+    if [ -n "${active_pane}" ]; then
+      printf '%s' "${active_pane}"
+      return 0
+    fi
+  fi
+
   if ! command -v tmux >/dev/null 2>&1; then
     return 1
   fi
@@ -194,37 +203,39 @@ resolve_role() {
   local pane_id="$1"
   local role=""
 
+  if [ -n "${pane_id}" ]; then
+    role="$(role_from_tmux_option "${pane_id}" || true)"
+    if [ -n "${role}" ]; then
+      log "role-resolve: source=tmux_option role='${role}' pane='${pane_id}'"
+      printf '%s' "${role}"
+      return 0
+    fi
+
+    role="$(role_from_runtime_map "${pane_id}" || true)"
+    if [ -n "${role}" ]; then
+      log "role-resolve: source=runtime_map role='${role}' pane='${pane_id}'"
+      printf '%s' "${role}"
+      return 0
+    fi
+
+    role="$(role_from_pane_title "${pane_id}" || true)"
+    if [ -n "${role}" ]; then
+      log "role-resolve: source=pane_title role='${role}' pane='${pane_id}'"
+      printf '%s' "${role}"
+      return 0
+    fi
+
+    role="$(role_from_layout "${pane_id}" || true)"
+    if [ -n "${role}" ]; then
+      log "role-resolve: source=layout role='${role}' pane='${pane_id}'"
+      printf '%s' "${role}"
+      return 0
+    fi
+  fi
+
   role="$(role_from_env || true)"
   if [ -n "${role}" ]; then
-    log "role-resolve: source=env role='${role}' pane='${pane_id}'"
-    printf '%s' "${role}"
-    return 0
-  fi
-
-  role="$(role_from_tmux_option "${pane_id}" || true)"
-  if [ -n "${role}" ]; then
-    log "role-resolve: source=tmux_option role='${role}' pane='${pane_id}'"
-    printf '%s' "${role}"
-    return 0
-  fi
-
-  role="$(role_from_runtime_map "${pane_id}" || true)"
-  if [ -n "${role}" ]; then
-    log "role-resolve: source=runtime_map role='${role}' pane='${pane_id}'"
-    printf '%s' "${role}"
-    return 0
-  fi
-
-  role="$(role_from_pane_title "${pane_id}" || true)"
-  if [ -n "${role}" ]; then
-    log "role-resolve: source=pane_title role='${role}' pane='${pane_id}'"
-    printf '%s' "${role}"
-    return 0
-  fi
-
-  role="$(role_from_layout "${pane_id}" || true)"
-  if [ -n "${role}" ]; then
-    log "role-resolve: source=layout role='${role}' pane='${pane_id}'"
+    log "role-resolve: source=env_fallback role='${role}' pane='${pane_id}'"
     printf '%s' "${role}"
     return 0
   fi
@@ -302,7 +313,6 @@ main() {
   pane_id="$(resolve_pane_id || true)"
   if [ -z "${pane_id}" ]; then
     log "skip: pane id unresolved (TMUX_PANE='${TMUX_PANE:-}')"
-    exit 0
   fi
 
   local role
@@ -312,8 +322,13 @@ main() {
   context="$(build_context_for_role "${role}" || true)"
   if [ -z "${context}" ]; then
     local pane_title pane_option
-    pane_title="$(tmux display-message -p -t "${pane_id}" '#{pane_title}' 2>/dev/null || true)"
-    pane_option="$(tmux display-message -p -t "${pane_id}" '#{@agent_role}' 2>/dev/null || true)"
+    if [ -n "${pane_id}" ]; then
+      pane_title="$(tmux display-message -p -t "${pane_id}" '#{pane_title}' 2>/dev/null || true)"
+      pane_option="$(tmux display-message -p -t "${pane_id}" '#{@agent_role}' 2>/dev/null || true)"
+    else
+      pane_title="(unresolved)"
+      pane_option="${AGENT_ROLE:-}"
+    fi
     if [ -z "${role}" ]; then
       log "skip: role unresolved (pane='${pane_id}' env='${AGENT_ROLE:-}' opt='${pane_option}' title='${pane_title}')"
     else

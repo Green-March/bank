@@ -68,7 +68,7 @@ files:
   draft_review_in: queue/review/reviewer_to_junior.yaml
 
 panes:
-  lookup: "tmux list-panes -t multiagent:0 -F '#{pane_id} #{pane_title}'"
+  lookup: "tmux list-panes -t multiagent:0 -F '#{pane_id} #{pane_title} #{@agent_role}'"
 
 send_keys:
   method: single_chained_command
