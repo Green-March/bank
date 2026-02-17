@@ -1,0 +1,114 @@
+# disclosure-expansion パイプライン定義
+# pipeline-runner で実行可能なDAG形式
+
+pipeline:
+  name: "disclosure_expansion"
+  description: "EDINET四半期/半期報告書収集→構造化→J-Quants突合の統合パイプライン"
+
+  steps:
+    - id: t0_schema
+      skill: null
+      description: "T0共通メタデータスキーマ検証/生成"
+      command: >
+        python3 -c "
+        import json, os, sys;
+        schema_path = 'data/{ticker}/schema/common-metadata.schema.json';
+        os.path.exists(schema_path) or sys.exit('Schema not found: ' + schema_path);
+        schema = json.load(open(schema_path));
+        required = ['source', 'endpoint_or_doc_id', 'fetched_at', 'period_end'];
+        missing = [k for k in required if k not in schema.get('properties', {})];
+        missing and sys.exit('Missing keys: ' + str(missing));
+        print('T0 schema OK')
+        "
+      output_dir: "data/{ticker}/schema"
+      gates: null
+
+    - id: t1r1_doc_list
+      skill: disclosure-collector
+      description: "T1R1: EDINET日次文書一覧収集（キャッシュ冪等）"
+      command: >
+        python3 skills/disclosure-collector/scripts/main.py edinet {edinet_code}
+        --ticker {ticker} --security-code {security_code}
+        --start-date {start_date} --end-date {end_date}
+        --report-keyword {report_keyword}
+        --doc-type-code 140 --doc-type-code 160
+      output_dir: "data/{ticker}/raw/edinet/kessan_tanshin"
+      depends_on: [t0_schema]
+      gates: null
+
+    - id: t2_pdf_collect
+      skill: disclosure-collector
+      description: "T2: 四半期/半期報告書PDFダウンロード"
+      command: >
+        python3 skills/disclosure-collector/scripts/main.py edinet {edinet_code}
+        --ticker {ticker} --security-code {security_code}
+        --start-date {start_date} --end-date {end_date}
+        --report-keyword {report_keyword}
+        --doc-type-code 140 --doc-type-code 160
+        --pdf --output-dir data/{ticker}/raw/edinet/shihanki_hokokusho/
+      output_dir: "data/{ticker}/raw/edinet/shihanki_hokokusho"
+      depends_on: [t1r1_doc_list]
+      gates: "skills/disclosure-expansion/references/quality_gates.yaml#QG-T2"
+
+    - id: t3_text_extract
+      skill: disclosure-parser
+      description: "T3: PDFテキスト抽出・セクション分類・テーブル解析"
+      command: >
+        python3 skills/disclosure-parser/scripts/main.py
+        --ticker {ticker}
+        --input-dir data/{ticker}/raw/edinet/shihanki_hokokusho/
+        --output-dir data/{ticker}/processed/
+        --pdf
+      output_dir: "data/{ticker}/processed"
+      depends_on: [t2_pdf_collect]
+      gates: "skills/disclosure-expansion/references/quality_gates.yaml#QG-T3"
+      # NOTE: T3出力は kessan_tanshin_text.json
+      # 現行はカスタムスクリプトで実施（disclosure-parserのPDFモード拡張後に統合）
+
+    - id: t5_structure
+      skill: disclosure-parser
+      description: "T5: 構造化JSON生成（T3のPDFパース出力 financials.json を構造化データとして利用）"
+      command: >
+        python3 -c "
+        import json, sys, pathlib;
+        f=pathlib.Path('data/{ticker}/processed/financials.json');
+        f.exists() or sys.exit('T5: financials.json not found (T3 must run first)');
+        d=json.loads(f.read_text());
+        n=d.get('document_count',0);
+        print(f'T5: financials.json OK — {{n}} documents structured')
+        "
+      output_dir: "data/{ticker}/processed"
+      depends_on: [t3_text_extract]
+      gates: "skills/disclosure-expansion/references/quality_gates.yaml#QG-T5-count,QG-T5-bs,QG-T5-period,QG-T5-pl"
+      # T3のPDFパースで financials.json が生成される。
+      # T5は検証ステップ（将来 --structure 独立実装時に置換）
+
+    - id: t4_jquants
+      skill: disclosure-collector
+      description: "T4: J-Quants fins/statements 収集・正規化"
+      command: >
+        python3 skills/disclosure-collector/scripts/main.py jquants {ticker}
+      output_dir: "data/{ticker}/processed"
+      depends_on: [t0_schema]
+      gates: "skills/disclosure-expansion/references/quality_gates.yaml#QG-T4,QG-T4-cf"
+      # T4はT1R1/T2/T3/T5と独立して実行可能
+
+    - id: t6_reconciliation
+      skill: null
+      description: "T6: T4(J-Quants) vs T5(EDINET構造化) 突合QA"
+      command: >
+        python3 skills/disclosure-expansion/scripts/reconcile.py
+        --ticker {ticker}
+        --edinet-data data/{ticker}/processed/financials.json
+        --jquants-data data/{ticker}/processed/jquants_fins_statements.json
+        --output data/{ticker}/qa/source_reconciliation.json
+        --tolerance 0.0001
+      output_dir: "data/{ticker}/qa"
+      depends_on: [t4_jquants, t5_structure]
+      gates: "skills/disclosure-expansion/references/quality_gates.yaml#QG-T6"
+
+  # パイプライン全体のデフォルト変数
+  default_vars:
+    report_keyword: "報告書"
+    security_code: "{ticker}0"
+    # start_date / end_date は timeframe から自動分割

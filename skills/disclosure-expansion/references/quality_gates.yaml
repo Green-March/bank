@@ -1,0 +1,185 @@
+# disclosure-expansion Quality Gates
+# pipeline-runner の gates パラメータと連携可能
+#
+# データ構造前提:
+#   EDINET manifest: download_summary.{attempted|downloaded|skipped_existing|failed}
+#   EDINET structured: documents[].{doc_id|doc_type_code|financials.{balance_sheet|income_statement|...}.tables[].records[]}
+#   J-Quants: records[].actuals.{revenue|operating_income|...}
+
+gates:
+  - id: QG-T0
+    step: all
+    description: "T0共通メタデータスキーマ準拠"
+    check: jsonschema_validate
+    params:
+      schema_path: "data/{ticker}/schema/common-metadata.schema.json"
+      required_keys: ["source", "endpoint_or_doc_id", "fetched_at", "period_end"]
+    severity: error
+
+  - id: QG-T2
+    step: t2_pdf_collect
+    description: "PDF収集完全性"
+    check: manifest_check
+    params:
+      manifest_path: "data/{ticker}/raw/edinet/shihanki_hokokusho/manifest.json"
+      assert: "download_summary.failed == 0"
+      # manifest構造: {download_summary: {attempted, downloaded, skipped_existing, failed}, failed_doc_ids: [...]}
+    severity: error
+
+  - id: QG-T3
+    step: t3_text_extract
+    description: "テキスト抽出文書数整合"
+    check: count_match
+    params:
+      actual: "data/{ticker}/processed/kessan_tanshin_text.json::document_count"
+      expected: "data/{ticker}/raw/edinet/shihanki_hokokusho/manifest.json::matched_doc_count"
+    severity: error
+
+  - id: QG-T4
+    step: t4_jquants
+    description: "J-Quantsレコード存在・revenue非null"
+    check: record_check
+    params:
+      data_path: "data/{ticker}/processed/jquants_fins_statements.json"
+      records_key: "records"
+      assert_record_count: "> 0"
+      # records[].actuals.revenue が非null のレコードが存在すること
+      assert_field_path: "actuals.revenue"
+      assert_field_not_null: true
+      filter_type_of_document: "FinancialStatements"
+    severity: error
+
+  - id: QG-T4-cf
+    step: t4_jquants
+    description: "FYレコードにoperating_cf非null"
+    check: field_check
+    params:
+      data_path: "data/{ticker}/processed/jquants_fins_statements.json"
+      records_key: "records"
+      filter: "type_of_current_period == 'FY'"
+      assert_field_path: "actuals.operating_cf"
+      assert_field_not_null: true
+    severity: warning
+
+  - id: QG-T5-count
+    step: t5_structure
+    description: "構造化文書数整合"
+    check: count_match
+    params:
+      actual: "data/{ticker}/processed/shihanki_structured.json::document_count"
+      expected: "data/{ticker}/processed/kessan_tanshin_text.json::document_count"
+    severity: error
+
+  - id: QG-T5-bs
+    step: t5_structure
+    description: "BS total_assets 完全一致ガード（流動資産合計≠総資産）"
+    check: custom_script
+    params:
+      description: >
+        total_assetsが流動資産合計と一致しないことを確認。
+        T5R2修正: item_matches()で「資産合計」は完全一致のみ許可。
+      script: |
+        import json
+        data = json.load(open('data/{ticker}/processed/shihanki_structured.json'))
+        for doc in data['documents']:
+            bs = doc.get('financials', {}).get('balance_sheet', {})
+            total_assets_val = None
+            current_assets_val = None
+            for table in bs.get('tables', []):
+                for rec in table.get('records', []):
+                    item = rec.get('item', '').strip()
+                    vals = rec.get('values', [])
+                    if not vals:
+                        continue
+                    last_val = max(vals, key=lambda v: v.get('column_index', 0)).get('parsed')
+                    if item == '資産合計':
+                        total_assets_val = last_val
+                    elif item == '流動資産合計':
+                        current_assets_val = last_val
+            if total_assets_val is not None and current_assets_val is not None:
+                if total_assets_val == current_assets_val:
+                    raise AssertionError(
+                        f"total_assets == current_assets in {doc.get('doc_id')}: "
+                        f"{total_assets_val} — BS抽出バグ(FP-2)の可能性"
+                    )
+        print("QG-T5-bs: PASS")
+    severity: error
+
+  - id: QG-T5-period
+    step: t5_structure
+    description: "半期報告書period_end補正確認"
+    check: custom_script
+    params:
+      description: >
+        docTypeCode=160の文書でperiod_endがFY末日でないことを確認。
+        T5R2修正: 表紙【中間会計期間】から実際の中間期末日を抽出。
+      script: |
+        import json
+        data = json.load(open('data/{ticker}/processed/shihanki_structured.json'))
+        for doc in data['documents']:
+            dtc = doc.get('doc_type_code', '')
+            if dtc == '160':
+                pe = doc.get('period_end') or doc.get('metadata', {}).get('period_end')
+                pe_orig = doc.get('period_end_original') or doc.get('metadata', {}).get('period_end_original')
+                if pe_orig and pe == pe_orig:
+                    raise AssertionError(
+                        f"半期報告書 {doc.get('doc_id')} のperiod_endがFY末日のまま: "
+                        f"{pe} (FP-3未修正)"
+                    )
+        print("QG-T5-period: PASS")
+    severity: warning
+
+  - id: QG-T5-pl
+    step: t5_structure
+    description: "PL整合性チェック（売上高 - 売上原価 ≈ 売上総利益）"
+    check: custom_script
+    params:
+      tolerance: 0.01
+      script: |
+        import json
+        data = json.load(open('data/{ticker}/processed/shihanki_structured.json'))
+        for doc in data['documents']:
+            pl = doc.get('financials', {}).get('income_statement', {})
+            for table in pl.get('tables', []):
+                items = {}
+                for rec in table.get('records', []):
+                    item = rec.get('item', '').strip()
+                    vals = rec.get('values', [])
+                    if not vals:
+                        continue
+                    last_val = max(vals, key=lambda v: v.get('column_index', 0)).get('parsed')
+                    if item == '売上高':
+                        items['revenue'] = last_val
+                    elif item == '売上原価':
+                        items['cogs'] = last_val
+                    elif item == '売上総利益':
+                        items['gross_profit'] = last_val
+                rev = items.get('revenue')
+                cogs = items.get('cogs')
+                gp = items.get('gross_profit')
+                if all(v is not None for v in [rev, cogs, gp]):
+                    calc = rev - cogs
+                    if gp != 0 and abs(calc - gp) > abs(gp) * 0.01:
+                        print(f"PL warning {doc.get('doc_id')}: "
+                              f"revenue({rev}) - COGS({cogs}) = {calc} vs gross_profit({gp})")
+        print("QG-T5-pl: PASS")
+    severity: warning
+
+  - id: QG-T6
+    step: t6_reconciliation
+    description: "ソース間突合（overlap期間で実値比較が有効であること）"
+    check: reconciliation_check
+    params:
+      data_path: "data/{ticker}/qa/source_reconciliation.json"
+      # summary.invalid_comparison == 0 (全項目null比較なし)
+      assert_no_invalid: true
+      # summary.mismatch は tolerance 依存のため warning のみ
+    severity: error
+
+  - id: QG-coverage
+    step: t6_reconciliation
+    description: "全期間カバレッジ確認"
+    check: manual
+    params:
+      description: "timeframe内の全期間について、少なくとも1ソース(EDINET or J-Quants)にデータがあることを確認"
+    severity: info
