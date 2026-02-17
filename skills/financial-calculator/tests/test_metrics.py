@@ -7,6 +7,7 @@ import pytest
 from scripts.metrics import (
     FinancialRecord,
     _build_metrics_series,
+    _compute_period_months,
     _growth_percent,
     _ratio_percent,
     _round_num,
@@ -30,6 +31,7 @@ def _make_record(
     investing_cf: float | None = -50.0,
     period: str | None = "FY",
     period_end: str | None = "2024-03-31",
+    period_start: str | None = None,
     ticker: str = "7685",
 ) -> FinancialRecord:
     return FinancialRecord(
@@ -45,6 +47,7 @@ def _make_record(
         operating_cf=operating_cf,
         investing_cf=investing_cf,
         period_end=period_end,
+        period_start=period_start,
     )
 
 
@@ -321,3 +324,73 @@ class TestSumNullable:
 
     def test_both_none(self):
         assert _sum_nullable(None, None) is None
+
+
+# ===================================================================
+# _compute_period_months
+# ===================================================================
+
+class TestComputePeriodMonths:
+    def test_full_year(self):
+        assert _compute_period_months("2024-01-01", "2024-12-31") == 12
+
+    def test_half_year(self):
+        assert _compute_period_months("2025-01-01", "2025-06-30") == 6
+
+    def test_quarter(self):
+        assert _compute_period_months("2024-01-01", "2024-03-31") == 3
+
+    def test_three_quarters(self):
+        assert _compute_period_months("2024-04-01", "2024-12-31") == 9
+
+    def test_start_none(self):
+        assert _compute_period_months(None, "2024-12-31") is None
+
+    def test_end_none(self):
+        assert _compute_period_months("2024-01-01", None) is None
+
+    def test_both_none(self):
+        assert _compute_period_months(None, None) is None
+
+    def test_invalid_date(self):
+        assert _compute_period_months("not-a-date", "2024-12-31") is None
+
+    def test_same_date_returns_one(self):
+        """Same start/end month = 1 month period."""
+        assert _compute_period_months("2024-03-01", "2024-03-31") == 1
+
+    def test_end_before_start(self):
+        assert _compute_period_months("2024-06-01", "2024-03-31") is None
+
+
+# ===================================================================
+# period_months in _build_metrics_series
+# ===================================================================
+
+class TestPeriodMonthsInSeries:
+    def test_period_months_with_start_and_end(self):
+        """period_start と period_end がある場合、period_months が算出される."""
+        record = _make_record(
+            2025,
+            period_start="2025-01-01",
+            period_end="2025-06-30",
+        )
+        series = _build_metrics_series([record])
+        assert series[0]["period_months"] == 6
+
+    def test_period_months_none_without_start(self):
+        """period_start がない場合、period_months は None."""
+        record = _make_record(2024)
+        series = _build_metrics_series([record])
+        assert series[0]["period_months"] is None
+
+    def test_backward_compat_existing_fields(self):
+        """period_months 追加後も既存フィールドが全て存在する."""
+        record = _make_record(2024)
+        series = _build_metrics_series([record])
+        entry = series[0]
+        for key in ("fiscal_year", "period", "revenue", "operating_income",
+                     "net_income", "roe_percent", "roa_percent",
+                     "operating_margin_percent", "equity_ratio_percent",
+                     "free_cash_flow"):
+            assert key in entry

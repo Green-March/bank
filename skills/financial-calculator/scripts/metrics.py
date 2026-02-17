@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Mapping, Sequence
 
@@ -21,6 +21,7 @@ class FinancialRecord:
     operating_cf: float | None
     investing_cf: float | None
     period_end: str | None
+    period_start: str | None = None
 
 
 def calculate_metrics_payload(parsed_dir: Path, ticker: str) -> dict[str, object]:
@@ -102,6 +103,7 @@ def _to_financial_record(payload: dict[str, object], fallback_ticker: str) -> Fi
     fiscal_year = _to_int(payload.get("fiscal_year")) or _to_int(payload.get("fiscalYear"))
     period = _as_str(payload.get("period"))
     period_end = _as_str(payload.get("period_end"))
+    period_start = _as_str(payload.get("period_start"))
 
     revenue = _pick_number(
         primary=pl,
@@ -166,6 +168,7 @@ def _to_financial_record(payload: dict[str, object], fallback_ticker: str) -> Fi
         operating_cf=operating_cf,
         investing_cf=investing_cf,
         period_end=period_end,
+        period_start=period_start,
     )
 
 
@@ -182,10 +185,13 @@ def _build_metrics_series(records: Sequence[FinancialRecord]) -> list[dict[str, 
         equity_ratio = _ratio_percent(record.equity, record.total_assets)
         free_cash_flow = _sum_nullable(record.operating_cf, record.investing_cf)
 
+        period_months = _compute_period_months(record.period_start, record.period_end)
+
         series.append(
             {
                 "fiscal_year": record.fiscal_year,
                 "period": record.period or "N/A",
+                "period_months": period_months,
                 "revenue": _round_num(record.revenue),
                 "operating_income": _round_num(record.operating_income),
                 "net_income": _round_num(record.net_income),
@@ -278,6 +284,26 @@ def _as_str(value: object) -> str | None:
         if stripped:
             return stripped
     return None
+
+
+def _compute_period_months(period_start: str | None, period_end: str | None) -> int | None:
+    """Compute period length in months from ISO date strings.
+
+    Returns None if either date is missing or unparseable.
+    """
+    if not period_start or not period_end:
+        return None
+    try:
+        start = date.fromisoformat(period_start)
+        end = date.fromisoformat(period_end)
+    except ValueError:
+        return None
+    # Financial periods start on 1st and end on last day of month,
+    # so add 1 to include the end month.
+    months = (end.year - start.year) * 12 + (end.month - start.month + 1)
+    if months <= 0:
+        return None
+    return months
 
 
 def _ratio_percent(numerator: float | None, denominator: float | None) -> float | None:
