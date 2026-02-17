@@ -3,6 +3,18 @@
 !.claude/settings.json
 .mcp.json
 
+# OS files
+.DS_Store
+
+# Codex settings
+.codex/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Runtime data (collected/parsed financial data)
+data/
+
 # Test outputs (generated during testing)
 test_output/
 
