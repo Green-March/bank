@@ -6,10 +6,12 @@ the same ParsedDocument / PeriodFinancial output as the XBRL parser.
 
 from __future__ import annotations
 
+import calendar
 import json
 import logging
 import re
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 import pdfplumber
@@ -115,14 +117,16 @@ def normalize_value(raw: str | None, multiplier: int = 1) -> int | None:
 
 # Strict bracket-enclosed headers for consolidated financial statements.
 # These appear as section titles like "①【連結貸借対照表】" in the PDF text.
-_CONSOLIDATED_BS_RE = re.compile(r"【連結貸借対照表】")
-_CONSOLIDATED_PL_RE = re.compile(r"【連結損益計算書(?:及び連結包括利益計算書)?】")
-_CONSOLIDATED_CF_RE = re.compile(r"【連結キャッシュ・フロー計算書】")
+# Optional 四半期/中間 prefix for quarterly/semi-annual reports.
+_QI_PREFIX = r"(?:四半期|中間)?"
+_CONSOLIDATED_BS_RE = re.compile(rf"【{_QI_PREFIX}連結貸借対照表】")
+_CONSOLIDATED_PL_RE = re.compile(rf"【{_QI_PREFIX}連結損益計算書(?:及び{_QI_PREFIX}連結包括利益計算書)?】")
+_CONSOLIDATED_CF_RE = re.compile(rf"【{_QI_PREFIX}連結キャッシュ・フロー計算書】")
 
 # Fallback for companies without consolidated statements
-_STANDALONE_BS_RE = re.compile(r"【貸借対照表】")
-_STANDALONE_PL_RE = re.compile(r"【損益計算書】")
-_STANDALONE_CF_RE = re.compile(r"【キャッシュ・フロー計算書】")
+_STANDALONE_BS_RE = re.compile(rf"【{_QI_PREFIX}貸借対照表】")
+_STANDALONE_PL_RE = re.compile(rf"【{_QI_PREFIX}損益計算書(?:及び{_QI_PREFIX}包括利益計算書)?】")
+_STANDALONE_CF_RE = re.compile(rf"【{_QI_PREFIX}キャッシュ・フロー計算書】")
 
 
 def classify_statement(page_text: str) -> str | None:
@@ -277,6 +281,7 @@ PDF_CONCEPT_ALIASES: dict[str, list[str]] = {
     # BS
     "total_assets": ["資産合計", "総資産", "総資産額"],
     "current_assets": ["流動資産合計"],
+    "noncurrent_assets": ["固定資産合計"],
     "total_liabilities": ["負債合計", "負債の部合計"],
     "current_liabilities": ["流動負債合計"],
     "total_equity": ["純資産合計", "純資産の部合計"],
@@ -289,8 +294,16 @@ PDF_CONCEPT_ALIASES: dict[str, list[str]] = {
     "net_income": [
         "親会社株主に帰属する当期純利益",
         "親会社株主に帰属する当期純損失",
+        "親会社株主に帰属する四半期純利益",
+        "親会社株主に帰属する四半期純損失",
+        "親会社株主に帰属する中間純利益",
+        "親会社株主に帰属する中間純損失",
         "当期純利益",
         "当期純損失",
+        "四半期純利益",
+        "四半期純損失",
+        "中間純利益",
+        "中間純損失",
     ],
     # CF
     "operating_cf": ["営業活動によるキャッシュ・フロー"],
@@ -307,6 +320,7 @@ for _canonical, _aliases in PDF_CONCEPT_ALIASES.items():
 CONCEPT_TO_STATEMENT: dict[str, str] = {
     "total_assets": "bs",
     "current_assets": "bs",
+    "noncurrent_assets": "bs",
     "total_liabilities": "bs",
     "current_liabilities": "bs",
     "total_equity": "bs",
@@ -322,11 +336,22 @@ CONCEPT_TO_STATEMENT: dict[str, str] = {
 }
 
 
+_BS_EXACT_MATCH_ALIASES: frozenset[str] = frozenset(
+    alias
+    for canonical, aliases in PDF_CONCEPT_ALIASES.items()
+    if CONCEPT_TO_STATEMENT.get(canonical) == "bs"
+    for alias in aliases
+)
+
+
 def map_concept(japanese_name: str) -> str | None:
     """Map a Japanese concept name to a canonical key.
 
     Tries exact match first, then prefix match for concept names that
     include suffixes like "又は...純損失（△）".
+
+    BS aliases use exact match only to prevent false positives
+    (e.g. "流動資産合計" prefix-matching "資産合計" → total_assets).
     """
     cleaned = japanese_name.strip()
     result = _CONCEPT_LOOKUP.get(cleaned)
@@ -334,7 +359,10 @@ def map_concept(japanese_name: str) -> str | None:
         return result
 
     # Prefix match: "親会社株主に帰属する当期純利益又は..." → net_income
+    # Skip BS aliases to prevent total_assets false positives
     for alias, canonical in _CONCEPT_LOOKUP.items():
+        if alias in _BS_EXACT_MATCH_ALIASES:
+            continue
         if cleaned.startswith(alias):
             return canonical
 
@@ -348,11 +376,23 @@ def map_concept(japanese_name: str) -> str | None:
 _YEAR_RE = re.compile(r"_(\d{4})(?:\.pdf)?$", re.IGNORECASE)
 
 
+_REPORT_PATTERNS = [
+    "{ticker}_有価証券報告書_*.pdf",
+    "{ticker}_四半期報告書_*.pdf",
+    "{ticker}_半期報告書_*.pdf",
+]
+
+
 def discover_pdfs(input_path: Path, ticker: str) -> list[Path]:
-    """Find and sort PDFs matching the naming convention."""
-    pattern = f"{ticker}_有価証券報告書_*.pdf"
+    """Find and sort PDFs matching the naming convention.
+
+    Supports 有価証券報告書, 四半期報告書, and 半期報告書 patterns.
+    """
+    found: set[Path] = set()
+    for pattern in _REPORT_PATTERNS:
+        found.update(input_path.glob(pattern.format(ticker=ticker)))
     return sorted(
-        input_path.glob(pattern),
+        found,
         key=lambda p: (_extract_year(p), p.name),
     )
 
@@ -360,6 +400,91 @@ def discover_pdfs(input_path: Path, ticker: str) -> list[Path]:
 def _extract_year(path: Path) -> int:
     m = _YEAR_RE.search(path.stem)
     return int(m.group(1)) if m else 0
+
+
+def _correct_half_year_period_end(fiscal_year_end: str) -> str:
+    """Calculate mid-year period end from fiscal year end for 半期報告書.
+
+    docTypeCode=160 reports cover the first half of the fiscal year.
+    The manifest period_end is the fiscal year end; the actual reporting
+    period ends 6 months earlier.  Always uses the last day of the target
+    month (fiscal year ends are always month-end dates).
+    """
+    d = date.fromisoformat(fiscal_year_end)
+    month = d.month - 6
+    year = d.year
+    if month <= 0:
+        month += 12
+        year -= 1
+    last_day = calendar.monthrange(year, month)[1]
+    return date(year, month, last_day).isoformat()
+
+
+_DOC_TYPE_FALLBACK_RE = re.compile(r"(?<!四)半期報告書")
+
+
+@dataclass
+class ManifestEntry:
+    """Metadata from a single manifest result entry."""
+
+    doc_id: str
+    doc_type_code: str | None = None
+    source: str | None = None
+    endpoint_or_doc_id: str | None = None
+    fetched_at: str | None = None
+    period_end: str | None = None
+    doc_description: str | None = None
+
+
+def _infer_doc_type_code(doc_description: str | None) -> str | None:
+    """Infer doc_type_code from doc_description when explicit code is absent."""
+    if doc_description and _DOC_TYPE_FALLBACK_RE.search(doc_description):
+        return "160"
+    return None
+
+
+def load_manifest_entries(input_path: Path) -> dict[str, ManifestEntry]:
+    """Load per-file metadata from manifest.json.
+
+    Returns {normalised_filename: ManifestEntry}.
+    Falls back to doc_description for doc_type_code when not explicitly set.
+    """
+    manifest_path = input_path / "manifest.json"
+    if not manifest_path.exists():
+        return {}
+
+    try:
+        with manifest_path.open("r", encoding="utf-8") as f:
+            manifest = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+    mapping: dict[str, ManifestEntry] = {}
+    for result in manifest.get("results", []):
+        file_path = result.get("file_path")
+        doc_id = result.get("doc_id")
+        if file_path and doc_id:
+            doc_type_code = result.get("doc_type_code")
+            doc_description = result.get("doc_description")
+            if doc_type_code is None:
+                doc_type_code = _infer_doc_type_code(doc_description)
+                if doc_type_code is not None:
+                    logger.info(
+                        "Inferred doc_type_code=%s from description: %s",
+                        doc_type_code,
+                        doc_description,
+                    )
+            mapping[Path(file_path).name] = ManifestEntry(
+                doc_id=doc_id,
+                doc_type_code=doc_type_code,
+                source=result.get("source"),
+                endpoint_or_doc_id=result.get("endpoint_or_doc_id"),
+                fetched_at=result.get("fetched_at"),
+                period_end=result.get("period_end"),
+                doc_description=doc_description,
+            )
+
+    return mapping
 
 
 def load_manifest_doc_ids(input_path: Path) -> dict[str, str]:
@@ -568,6 +693,82 @@ def _is_period_header_row(row: list[str | None]) -> bool:
     return False
 
 
+_DURATION_START_ALL_RE = re.compile(
+    r"自\s*(?:(\d{4})\s*年|(令和|平成|昭和)\s*(\d{1,2})\s*年)\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日"
+)
+_DURATION_END_ALL_RE = re.compile(
+    r"至\s*(?:(\d{4})\s*年|(令和|平成|昭和)\s*(\d{1,2})\s*年)\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日"
+)
+
+
+def _extract_periods_from_page_text(page_text: str) -> list[PeriodInfo]:
+    """Fallback: extract period info from page text when table headers lack dates.
+
+    Handles interleaved multi-column layouts by collecting all 自/至 dates
+    separately and pairing them by order.
+    """
+    # Use only the first portion of the page (before financial data rows)
+    header_text = page_text[:1500]
+
+    # Collect all 自 (start) and 至 (end) dates
+    starts: list[str] = []
+    for m in _DURATION_START_ALL_RE.finditer(header_text):
+        if m.group(1):
+            year = int(m.group(1))
+        else:
+            year = _era_to_western(m.group(2), int(m.group(3)))
+        starts.append(f"{year}-{int(m.group(4)):02d}-{int(m.group(5)):02d}")
+
+    ends: list[str] = []
+    for m in _DURATION_END_ALL_RE.finditer(header_text):
+        if m.group(1):
+            year = int(m.group(1))
+        else:
+            year = _era_to_western(m.group(2), int(m.group(3)))
+        ends.append(f"{year}-{int(m.group(4)):02d}-{int(m.group(5)):02d}")
+
+    # Pair starts and ends by order (1st 自 → 1st 至, 2nd 自 → 2nd 至)
+    if starts and ends and len(starts) == len(ends):
+        periods: list[PeriodInfo] = []
+        for i, (start, end) in enumerate(zip(starts, ends)):
+            label = "prior" if i == 0 and len(starts) > 1 else "current"
+            periods.append(PeriodInfo(
+                period_start=start, period_end=end,
+                period_type="duration", label=label,
+            ))
+        return periods
+
+    # Fallback to instant dates (BS)
+    instants: list[str] = []
+    for m in _WESTERN_DATE_RE.finditer(header_text):
+        iso = f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+        instants.append(iso)
+    for m in _ERA_DATE_RE.finditer(header_text):
+        year = _era_to_western(m.group(1), int(m.group(2)))
+        iso = f"{year}-{int(m.group(3)):02d}-{int(m.group(4)):02d}"
+        instants.append(iso)
+
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    unique: list[str] = []
+    for d in instants:
+        if d not in seen:
+            seen.add(d)
+            unique.append(d)
+
+    if unique:
+        periods = []
+        for i, d in enumerate(unique):
+            label = "prior" if i == 0 and len(unique) > 1 else "current"
+            periods.append(PeriodInfo(
+                period_start=None, period_end=d,
+                period_type="instant", label=label,
+            ))
+        return periods
+
+    return []
+
+
 def _extract_table_from_page(
     page: pdfplumber.pdf.Page,
     is_header_page: bool,
@@ -628,6 +829,22 @@ def _extract_table_from_page(
     return periods, data_rows, multiplier, unit_label
 
 
+def _count_non_empty_value_cols(rows: list[list[str | None]]) -> int:
+    """Count value columns (excluding item-name col 0) with at least one non-empty cell."""
+    if not rows:
+        return 0
+    max_cols = max(len(r) for r in rows)
+    count = 0
+    for col_idx in range(1, max_cols):
+        for row in rows:
+            if col_idx < len(row):
+                cell = row[col_idx]
+                if cell and cell.strip() and cell.strip() not in _EMPTY_VALUES:
+                    count += 1
+                    break
+    return count
+
+
 def _try_strategies(
     pages: list[pdfplumber.pdf.Page],
     is_header_flags: list[bool],
@@ -663,6 +880,41 @@ def _try_strategies(
     # Select best strategy: prefer more periods extracted, then by concept_score
     candidates.sort(key=lambda c: (len(c[0]), c[5]), reverse=True)
     periods, rows, multiplier, unit_label, sid, score = candidates[0]
+
+    # Data-quality override: detect when the winning strategy lost data
+    # columns during table extraction.  This happens when a strategy
+    # (e.g. S3 text/lines) partially parses a multi-column table,
+    # producing rows with the right column count but empty value cells.
+    # If another strategy extracted the same rows with all columns
+    # populated, switch to its data.
+    max_row_cols = max((len(r) for r in rows), default=0) if rows else 0
+    expected_data_cols = max(max_row_cols - 1, 0)
+    winning_value_cols = _count_non_empty_value_cols(rows)
+    if winning_value_cols < expected_data_cols:
+        for alt_periods, alt_rows, alt_mult, alt_ulabel, alt_sid, alt_score in candidates[1:]:
+            alt_value_cols = _count_non_empty_value_cols(alt_rows)
+            if alt_value_cols >= expected_data_cols and alt_score >= score:
+                rows = alt_rows
+                periods = []  # force text fallback for period derivation
+                sid = alt_sid
+                score = alt_score
+                if alt_ulabel != DEFAULT_UNIT_LABEL:
+                    multiplier = alt_mult
+                    unit_label = alt_ulabel
+                break
+
+    # Post-selection fallback: extract periods from page text when the
+    # winning strategy found none from table headers.  Applied AFTER
+    # strategy selection to prevent text-derived periods from inflating
+    # an inferior strategy's period count.
+    if not periods:
+        for page, is_header in zip(pages, is_header_flags):
+            if is_header:
+                page_text = page.extract_text() or ""
+                text_periods = _extract_periods_from_page_text(page_text)
+                if text_periods:
+                    periods = text_periods
+                    break
 
     # Supplement: fill missing concepts from text extraction
     found_concepts: set[str] = set()
@@ -845,14 +1097,63 @@ class PdfParseMetadata:
     unit_multiplier: int
     strategy_used: str = "S1"
     concept_score: int = 0
+    doc_type_code: str | None = None
+    period_end_original: str | None = None
+
+
+def _apply_half_year_correction(
+    periods: list[PeriodFinancial],
+    manifest_period_end: str | None,
+) -> str | None:
+    """Apply 半期報告書 period_end correction to PeriodFinancial objects.
+
+    For docTypeCode=160, the manifest period_end is the fiscal year end.
+    Any PeriodFinancial whose period_end matches the fiscal year end gets
+    corrected to mid-year.  Returns the corrected period_end if applied,
+    or None if no correction was needed.
+    """
+    if manifest_period_end is None or not periods:
+        return None
+
+    corrected = _correct_half_year_period_end(manifest_period_end)
+    if corrected == manifest_period_end:
+        return None
+
+    applied = False
+    for pf in periods:
+        if pf.period_end == manifest_period_end:
+            pf.period_end_original = pf.period_end
+            pf.period_end = corrected
+            applied = True
+            logger.info(
+                "半期報告書 PeriodFinancial corrected: %s → %s",
+                manifest_period_end,
+                corrected,
+            )
+
+    return corrected if applied else None
 
 
 def parse_pdf(
     pdf_path: Path,
     ticker: str,
     doc_id: str | None = None,
+    doc_type_code: str | None = None,
+    source: str | None = None,
+    endpoint_or_doc_id: str | None = None,
+    fetched_at: str | None = None,
+    manifest_period_end: str | None = None,
 ) -> tuple[ParsedDocument, PdfParseMetadata]:
     """Parse a single PDF securities report.
+
+    Args:
+        doc_type_code: EDINET docTypeCode (e.g. "160" for 半期報告書).
+            When "160", period_end is corrected to mid-year.
+        source: Data source identifier (e.g. "edinet") for T0 traceability.
+        endpoint_or_doc_id: API endpoint or doc_id for T0 traceability.
+        fetched_at: ISO timestamp of data retrieval for T0 traceability.
+        manifest_period_end: Fiscal year end from manifest.  Used with
+            doc_type_code="160" to identify which periods to correct.
 
     Returns (ParsedDocument, PdfParseMetadata).
     """
@@ -875,9 +1176,17 @@ def parse_pdf(
         strategies_used.append(stmt.strategy_id)
         total_score += stmt.concept_score
 
-    current_period = periods[-1] if periods else None
     # Determine dominant strategy
     dominant_strategy = max(set(strategies_used), key=strategies_used.count) if strategies_used else "S1"
+
+    # 半期報告書 period_end correction: apply to periods AND metadata
+    meta_period_end_original: str | None = None
+    if doc_type_code == "160":
+        corrected = _apply_half_year_correction(periods, manifest_period_end)
+        if corrected is not None:
+            meta_period_end_original = manifest_period_end
+
+    current_period = periods[-1] if periods else None
 
     metadata = PdfParseMetadata(
         doc_id=doc_id,
@@ -891,6 +1200,8 @@ def parse_pdf(
         unit_multiplier=unit_mult,
         strategy_used=dominant_strategy,
         concept_score=total_score,
+        doc_type_code=doc_type_code,
+        period_end_original=meta_period_end_original,
     )
 
     document = ParsedDocument(
@@ -899,6 +1210,9 @@ def parse_pdf(
         source_zip=str(pdf_path),
         company_name=None,
         periods=periods,
+        source=source,
+        endpoint_or_doc_id=endpoint_or_doc_id,
+        fetched_at=fetched_at,
     )
 
     return document, metadata
@@ -919,7 +1233,7 @@ def parse_pdf_directory(
             f"found in {input_path}"
         )
 
-    doc_id_map = load_manifest_doc_ids(input_path)
+    manifest_entries = load_manifest_entries(input_path)
 
     manifest_path = input_path / "manifest.json"
     if manifest_path.exists():
@@ -940,8 +1254,17 @@ def parse_pdf_directory(
     metadata_list: list[PdfParseMetadata] = []
 
     for pdf_path in pdf_files:
-        doc_id = doc_id_map.get(pdf_path.name)
-        doc, meta = parse_pdf(pdf_path, ticker, doc_id=doc_id)
+        entry = manifest_entries.get(pdf_path.name)
+        doc, meta = parse_pdf(
+            pdf_path,
+            ticker,
+            doc_id=entry.doc_id if entry else None,
+            doc_type_code=entry.doc_type_code if entry else None,
+            source=entry.source if entry else None,
+            endpoint_or_doc_id=entry.endpoint_or_doc_id if entry else None,
+            fetched_at=entry.fetched_at if entry else None,
+            manifest_period_end=entry.period_end if entry else None,
+        )
         documents.append(doc)
         metadata_list.append(meta)
 

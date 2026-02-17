@@ -15,6 +15,7 @@ from lxml import etree
 BS_KEYS: tuple[str, ...] = (
     "total_assets",
     "current_assets",
+    "noncurrent_assets",
     "total_liabilities",
     "current_liabilities",
     "total_equity",
@@ -39,6 +40,7 @@ CF_KEYS: tuple[str, ...] = (
 CONCEPT_ALIASES: dict[str, tuple[str, ...]] = {
     "total_assets": ("totalassets", "assetstotal"),
     "current_assets": ("currentassets",),
+    "noncurrent_assets": ("noncurrentassets", "fixedassets"),
     "total_liabilities": ("totalliabilities", "liabilitiestotal"),
     "current_liabilities": ("currentliabilities",),
     "total_equity": (
@@ -65,6 +67,7 @@ CONCEPT_ALIASES: dict[str, tuple[str, ...]] = {
 CONCEPT_TO_STATEMENT: dict[str, str] = {
     "total_assets": "bs",
     "current_assets": "bs",
+    "noncurrent_assets": "bs",
     "total_liabilities": "bs",
     "current_liabilities": "bs",
     "total_equity": "bs",
@@ -131,6 +134,7 @@ class PeriodFinancial:
         default_factory=lambda: {key: None for key in CF_KEYS}
     )
     source_context_ids: list[str] = field(default_factory=list)
+    period_end_original: str | None = None
     _scores: dict[str, int] = field(default_factory=dict)
 
     def set_metric(
@@ -152,13 +156,20 @@ class PeriodFinancial:
             self.source_context_ids.append(context_id)
 
     def finalize(self) -> None:
+        # BUG-1b: BS fallback — total_assets = current_assets + noncurrent_assets
+        if self.bs.get("total_assets") is None:
+            current = self.bs.get("current_assets")
+            noncurrent = self.bs.get("noncurrent_assets")
+            if current is not None and noncurrent is not None:
+                self.bs["total_assets"] = current + noncurrent
+
         operating_cf = self.cf["operating_cf"]
         investing_cf = self.cf["investing_cf"]
         if operating_cf is not None and investing_cf is not None:
             self.cf["free_cash_flow"] = operating_cf + investing_cf
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        result: dict[str, object] = {
             "period_end": self.period_end,
             "period_start": self.period_start,
             "period_type": self.period_type,
@@ -168,6 +179,9 @@ class PeriodFinancial:
             "cf": self.cf,
             "source_context_ids": self.source_context_ids,
         }
+        if self.period_end_original is not None:
+            result["period_end_original"] = self.period_end_original
+        return result
 
 
 @dataclass
@@ -179,15 +193,25 @@ class ParsedDocument:
     source_zip: str
     company_name: str | None
     periods: list[PeriodFinancial]
+    source: str | None = None
+    endpoint_or_doc_id: str | None = None
+    fetched_at: str | None = None
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        result: dict[str, object] = {
             "ticker": self.ticker,
             "document_id": self.document_id,
             "source_zip": self.source_zip,
             "company_name": self.company_name,
             "periods": [period.to_dict() for period in self.periods],
         }
+        if self.source is not None:
+            result["source"] = self.source
+        if self.endpoint_or_doc_id is not None:
+            result["endpoint_or_doc_id"] = self.endpoint_or_doc_id
+        if self.fetched_at is not None:
+            result["fetched_at"] = self.fetched_at
+        return result
 
 
 def normalize_identifier(value: str) -> str:

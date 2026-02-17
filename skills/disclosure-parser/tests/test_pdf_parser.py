@@ -135,11 +135,41 @@ class TestMapConcept(unittest.TestCase):
         result = pdf_parser.map_concept("親会社株主に帰属する当期純利益又は親会社株主に帰属する当期純損失（△）")
         self.assertEqual(result, "net_income")
 
+    def test_quarterly_net_income(self) -> None:
+        self.assertEqual(pdf_parser.map_concept("親会社株主に帰属する四半期純利益"), "net_income")
+
+    def test_quarterly_net_loss(self) -> None:
+        self.assertEqual(pdf_parser.map_concept("親会社株主に帰属する四半期純損失"), "net_income")
+
+    def test_interim_net_income(self) -> None:
+        self.assertEqual(pdf_parser.map_concept("親会社株主に帰属する中間純利益"), "net_income")
+
+    def test_quarterly_net_income_short(self) -> None:
+        self.assertEqual(pdf_parser.map_concept("四半期純利益"), "net_income")
+
     def test_unknown_concept(self) -> None:
         self.assertIsNone(pdf_parser.map_concept("未知の科目"))
 
     def test_whitespace_stripped(self) -> None:
         self.assertEqual(pdf_parser.map_concept("  売上高  "), "revenue")
+
+    def test_bs_exact_match_guard_current_assets(self) -> None:
+        """流動資産合計 must map to current_assets, not total_assets."""
+        self.assertEqual(pdf_parser.map_concept("流動資産合計"), "current_assets")
+
+    def test_bs_exact_match_guard_noncurrent_assets(self) -> None:
+        """固定資産合計 must map to noncurrent_assets, not total_assets."""
+        self.assertEqual(pdf_parser.map_concept("固定資産合計"), "noncurrent_assets")
+
+    def test_bs_exact_match_guard_no_prefix_leak(self) -> None:
+        """BS aliases must not prefix-match longer strings."""
+        # "資産合計その他" should NOT match total_assets via prefix
+        self.assertIsNone(pdf_parser.map_concept("資産合計その他"))
+
+    def test_pl_prefix_match_still_works(self) -> None:
+        """PL prefix match must still work after BS guard."""
+        result = pdf_parser.map_concept("営業利益又は営業損失（△）")
+        self.assertEqual(result, "operating_income")
 
 
 class TestClassifyStatement(unittest.TestCase):
@@ -159,6 +189,36 @@ class TestClassifyStatement(unittest.TestCase):
 
     def test_no_statement(self) -> None:
         self.assertIsNone(pdf_parser.classify_statement("目次"))
+
+    # --- 四半期/中間プレフィックス対応 ---
+    def test_quarterly_consolidated_bs(self) -> None:
+        self.assertEqual(pdf_parser.classify_statement("（１）【四半期連結貸借対照表】"), "bs")
+
+    def test_quarterly_consolidated_pl(self) -> None:
+        self.assertEqual(pdf_parser.classify_statement("【四半期連結損益計算書】"), "pl")
+
+    def test_quarterly_consolidated_pl_with_ci(self) -> None:
+        self.assertEqual(pdf_parser.classify_statement(
+            "（２）【四半期連結損益計算書及び四半期連結包括利益計算書】"
+        ), "pl")
+
+    def test_quarterly_consolidated_cf(self) -> None:
+        self.assertEqual(pdf_parser.classify_statement("【四半期連結キャッシュ・フロー計算書】"), "cf")
+
+    def test_interim_consolidated_bs(self) -> None:
+        self.assertEqual(pdf_parser.classify_statement("【中間連結貸借対照表】"), "bs")
+
+    def test_interim_consolidated_pl(self) -> None:
+        self.assertEqual(pdf_parser.classify_statement("【中間連結損益計算書】"), "pl")
+
+    def test_interim_consolidated_cf(self) -> None:
+        self.assertEqual(pdf_parser.classify_statement("【中間連結キャッシュ・フロー計算書】"), "cf")
+
+    def test_quarterly_standalone_bs(self) -> None:
+        self.assertEqual(pdf_parser.classify_statement("【四半期貸借対照表】"), "bs")
+
+    def test_interim_standalone_pl(self) -> None:
+        self.assertEqual(pdf_parser.classify_statement("【中間損益計算書】"), "pl")
 
 
 class TestParseColumnHeader(unittest.TestCase):
@@ -377,6 +437,250 @@ class TestIntegration2020(unittest.TestCase):
         self.assertIsNotNone(current.pl.get("operating_income"))
         self.assertIsNotNone(current.pl.get("net_income"))
         self.assertIsNotNone(current.cf.get("operating_cf"))
+
+
+# ===========================================================================
+# S2 新規テスト: BUG-1b fallback, period_end補正, T0キー
+# ===========================================================================
+
+from parser import PeriodFinancial, BS_KEYS, ParsedDocument
+
+
+class TestBug1bBsFallback(unittest.TestCase):
+    """BUG-1b: total_assets = current_assets + noncurrent_assets fallback."""
+
+    def test_fallback_computed_when_total_assets_missing(self) -> None:
+        pf = PeriodFinancial(
+            period_end="2024-03-31",
+            period_start="2023-04-01",
+            period_type="instant",
+            fiscal_year=2024,
+        )
+        pf.bs["current_assets"] = 10_000_000
+        pf.bs["noncurrent_assets"] = 20_000_000
+        pf.bs["total_assets"] = None
+        pf.finalize()
+        self.assertEqual(pf.bs["total_assets"], 30_000_000)
+
+    def test_no_fallback_when_total_assets_present(self) -> None:
+        pf = PeriodFinancial(
+            period_end="2024-03-31",
+            period_start="2023-04-01",
+            period_type="instant",
+            fiscal_year=2024,
+        )
+        pf.bs["total_assets"] = 50_000_000
+        pf.bs["current_assets"] = 10_000_000
+        pf.bs["noncurrent_assets"] = 20_000_000
+        pf.finalize()
+        self.assertEqual(pf.bs["total_assets"], 50_000_000)
+
+    def test_no_fallback_when_parts_missing(self) -> None:
+        pf = PeriodFinancial(
+            period_end="2024-03-31",
+            period_start="2023-04-01",
+            period_type="instant",
+            fiscal_year=2024,
+        )
+        pf.bs["current_assets"] = 10_000_000
+        pf.bs["noncurrent_assets"] = None
+        pf.bs["total_assets"] = None
+        pf.finalize()
+        self.assertIsNone(pf.bs["total_assets"])
+
+    def test_noncurrent_assets_in_bs_keys(self) -> None:
+        self.assertIn("noncurrent_assets", BS_KEYS)
+
+
+class TestHalfYearPeriodEndCorrection(unittest.TestCase):
+    """半期報告書 period_end 補正 (docTypeCode=160)."""
+
+    def test_march_to_september(self) -> None:
+        result = pdf_parser._correct_half_year_period_end("2025-03-31")
+        self.assertEqual(result, "2024-09-30")
+
+    def test_december_to_june(self) -> None:
+        result = pdf_parser._correct_half_year_period_end("2024-12-31")
+        self.assertEqual(result, "2024-06-30")
+
+    def test_june_to_december(self) -> None:
+        result = pdf_parser._correct_half_year_period_end("2025-06-30")
+        self.assertEqual(result, "2024-12-31")
+
+    def test_september_to_march(self) -> None:
+        result = pdf_parser._correct_half_year_period_end("2025-09-30")
+        self.assertEqual(result, "2025-03-31")
+
+
+class TestT0Keys(unittest.TestCase):
+    """T0 traceability key output."""
+
+    def test_parsed_document_includes_t0_keys(self) -> None:
+        doc = ParsedDocument(
+            ticker="2780",
+            document_id="S100KSCU",
+            source_zip="test.zip",
+            company_name="Test Co",
+            periods=[],
+            source="edinet",
+            endpoint_or_doc_id="S100KSCU",
+            fetched_at="2026-02-15T12:30:00Z",
+        )
+        d = doc.to_dict()
+        self.assertEqual(d["source"], "edinet")
+        self.assertEqual(d["endpoint_or_doc_id"], "S100KSCU")
+        self.assertEqual(d["fetched_at"], "2026-02-15T12:30:00Z")
+
+    def test_t0_keys_omitted_when_none(self) -> None:
+        doc = ParsedDocument(
+            ticker="2780",
+            document_id="S100KSCU",
+            source_zip="test.zip",
+            company_name="Test Co",
+            periods=[],
+        )
+        d = doc.to_dict()
+        self.assertNotIn("source", d)
+        self.assertNotIn("endpoint_or_doc_id", d)
+        self.assertNotIn("fetched_at", d)
+
+    def test_pdf_parse_metadata_has_doc_type_code(self) -> None:
+        meta = pdf_parser.PdfParseMetadata(
+            doc_id="S100URDL",
+            source_pdf="test.pdf",
+            period_start=None,
+            period_end="2024-09-30",
+            extraction_pages=[1],
+            parser_version="0.3.0",
+            extraction_method="pdfplumber_table",
+            unit_detected="千円",
+            unit_multiplier=1000,
+            doc_type_code="160",
+            period_end_original="2025-03-31",
+        )
+        self.assertEqual(meta.doc_type_code, "160")
+        self.assertEqual(meta.period_end_original, "2025-03-31")
+
+
+from parser import build_period_index
+
+
+class TestHalfYearPeriodCorrection(unittest.TestCase):
+    """S2R1: period_end correction applied to PeriodFinancial and period_index."""
+
+    def _make_periods(self, period_end: str) -> list[PeriodFinancial]:
+        """Create fixture periods mimicking a 半期報告書 with fiscal year end."""
+        prior = PeriodFinancial(
+            period_end="2023-09-30",
+            period_start="2023-04-01",
+            period_type="instant",
+            fiscal_year=2023,
+        )
+        prior.bs["total_assets"] = 60_000_000_000
+        prior.pl["revenue"] = 50_000_000_000
+
+        current = PeriodFinancial(
+            period_end=period_end,
+            period_start="2024-04-01",
+            period_type="instant",
+            fiscal_year=2024,
+        )
+        current.bs["total_assets"] = 70_000_000_000
+        current.pl["revenue"] = 60_000_000_000
+
+        return [prior, current]
+
+    def test_correction_applied_to_matching_period(self) -> None:
+        periods = self._make_periods("2025-03-31")
+        corrected = pdf_parser._apply_half_year_correction(periods, "2025-03-31")
+        self.assertEqual(corrected, "2024-09-30")
+        self.assertEqual(periods[1].period_end, "2024-09-30")
+        self.assertEqual(periods[1].period_end_original, "2025-03-31")
+
+    def test_no_correction_when_already_mid_year(self) -> None:
+        periods = self._make_periods("2024-09-30")
+        corrected = pdf_parser._apply_half_year_correction(periods, "2025-03-31")
+        # No period matches the manifest fiscal year end
+        self.assertIsNone(corrected)
+        self.assertEqual(periods[1].period_end, "2024-09-30")
+        self.assertIsNone(periods[1].period_end_original)
+
+    def test_prior_period_unchanged(self) -> None:
+        periods = self._make_periods("2025-03-31")
+        pdf_parser._apply_half_year_correction(periods, "2025-03-31")
+        self.assertEqual(periods[0].period_end, "2023-09-30")
+        self.assertIsNone(periods[0].period_end_original)
+
+    def test_period_index_uses_corrected_end(self) -> None:
+        periods = self._make_periods("2025-03-31")
+        pdf_parser._apply_half_year_correction(periods, "2025-03-31")
+        doc = ParsedDocument(
+            ticker="2780",
+            document_id="S100URDL",
+            source_zip="test.zip",
+            company_name="Test Co",
+            periods=periods,
+        )
+        index = build_period_index([doc])
+        period_ends = [entry["period_end"] for entry in index]
+        self.assertIn("2024-09-30", period_ends)
+        self.assertNotIn("2025-03-31", period_ends)
+
+    def test_period_end_original_in_to_dict(self) -> None:
+        pf = PeriodFinancial(
+            period_end="2024-09-30",
+            period_start="2024-04-01",
+            period_type="instant",
+            fiscal_year=2024,
+            period_end_original="2025-03-31",
+        )
+        d = pf.to_dict()
+        self.assertEqual(d["period_end"], "2024-09-30")
+        self.assertEqual(d["period_end_original"], "2025-03-31")
+
+    def test_period_end_original_omitted_when_none(self) -> None:
+        pf = PeriodFinancial(
+            period_end="2024-09-30",
+            period_start="2024-04-01",
+            period_type="instant",
+            fiscal_year=2024,
+        )
+        d = pf.to_dict()
+        self.assertNotIn("period_end_original", d)
+
+    def test_no_correction_without_manifest_period_end(self) -> None:
+        periods = self._make_periods("2025-03-31")
+        corrected = pdf_parser._apply_half_year_correction(periods, None)
+        self.assertIsNone(corrected)
+        self.assertEqual(periods[1].period_end, "2025-03-31")
+
+
+class TestDocTypeCodeFallback(unittest.TestCase):
+    """doc_type_code fallback from doc_description."""
+
+    def test_infer_160_from_description(self) -> None:
+        result = pdf_parser._infer_doc_type_code(
+            "半期報告書－第47期(2024/04/01－2025/03/31)"
+        )
+        self.assertEqual(result, "160")
+
+    def test_no_infer_for_quarterly(self) -> None:
+        result = pdf_parser._infer_doc_type_code(
+            "四半期報告書－第43期第3四半期(令和2年10月1日－令和2年12月31日)"
+        )
+        self.assertIsNone(result)
+
+    def test_no_infer_for_none(self) -> None:
+        result = pdf_parser._infer_doc_type_code(None)
+        self.assertIsNone(result)
+
+    def test_manifest_entry_has_period_end(self) -> None:
+        entry = pdf_parser.ManifestEntry(
+            doc_id="S100URDL",
+            doc_type_code="160",
+            period_end="2025-03-31",
+        )
+        self.assertEqual(entry.period_end, "2025-03-31")
 
 
 if __name__ == "__main__":
