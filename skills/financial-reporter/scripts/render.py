@@ -162,7 +162,7 @@ def render_markdown(
     absence_map: AbsenceMap | None = None,
     fy_end_month: int = 12,
 ) -> str:
-    company_name = str(metrics_payload.get("company_name") or "Unknown")
+    company_name = str(metrics_payload.get("company_name") or "不明")
     generated_at = str(metrics_payload.get("generated_at") or _now_iso())
 
     series_raw = metrics_payload.get("metrics_series")
@@ -202,27 +202,27 @@ def render_markdown(
         )
 
     lines: list[str] = []
-    lines.append(f"# {ticker} {company_name} Analysis Report")
+    lines.append(f"# {ticker} {company_name} 分析レポート")
     lines.append("")
-    lines.append("## Snapshot")
-    lines.append(f"- Ticker: {ticker}")
-    lines.append(f"- Company: {company_name}")
-    lines.append(f"- Generated At (UTC): {generated_at}")
+    lines.append("## 概要")
+    lines.append(f"- 証券コード: {ticker}")
+    lines.append(f"- 企業名: {company_name}")
+    lines.append(f"- 生成日時 (UTC): {generated_at}")
     lines.append("")
-    lines.append("## Key Metrics (Latest)")
+    lines.append("## 主要指標（直近）")
     latest_label = _period_label(latest.get("period_months"))
     latest_suffix = f" ({latest_label})" if latest_label and latest_label != "通期" else ""
-    lines.append(f"- Revenue{latest_suffix}: {fmt(latest.get('revenue'), field='revenue', row_abs=latest_abs)}{unit_label}")
-    lines.append(f"- Operating Income{latest_suffix}: {fmt(latest.get('operating_income'), field='operating_income', row_abs=latest_abs)}{unit_label}")
-    lines.append(f"- Net Income{latest_suffix}: {fmt(latest.get('net_income'), field='net_income', row_abs=latest_abs)}{unit_label}")
+    lines.append(f"- 売上高{latest_suffix}: {fmt(latest.get('revenue'), field='revenue', row_abs=latest_abs)}{unit_label}")
+    lines.append(f"- 営業利益{latest_suffix}: {fmt(latest.get('operating_income'), field='operating_income', row_abs=latest_abs)}{unit_label}")
+    lines.append(f"- 当期純利益{latest_suffix}: {fmt(latest.get('net_income'), field='net_income', row_abs=latest_abs)}{unit_label}")
     lines.append(f"- ROE: {fmt(latest.get('roe_percent'), '%', field='roe_percent', row_abs=latest_abs)}")
     lines.append(f"- ROA: {fmt(latest.get('roa_percent'), '%', field='roa_percent', row_abs=latest_abs)}")
-    lines.append(f"- Operating Margin: {fmt(latest.get('operating_margin_percent'), '%', field='operating_margin_percent', row_abs=latest_abs)}")
-    lines.append(f"- Equity Ratio: {fmt(latest.get('equity_ratio_percent'), '%', field='equity_ratio_percent', row_abs=latest_abs)}")
-    lines.append(f"- Free Cash Flow{latest_suffix}: {fmt(latest.get('free_cash_flow'), field='free_cash_flow', row_abs=latest_abs)}{unit_label}")
+    lines.append(f"- 営業利益率: {fmt(latest.get('operating_margin_percent'), '%', field='operating_margin_percent', row_abs=latest_abs)}")
+    lines.append(f"- 自己資本比率: {fmt(latest.get('equity_ratio_percent'), '%', field='equity_ratio_percent', row_abs=latest_abs)}")
+    lines.append(f"- フリーキャッシュフロー{latest_suffix}: {fmt(latest.get('free_cash_flow'), field='free_cash_flow', row_abs=latest_abs)}{unit_label}")
     lines.append("")
-    lines.append("## Trend Table")
-    lines.append("| Fiscal Year | Revenue | Operating Income | Net Income | ROE(%) | ROA(%) | Margin(%) | Equity Ratio(%) | FCF |")
+    lines.append("## 推移表")
+    lines.append("| 会計年度 | 売上高 | 営業利益 | 当期純利益 | ROE(%) | ROA(%) | 営業利益率(%) | 自己資本比率(%) | FCF |")
     lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
     for row in series:
         row_abs = _row_absence(row, absence_map, fy_end_month=fy_end_month)
@@ -241,11 +241,11 @@ def render_markdown(
         )
 
     lines.append("")
-    lines.append("## Risks and Watchpoints")
-    lines.append("- Data lag risk: very recent disclosures may not yet be reflected.")
-    lines.append("- Accounting policy and segment changes can distort YoY comparisons.")
-    lines.append("- One-off gains/losses can inflate profitability metrics.")
-    lines.append("- Price valuation requires market data integration beyond this report.")
+    lines.append("## リスクと注意点")
+    lines.append("- データ遅延リスク: 直近の開示情報がまだ反映されていない可能性があります。")
+    lines.append("- 会計方針やセグメント変更により、前年同期比較が歪む場合があります。")
+    lines.append("- 一時的な損益が収益性指標を歪める可能性があります。")
+    lines.append("- 株価バリュエーションには本レポート範囲外の市場データが必要です。")
     lines.append("")
 
     # Data Quality Notes (only when absence_map has entries)
@@ -257,10 +257,10 @@ def render_markdown(
                     f"  - {period_end} / {field_name}: {reason}"
                 )
         if footnotes:
-            lines.append("## Data Quality Notes")
+            lines.append("## データ品質に関する注記")
             lines.append("")
             lines.append(
-                "\u2020: 確認済み不在 (confirmed absent)"
+                "\u2020: 確認済み不在"
                 " \u2014 開示資料に該当データが存在しないことを確認済み。"
             )
             lines.append("")
@@ -274,7 +274,7 @@ def render_html(markdown_text: str, title: str) -> str:
     content_html = markdown.markdown(markdown_text, extensions=["tables", "fenced_code"])
     template = Template(
         """<!doctype html>
-<html lang=\"en\">
+<html lang=\"ja\">
 <head>
   <meta charset=\"utf-8\" />
   <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />

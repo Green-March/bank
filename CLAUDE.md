@@ -267,14 +267,14 @@ Each agent MUST stay within its designated role. Violations waste context and ca
 4. Reset queue files to idle state
 5. Initialize `dashboard.md`
 6. Create tmux session with 6 panes
-7. Launch agents: manager/juniors (`claude --model opus --dangerously-skip-permissions`), senior/reviewer (`codex -s danger-full-access -a never`)
+7. Launch agents: manager/juniors/senior (`claude --model opus --dangerously-skip-permissions`), reviewer (`codex -s danger-full-access -a never`)
 8. Send init instructions
 
 ### Agent launch flags (mandatory)
 All Claude agents (manager, junior1-3) MUST be launched with `--dangerously-skip-permissions`.
 Without this flag, every file write and bash execution requires manual approval via "accept edits on" prompt,
 which causes agents to stall indefinitely when other agents send them messages via `tmux send-keys`.
-Senior/reviewer run Codex with `-s danger-full-access -a never` so tmux socket operations are not blocked by macOS sandboxing.
+Senior uses Claude with `--dangerously-skip-permissions`. Reviewer uses Codex with `-s danger-full-access -a never` so tmux socket operations are not blocked by macOS sandboxing.
 `go.sh` mitigates risk by scrubbing common credential environment variables and pinning Codex working directory with `-C <target>`.
 
 ## Session start requirements (all agents)

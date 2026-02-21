@@ -98,21 +98,21 @@ def _resolve_company_name(ticker: str, data_root: Path) -> str | None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generate markdown/html financial report")
-    parser.add_argument("--ticker", required=True, help="Ticker code (e.g. 7203)")
-    parser.add_argument("--metrics", default=None, help="Input metrics.json path")
-    parser.add_argument("--output-md", default=None, help="Output markdown path")
-    parser.add_argument("--output-html", default=None, help="Output html path")
+    parser = argparse.ArgumentParser(description="財務指標データから Markdown/HTML 分析レポートを生成")
+    parser.add_argument("--ticker", required=True, help="銘柄コード (例: 7203)")
+    parser.add_argument("--metrics", default=None, help="入力 metrics.json パス")
+    parser.add_argument("--output-md", default=None, help="Markdown 出力先パス")
+    parser.add_argument("--output-html", default=None, help="HTML 出力先パス")
     parser.add_argument(
         "--reconciliation",
         default=None,
-        help="source_reconciliation.json path (auto-detected if omitted)",
+        help="source_reconciliation.json パス (省略時は自動検出)",
     )
     parser.add_argument(
         "--number-format",
         choices=["raw", "man_yen", "oku_yen"],
         default="raw",
-        help="Number display: raw (default), man_yen (百万円), oku_yen (億円)",
+        help="数値表示形式: raw (デフォルト・生数値), man_yen (百万円), oku_yen (億円)",
     )
     return parser
 
@@ -135,17 +135,17 @@ def main() -> int:
     output_html = Path(args.output_html) if args.output_html else (data_root / ticker / "reports" / f"{ticker}_report.html")
 
     if not metrics_path.exists():
-        print(f"metrics.json not found: {metrics_path}", file=sys.stderr)
+        print(f"metrics.json が見つかりません: {metrics_path}", file=sys.stderr)
         return 1
 
     try:
         payload = json.loads(metrics_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        print(f"failed to read metrics payload: {exc}", file=sys.stderr)
+        print(f"metrics データの読み込みに失敗しました: {exc}", file=sys.stderr)
         return 1
 
     if not isinstance(payload, dict):
-        print("invalid metrics payload", file=sys.stderr)
+        print("不正な metrics データ形式です", file=sys.stderr)
         return 1
 
     # Resolve company_name if missing or "Unknown"
@@ -181,7 +181,7 @@ def main() -> int:
         absence_map=absence_map,
         fy_end_month=fy_end_month,
     )
-    html_text = render_html(markdown_text=markdown_text, title=f"{ticker} Analysis Report")
+    html_text = render_html(markdown_text=markdown_text, title=f"{ticker} 分析レポート")
 
     output_md.parent.mkdir(parents=True, exist_ok=True)
     output_html.parent.mkdir(parents=True, exist_ok=True)
@@ -189,8 +189,8 @@ def main() -> int:
     output_md.write_text(markdown_text, encoding="utf-8")
     output_html.write_text(html_text, encoding="utf-8")
 
-    print(f"markdown: {output_md}")
-    print(f"html: {output_html}")
+    print(f"Markdown 出力: {output_md}")
+    print(f"HTML 出力: {output_html}")
     return 0
 
 

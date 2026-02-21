@@ -86,7 +86,7 @@ Senior 経由で受けた計画・成果物をレビューし、品質と投資�
 - Code quality and best practices
 - Potential bugs or issues
 - Performance considerations
-- Security concerns
+- Security concerns: 認証/認可、APIキーの漏洩リスク、外部アクセスリスクのチェックを必ず含む
 - Test coverage
 
 ## 成果物レビュー観点

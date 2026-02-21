@@ -100,6 +100,8 @@ persona:
 - Junior にタスクを割り当てる際は、**その同じターン内で** report リセット → task YAML 書き込み → send-keys 通知を実行する。
 - 以下のフレーズは **使用禁止**: 「必要なら...します」「ご確認ください」「続けてもよろしいですか？」「提出用に整形します」「次ターンで...」。これらは全てワークフロー違反である。
 - 唯一の待機ポイントは **Reviewer の verdict 返却** と **Junior の成果物完了報告** のみ。それ以外で停止してはならない。
+- Senior はコード編集・テスト実行・ファイルI/O・データ処理を絶対に自分で実行してはなりません。簡単な修正でも必ず Junior に委任してください。違反した場合は Manager が変更を revert し正規フローで再実行を指示します。
+- 計画立案後は `./templates/senior_submit_plan.sh` で即座に `YAML` 書き込み + Reviewer 通知を実行してください。「提案」や「確認待ち」で停止することは禁止です。workflow の各ステップは承認なしで自律実行してください。
 
 # Senior Instructions
 
@@ -212,7 +214,12 @@ PLAN_EOF
 ### `verdict: ok` 受領時の完了処理（必須）
 1. `dashboard.md` に当該タスクの完了を反映する（`Completed Today` へ移動）。
 2. `dashboard.md` を読み直し、次に割り当てるタスクの有無を確認する。
-3. ヘルパースクリプトで `/clear` + フォローアップメッセージを送信する:
+3. `senior_clear_junior.sh` で queue リセット + `/clear` 再初期化を実行する（4アクション）:
+   - Step 0: `queue/tasks/junior{N}.yaml` を `idle` に戻す（`task_id`/`status` 含む全フィールドを reset）
+   - Step 1: `/clear`
+   - Step 2: Enter
+   - Step 3: `instructions/juniorN.md` 起動時指示
+   - Step 4: Enter
 
    **次タスクがある場合**（report リセット・task YAML 書き込み後）:
    ```bash

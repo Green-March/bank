@@ -71,7 +71,7 @@ def test_financial_reporter_generates_markdown_and_html() -> None:
         assert result.returncode == 0, result.stderr
         assert output_md.exists()
         assert output_html.exists()
-        assert "7203 Sample Co. Analysis Report" in output_md.read_text(encoding="utf-8")
+        assert "7203 Sample Co. 分析レポート" in output_md.read_text(encoding="utf-8")
         assert "<table>" in output_html.read_text(encoding="utf-8")
 
 
@@ -448,9 +448,9 @@ class TestRenderMarkdownPeriodDisplay:
             ],
         }
         md = render_markdown(payload, "7685")
-        assert "Revenue (半期)" in md
-        assert "Net Income (半期)" in md
-        assert "Free Cash Flow (半期)" in md
+        assert "売上高 (半期)" in md
+        assert "当期純利益 (半期)" in md
+        assert "フリーキャッシュフロー (半期)" in md
 
 
 # ===================================================================
@@ -552,7 +552,7 @@ class TestConfirmedAbsentRendering:
 
     def test_data_quality_notes_section(self):
         md = render_markdown(self._PAYLOAD, "7685", absence_map=self._ABSENCE_MAP)
-        assert "## Data Quality Notes" in md
+        assert "## データ品質に関する注記" in md
         assert "確認済み不在" in md
         assert "半期BSに前中間末列なし" in md
         assert "四半期報告書にCF計算書なし" in md
@@ -561,7 +561,7 @@ class TestConfirmedAbsentRendering:
         """absence_map なしでは従来通り N/A 表示のみ."""
         md = render_markdown(self._PAYLOAD, "7685")
         assert "\u2014\u2020" not in md
-        assert "Data Quality Notes" not in md
+        assert "データ品質に関する注記" not in md
         assert "N/A" in md
 
 
@@ -755,7 +755,7 @@ class TestNumberFormatCli:
 
             assert result.returncode == 0, result.stderr
             md_text = output_md.read_text(encoding="utf-8")
-            assert "Data Quality Notes" in md_text
+            assert "データ品質に関する注記" in md_text
             assert "\u2014\u2020" in md_text  # —†
             assert "半期BSなし" in md_text
 
@@ -934,7 +934,7 @@ class TestMarchEndRendering:
             absence_map=self._ABSENCE_MAP, fy_end_month=3,
         )
         assert "\u2014\u2020" in md  # —†
-        assert "Data Quality Notes" in md
+        assert "データ品質に関する注記" in md
         assert "四半期報告書に累計純利益なし" in md
 
     def test_march_end_wrong_fy_end_month_misses(self):

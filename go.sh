@@ -341,6 +341,7 @@ if [ "$SETUP_ONLY" = false ]; then
 
     # Codex needs unsandboxed execution to access tmux sockets on macOS.
     # Minimize risk by scrubbing common credential env vars and pinning cwd.
+    CLAUDE_CMD="claude --model opus --dangerously-skip-permissions"
     build_codex_cmd() {
         local target_q env_unset var
         target_q="$(printf '%q' "$TARGET_DIR")"
@@ -357,15 +358,15 @@ if [ "$SETUP_ONLY" = false ]; then
     }
     CODEX_CMD="$(build_codex_cmd)"
 
-    tmux send-keys -t "$manager_pane" "MAX_THINKING_TOKENS=0 claude --model opus --dangerously-skip-permissions" Enter
-    tmux send-keys -t "$senior_pane" "${CODEX_CMD}" Enter
+    tmux send-keys -t "$manager_pane" "claude --model opus --dangerously-skip-permissions" Enter
+    tmux send-keys -t "$senior_pane" "${CLAUDE_CMD}" Enter
     tmux send-keys -t "$junior1_pane" "claude --model opus --dangerously-skip-permissions" Enter
     tmux send-keys -t "$junior2_pane" "claude --model opus --dangerously-skip-permissions" Enter
     tmux send-keys -t "$junior3_pane" "claude --model opus --dangerously-skip-permissions" Enter
     tmux send-keys -t "$reviewer_pane" "${CODEX_CMD}" Enter
 
     log_success "Agents launched"
-    log_warn "Senior/Reviewer Codex uses danger-full-access for tmux compatibility; common credential env vars are scrubbed."
+    log_warn "Senior uses Claude with dangerously-skip-permissions; Reviewer uses Codex with danger-full-access for tmux compatibility."
 
     sleep 5
 
