@@ -16,7 +16,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = REPO_ROOT / "data" / "7685" / "processed"
+DATA_DIR = REPO_ROOT / "data" / "7685" / "parsed"
 FINANCIALS_JSON = DATA_DIR / "financials.json"
 MAIN_SCRIPT = SKILL_ROOT / "scripts" / "main.py"
 
@@ -27,7 +27,7 @@ from scripts.report import render_report_markdown  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     not FINANCIALS_JSON.exists(),
-    reason="data/7685/processed/financials.json not found",
+    reason="data/7685/parsed/financials.json not found",
 )
 
 # ── Shared fixtures ──────────────────────────────────────────────

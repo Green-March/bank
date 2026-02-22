@@ -30,7 +30,7 @@ python3 skills/financial-calculator/scripts/main.py calculate \
 python3 skills/financial-calculator/scripts/main.py report \
   --ticker 7203 \
   --metrics data/7203/parsed/metrics.json \
-  --output projects/7203/reports/report.md
+  --output data/7203/reports/report.md
 ```
 
 ## Calculated Metrics
@@ -47,12 +47,11 @@ python3 skills/financial-calculator/scripts/main.py report \
 ## Output
 
 - `data/{ticker}/parsed/metrics.json`
-- `projects/{ticker}/reports/report.md`（既定）
+- `data/{ticker}/reports/report.md`（既定）
 
 ## Environment Variables
 
 - `DATA_PATH`（任意）
-- `PROJECTS_PATH`（任意）
 
 ## Status
 

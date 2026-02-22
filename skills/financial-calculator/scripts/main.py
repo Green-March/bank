@@ -40,10 +40,6 @@ def _data_root() -> Path:
     return _resolve_root("DATA_PATH", "data")
 
 
-def _projects_root() -> Path:
-    return _resolve_root("PROJECTS_PATH", "projects")
-
-
 def calculate_command(ticker: str, parsed_dir: Path, output_path: Path) -> int:
     payload = calculate_metrics_payload(parsed_dir=parsed_dir, ticker=ticker)
     write_metrics_payload(payload=payload, output_path=output_path)
@@ -101,7 +97,7 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser.add_argument(
         "--output",
         default=None,
-        help="出力Markdownパス（省略時: projects/{ticker}_komehyo/report.md）",
+        help="出力Markdownパス（省略時: data/{ticker}/reports/report.md）",
     )
 
     return parser
@@ -112,7 +108,6 @@ def main() -> int:
     args = parser.parse_args()
 
     data_root = _data_root()
-    projects_root = _projects_root()
     ticker = str(args.ticker)
 
     if args.command == "calculate":
@@ -133,7 +128,7 @@ def main() -> int:
         if args.metrics
         else (data_root / ticker / "parsed" / "metrics.json")
     )
-    default_report_dir = projects_root / ticker / "reports"
+    default_report_dir = data_root / ticker / "reports"
     output_path = Path(args.output) if args.output else (default_report_dir / "report.md")
     return report_command(ticker=ticker, metrics_path=metrics_path, output_path=output_path)
 

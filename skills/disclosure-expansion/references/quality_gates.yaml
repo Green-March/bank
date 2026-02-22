@@ -31,7 +31,7 @@ gates:
     description: "テキスト抽出文書数整合"
     check: count_match
     params:
-      actual: "data/{ticker}/processed/kessan_tanshin_text.json::document_count"
+      actual: "data/{ticker}/parsed/kessan_tanshin_text.json::document_count"
       expected: "data/{ticker}/raw/edinet/shihanki_hokokusho/manifest.json::matched_doc_count"
     severity: error
 
@@ -40,7 +40,7 @@ gates:
     description: "J-Quantsレコード存在・revenue非null"
     check: record_check
     params:
-      data_path: "data/{ticker}/processed/jquants_fins_statements.json"
+      data_path: "data/{ticker}/parsed/jquants_fins_statements.json"
       records_key: "records"
       assert_record_count: "> 0"
       # records[].actuals.revenue が非null のレコードが存在すること
@@ -54,7 +54,7 @@ gates:
     description: "FYレコードにoperating_cf非null"
     check: field_check
     params:
-      data_path: "data/{ticker}/processed/jquants_fins_statements.json"
+      data_path: "data/{ticker}/parsed/jquants_fins_statements.json"
       records_key: "records"
       filter: "type_of_current_period == 'FY'"
       assert_field_path: "actuals.operating_cf"
@@ -66,8 +66,8 @@ gates:
     description: "構造化文書数整合"
     check: count_match
     params:
-      actual: "data/{ticker}/processed/shihanki_structured.json::document_count"
-      expected: "data/{ticker}/processed/kessan_tanshin_text.json::document_count"
+      actual: "data/{ticker}/parsed/shihanki_structured.json::document_count"
+      expected: "data/{ticker}/parsed/kessan_tanshin_text.json::document_count"
     severity: error
 
   - id: QG-T5-bs
@@ -80,7 +80,7 @@ gates:
         T5R2修正: item_matches()で「資産合計」は完全一致のみ許可。
       script: |
         import json
-        data = json.load(open('data/{ticker}/processed/shihanki_structured.json'))
+        data = json.load(open('data/{ticker}/parsed/shihanki_structured.json'))
         for doc in data['documents']:
             bs = doc.get('financials', {}).get('balance_sheet', {})
             total_assets_val = None
@@ -115,7 +115,7 @@ gates:
         T5R2修正: 表紙【中間会計期間】から実際の中間期末日を抽出。
       script: |
         import json
-        data = json.load(open('data/{ticker}/processed/shihanki_structured.json'))
+        data = json.load(open('data/{ticker}/parsed/shihanki_structured.json'))
         for doc in data['documents']:
             dtc = doc.get('doc_type_code', '')
             if dtc == '160':
@@ -137,7 +137,7 @@ gates:
       tolerance: 0.01
       script: |
         import json
-        data = json.load(open('data/{ticker}/processed/shihanki_structured.json'))
+        data = json.load(open('data/{ticker}/parsed/shihanki_structured.json'))
         for doc in data['documents']:
             pl = doc.get('financials', {}).get('income_statement', {})
             for table in pl.get('tables', []):

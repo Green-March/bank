@@ -162,7 +162,7 @@ python3 skills/disclosure-collector/scripts/main.py edinet {edinet_code} \
 T2で取得したPDFをpdfplumber + multi-strategyで解析し、セクション分類・テーブル抽出を実行。
 
 - 入力: `data/{ticker}/raw/edinet/shihanki_hokokusho/*.pdf`
-- 出力: `data/{ticker}/processed/kessan_tanshin_text.json`
+- 出力: `data/{ticker}/parsed/kessan_tanshin_text.json`
 - 処理: PDF→テキスト分割、テーブル構造解析、財務セクション自動分類
 - T0準拠: 各documentの`metadata`に必須4キーを保持
 
@@ -170,8 +170,8 @@ T2で取得したPDFをpdfplumber + multi-strategyで解析し、セクション
 
 T3出力から財務数値を抽出し、BS/PL/CF/包括利益を構造化JSONに変換。
 
-- 入力: `data/{ticker}/processed/kessan_tanshin_text.json`
-- 出力: `data/{ticker}/processed/shihanki_structured.json`
+- 入力: `data/{ticker}/parsed/kessan_tanshin_text.json`
+- 出力: `data/{ticker}/parsed/shihanki_structured.json`
 
 #### T5R2で適用済みの修正事項
 
@@ -192,7 +192,7 @@ python3 skills/disclosure-collector/scripts/main.py jquants {ticker}
 ```
 
 - 出力(raw): `data/{ticker}/raw/jquants/statements_{date}.json`
-- 出力(processed): `data/{ticker}/processed/jquants_fins_statements.json`
+- 出力(parsed): `data/{ticker}/parsed/jquants_fins_statements.json`
 - 認証: `JQUANTS_REFRESH_TOKEN` → IDトークン
 - 制約: Free/Lightプランでは過去データに制限あり（FP-5参照）
 
@@ -200,7 +200,7 @@ python3 skills/disclosure-collector/scripts/main.py jquants {ticker}
 
 T4（J-Quants）とT5（EDINET構造化）のクロスチェック。
 
-- 入力: T4 + T5 の processed JSON
+- 入力: T4 + T5 の parsed JSON
 - 出力: `data/{ticker}/qa/source_reconciliation.json`
 - 照合キー: `period_end`（T5R2補正後の値を使用）
 - 比較項目: `revenue`, `operating_income`, `net_income`, `total_assets`, `equity`
@@ -223,7 +223,7 @@ data/{ticker}/
 │   │   └── shihanki_hokokusho/       # T2 (四半期/半期PDF + manifest.json)
 │   └── jquants/
 │       └── statements_{date}.json    # T4 (生データ)
-├── processed/
+├── parsed/
 │   ├── kessan_tanshin_text.json      # T3 (テキスト抽出)
 │   ├── shihanki_structured.json      # T5 (構造化、T5R2修正適用)
 │   └── jquants_fins_statements.json  # T4 (正規化)
@@ -464,7 +464,7 @@ python3 -c "import json, jsonschema; \
 |------|-----|
 | 必須CLI | `--ticker` |
 | 任意CLI | `--tolerance` (default: 0.0001 = 0.01%) |
-| 入力 | `data/{ticker}/processed/shihanki_structured.json` (T5), `data/{ticker}/processed/jquants_fins_statements.json` (T4) |
+| 入力 | `data/{ticker}/parsed/shihanki_structured.json` (T5), `data/{ticker}/parsed/jquants_fins_statements.json` (T4) |
 | 出力 | `data/{ticker}/qa/source_reconciliation.json` |
 | 終了コード | 0=全MATCH, 1=MISMATCH or INVALID_COMPARISON あり |
 | 必須キー | period_end（照合キー）, revenue/operating_income/net_income/total_assets/equity（比較項目） |
@@ -476,7 +476,7 @@ python3 -c "import json, jsonschema; \
 | 必須CLI | `--ticker`, `--edinet-code` |
 | 任意CLI | `--timeframe`, `--security-code`, `--report-keyword`, `--skip-jquants`, `--skip-qa`, `--dry-run`, `--retry` (default: 1), `--on-fail` (abort/skip), `--step`, `--log-dir` |
 | 入力 | `references/pipeline.yaml` (DAG定義), `references/quality_gates.yaml` (品質ゲート), 環境変数 |
-| 出力 | `projects/{ticker}/logs/run_{timestamp}.json` (実行ログ), 各ステップの成果物 |
+| 出力 | `data/{ticker}/logs/run_{timestamp}.json` (実行ログ), 各ステップの成果物 |
 | 終了コード | 0=全SUCCESS, 1=FAILED あり |
 | DAG順序 | トポロジカルソート（depends_on ベース） |
 | 失敗制御 | `--on-fail abort`: 失敗で停止, `--on-fail skip`: 失敗ステップの下流をスキップして続行 |

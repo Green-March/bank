@@ -41,7 +41,7 @@ python3 skills/financial-reporter/scripts/main.py \
 | オプション | デフォルト | 説明 |
 |---|---|---|
 | `--ticker` | (必須) | 銘柄コード (例: 7203) |
-| `--metrics` | auto | 入力 metrics.json パス (省略時: `data/{ticker}/processed/metrics.json` または `parsed/`) |
+| `--metrics` | auto | 入力 metrics.json パス (省略時: `data/{ticker}/parsed/metrics.json`) |
 | `--output-md` | auto | Markdown 出力先パス |
 | `--output-html` | auto | HTML 出力先パス |
 | `--number-format` | `raw` | 数値表示形式: `raw` (デフォルト・生数値), `man_yen` (百万円), `oku_yen` (億円) |

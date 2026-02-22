@@ -17,8 +17,8 @@ T5R2修正適用:
 Usage:
     python3 skills/disclosure-expansion/scripts/reconcile.py \
         --ticker 2780 \
-        --edinet-data data/2780/processed/shihanki_structured.json \
-        --jquants-data data/2780/processed/jquants_fins_statements.json \
+        --edinet-data data/2780/parsed/shihanki_structured.json \
+        --jquants-data data/2780/parsed/jquants_fins_statements.json \
         --output data/2780/qa/source_reconciliation.json \
         --tolerance 0.0001
 """
@@ -379,7 +379,7 @@ def main():
     parser.add_argument("--edinet-data", required=True,
                         help="T5 structured JSON path")
     parser.add_argument("--jquants-data", required=True,
-                        help="T4 J-Quants processed JSON path")
+                        help="T4 J-Quants parsed JSON path")
     parser.add_argument("--output", required=True,
                         help="Output reconciliation JSON path")
     parser.add_argument("--tolerance", type=float, default=0.0001,

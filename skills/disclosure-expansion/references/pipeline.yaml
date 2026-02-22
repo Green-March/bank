@@ -58,9 +58,9 @@ pipeline:
         python3 skills/disclosure-parser/scripts/main.py
         --ticker {ticker}
         --input-dir data/{ticker}/raw/edinet/shihanki_hokokusho/
-        --output-dir data/{ticker}/processed/
+        --output-dir data/{ticker}/parsed/
         --pdf
-      output_dir: "data/{ticker}/processed"
+      output_dir: "data/{ticker}/parsed"
       depends_on: [t2_pdf_collect]
       gates: "skills/disclosure-expansion/references/quality_gates.yaml#QG-T3"
       # NOTE: T3出力は kessan_tanshin_text.json
@@ -72,13 +72,13 @@ pipeline:
       command: >
         python3 -c "
         import json, sys, pathlib;
-        f=pathlib.Path('data/{ticker}/processed/financials.json');
+        f=pathlib.Path('data/{ticker}/parsed/financials.json');
         f.exists() or sys.exit('T5: financials.json not found (T3 must run first)');
         d=json.loads(f.read_text());
         n=d.get('document_count',0);
         print(f'T5: financials.json OK — {{n}} documents structured')
         "
-      output_dir: "data/{ticker}/processed"
+      output_dir: "data/{ticker}/parsed"
       depends_on: [t3_text_extract]
       gates: "skills/disclosure-expansion/references/quality_gates.yaml#QG-T5-count,QG-T5-bs,QG-T5-period,QG-T5-pl"
       # T3のPDFパースで financials.json が生成される。
@@ -89,7 +89,7 @@ pipeline:
       description: "T4: J-Quants fins/statements 収集・正規化"
       command: >
         python3 skills/disclosure-collector/scripts/main.py jquants {ticker}
-      output_dir: "data/{ticker}/processed"
+      output_dir: "data/{ticker}/parsed"
       depends_on: [t0_schema]
       gates: "skills/disclosure-expansion/references/quality_gates.yaml#QG-T4,QG-T4-cf"
       # T4はT1R1/T2/T3/T5と独立して実行可能
@@ -100,8 +100,8 @@ pipeline:
       command: >
         python3 skills/disclosure-expansion/scripts/reconcile.py
         --ticker {ticker}
-        --edinet-data data/{ticker}/processed/financials.json
-        --jquants-data data/{ticker}/processed/jquants_fins_statements.json
+        --edinet-data data/{ticker}/parsed/financials.json
+        --jquants-data data/{ticker}/parsed/jquants_fins_statements.json
         --output data/{ticker}/qa/source_reconciliation.json
         --tolerance 0.0001
       output_dir: "data/{ticker}/qa"

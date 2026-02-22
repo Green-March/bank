@@ -535,8 +535,8 @@ class TestReconcileWithRealData:
 
     @pytest.fixture
     def real_data_paths(self):
-        edinet = Path("data/2780/processed/shihanki_structured.json")
-        jquants = Path("data/2780/processed/jquants_fins_statements.json")
+        edinet = Path("data/2780/parsed/shihanki_structured.json")
+        jquants = Path("data/2780/parsed/jquants_fins_statements.json")
         if not edinet.exists() or not jquants.exists():
             pytest.skip("Real data not available")
         return str(edinet), str(jquants)

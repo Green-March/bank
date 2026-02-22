@@ -41,8 +41,8 @@ python3 skills/quality-gate/scripts/main.py \
 ```bash
 python3 skills/quality-gate/scripts/main.py \
   --gates skills/quality-gate/references/default_gates.yaml \
-  --data-dir projects/2780/parsed/ \
-  --output projects/2780/parsed/gate_results.json
+  --data-dir data/2780/parsed/ \
+  --output data/2780/parsed/gate_results.json
 ```
 
 ## Gates Definition YAML

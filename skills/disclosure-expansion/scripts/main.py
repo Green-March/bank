@@ -402,7 +402,7 @@ def cmd_run(args):
     }
 
     # Setup log directory
-    log_dir = Path(args.log_dir) if args.log_dir else Path(f"projects/{ticker}/logs")
+    log_dir = Path(args.log_dir) if args.log_dir else Path(f"data/{ticker}/logs")
     log_dir.mkdir(parents=True, exist_ok=True)
     run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_file = log_dir / f"run_{run_ts}.json"
@@ -501,6 +501,11 @@ def cmd_run(args):
         # Built-in handler for t0_schema (avoid inline Python indentation issues)
         if step_id == "t0_schema":
             print(f"[RUN]  {step_id}: {description}")
+            if args.dry_run:
+                print(f"       T0: schema validation (skipped in dry-run)")
+                step_log["status"] = "DRY_RUN"
+                run_log["steps"].append(step_log)
+                continue
             ok = check_schema(ticker, data_path, auto_create=True)
             if ok:
                 step_log["status"] = "SUCCESS"
@@ -521,7 +526,12 @@ def cmd_run(args):
         # Built-in handler for t5_structure (validate T3 output exists)
         if step_id == "t5_structure":
             print(f"[RUN]  {step_id}: {description}")
-            financials = Path(data_path) / ticker / "processed" / "financials.json"
+            if args.dry_run:
+                print(f"       T5: financials.json existence check (skipped in dry-run)")
+                step_log["status"] = "DRY_RUN"
+                run_log["steps"].append(step_log)
+                continue
+            financials = Path(data_path) / ticker / "parsed" / "financials.json"
             if financials.exists():
                 try:
                     fdata = json.loads(financials.read_text())
@@ -708,8 +718,8 @@ def cmd_validate(args):
     # Check existing data
     ticker_dir = Path(data_path) / args.ticker
     if ticker_dir.exists():
-        structured = ticker_dir / "processed" / "shihanki_structured.json"
-        jquants = ticker_dir / "processed" / "jquants_fins_statements.json"
+        structured = ticker_dir / "parsed" / "shihanki_structured.json"
+        jquants = ticker_dir / "parsed" / "jquants_fins_statements.json"
         if structured.exists():
             print(f"  PASS: T5 structured data found ({structured})")
         if jquants.exists():
@@ -742,9 +752,9 @@ def cmd_status(args):
         ("T0 Schema", ticker_dir / "schema" / "common-metadata.schema.json"),
         ("T1R1 Doc list", ticker_dir / "raw" / "edinet" / "kessan_tanshin"),
         ("T2 PDFs", ticker_dir / "raw" / "edinet" / "shihanki_hokokusho" / "manifest.json"),
-        ("T3 Text", ticker_dir / "processed" / "kessan_tanshin_text.json"),
-        ("T4 J-Quants", ticker_dir / "processed" / "jquants_fins_statements.json"),
-        ("T5 Structured", ticker_dir / "processed" / "shihanki_structured.json"),
+        ("T3 Text", ticker_dir / "parsed" / "kessan_tanshin_text.json"),
+        ("T4 J-Quants", ticker_dir / "parsed" / "jquants_fins_statements.json"),
+        ("T5 Structured", ticker_dir / "parsed" / "shihanki_structured.json"),
         ("T6 QA", ticker_dir / "qa" / "source_reconciliation.json"),
     ]
 
@@ -766,8 +776,8 @@ def cmd_reconcile(args):
     data_path = os.environ.get("DATA_PATH", "./data")
     ticker_dir = Path(data_path) / args.ticker
 
-    edinet_data = ticker_dir / "processed" / "shihanki_structured.json"
-    jquants_data = ticker_dir / "processed" / "jquants_fins_statements.json"
+    edinet_data = ticker_dir / "parsed" / "shihanki_structured.json"
+    jquants_data = ticker_dir / "parsed" / "jquants_fins_statements.json"
     output = ticker_dir / "qa" / "source_reconciliation.json"
 
     for path, label in [(edinet_data, "T5 structured"), (jquants_data, "T4 J-Quants")]:
@@ -841,7 +851,7 @@ def main():
     run_parser.add_argument("--step", action="append",
                              help="実行するステップID (複数指定可、依存も自動追加)")
     run_parser.add_argument("--log-dir", default=None,
-                             help="ログ出力先 (default: projects/{ticker}/logs)")
+                             help="ログ出力先 (default: data/{ticker}/logs)")
     run_parser.set_defaults(func=cmd_run)
 
     args = parser.parse_args()

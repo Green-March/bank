@@ -129,16 +129,16 @@ def test_resolve_company_name_from_parsed_json() -> None:
         assert "Unknown" not in md_text
 
 
-def test_resolve_company_name_from_processed_dir() -> None:
-    """company_name resolved from processed/ directory (not just parsed/)."""
+def test_resolve_company_name_from_parsed_dir() -> None:
+    """company_name resolved from parsed/ directory."""
     script = Path(__file__).resolve().parents[1] / "scripts" / "main.py"
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
 
         ticker = "8888"
-        processed_dir = tmp_path / ticker / "processed"
-        processed_dir.mkdir(parents=True)
+        parsed_dir = tmp_path / ticker / "parsed"
+        parsed_dir.mkdir(parents=True)
 
         # metrics.json without company_name
         metrics_payload = {
@@ -152,17 +152,17 @@ def test_resolve_company_name_from_processed_dir() -> None:
                  "free_cash_flow": 2.0}
             ],
         }
-        metrics_path = processed_dir / "metrics.json"
+        metrics_path = parsed_dir / "metrics.json"
         metrics_path.write_text(json.dumps(metrics_payload), encoding="utf-8")
 
-        # Processed document with company_name
-        processed_doc = {
+        # Parsed document with company_name
+        parsed_doc = {
             "ticker": ticker,
             "company_name": "プロセス株式会社",
             "periods": [{"fiscal_year": 2024, "period_type": "FY"}],
         }
-        (processed_dir / "doc1.json").write_text(
-            json.dumps(processed_doc, ensure_ascii=False), encoding="utf-8"
+        (parsed_dir / "doc1.json").write_text(
+            json.dumps(parsed_doc, ensure_ascii=False), encoding="utf-8"
         )
 
         output_md = tmp_path / "out.md"

@@ -360,8 +360,8 @@ class TestBackwardCompatibility:
 
     REAL_DATA_PATH = (
         Path(__file__).resolve().parents[3]
-        / "projects"
-        / "2780_コメ兵ホールディングス"
+        / "data"
+        / "2780"
         / "parsed"
         / "financials.json"
     )
@@ -376,10 +376,10 @@ class TestBackwardCompatibility:
     def test_model_validate(self, real_data):
         m = FinancialsJson.model_validate(real_data)
         assert m.ticker == "2780"
-        assert m.document_count == 10
+        assert m.document_count == 12
         assert m.source_format == "pdf"
-        assert len(m.documents) == 10
-        assert len(m.period_index) == 11
+        assert len(m.documents) == 12
+        assert len(m.period_index) == 21
 
     def test_period_data_integrity(self, real_data):
         m = FinancialsJson.model_validate(real_data)

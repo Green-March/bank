@@ -38,16 +38,16 @@ def _data_root() -> Path:
 
 
 def _resolve_company_name(ticker: str, data_root: Path) -> str | None:
-    """Resolve company name from parsed/processed JSON or EDINET document cache.
+    """Resolve company name from parsed JSON or EDINET document cache.
 
     Resolution order:
-      1. processed/*.json (or parsed/*.json) — company_name field
+      1. parsed/*.json — company_name field
       2. raw/edinet/**/documents_*.json — filerName matching secCode
     """
     ticker_dir = data_root / ticker
 
-    # Strategy 1: scan processed/parsed JSON files for company_name
-    for dirname in ("processed", "parsed"):
+    # Strategy 1: scan parsed JSON files for company_name
+    for dirname in ("parsed",):
         data_dir = ticker_dir / dirname
         if not data_dir.is_dir():
             continue
@@ -127,10 +127,7 @@ def main() -> int:
     if args.metrics:
         metrics_path = Path(args.metrics)
     else:
-        # Prefer processed/ over parsed/ for default metrics location
-        processed = data_root / ticker / "processed" / "metrics.json"
-        parsed = data_root / ticker / "parsed" / "metrics.json"
-        metrics_path = processed if processed.exists() else parsed
+        metrics_path = data_root / ticker / "parsed" / "metrics.json"
     output_md = Path(args.output_md) if args.output_md else (data_root / ticker / "reports" / f"{ticker}_report.md")
     output_html = Path(args.output_html) if args.output_html else (data_root / ticker / "reports" / f"{ticker}_report.html")
 

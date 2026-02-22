@@ -106,9 +106,9 @@ def test_parse_timeframe_invalid():
 
 def test_expand_vars():
     """変数展開"""
-    template = "data/{ticker}/processed/{ticker}_{edinet_code}.json"
+    template = "data/{ticker}/parsed/{ticker}_{edinet_code}.json"
     result = expand_vars(template, {"ticker": "2780", "edinet_code": "E03416"})
-    assert result == "data/2780/processed/2780_E03416.json"
+    assert result == "data/2780/parsed/2780_E03416.json"
 
 
 def test_topo_sort_linear():

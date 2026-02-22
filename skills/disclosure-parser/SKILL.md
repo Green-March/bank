@@ -32,15 +32,15 @@ python3 skills/disclosure-parser/scripts/main.py \
 # --pdf フラグで明示指定
 python3 skills/disclosure-parser/scripts/main.py \
   --ticker 2780 \
-  --input-dir projects/2780_コメ兵ホールディングス/ \
-  --output-dir projects/2780_コメ兵ホールディングス/parsed/ \
+  --input-dir data/2780/raw/edinet/shihanki_hokokusho/ \
+  --output-dir data/2780/parsed/ \
   --pdf
 
 # 自動判別（ディレクトリに .pdf のみの場合は自動的にPDFモード）
 python3 skills/disclosure-parser/scripts/main.py \
   --ticker 2780 \
-  --input-dir projects/2780_コメ兵ホールディングス/ \
-  --output-dir projects/2780_コメ兵ホールディングス/parsed/
+  --input-dir data/2780/raw/edinet/shihanki_hokokusho/ \
+  --output-dir data/2780/parsed/
 ```
 
 ### CLI オプション

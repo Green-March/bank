@@ -15,13 +15,13 @@ pipeline:
       gates: "skills/quality-gate/references/default_gates.yaml"
     - id: calculate
       skill: financial-calculator
-      command: "python3 skills/financial-calculator/scripts/main.py --input data/{ticker}/parsed/financials.json --output data/{ticker}/metrics/"
-      output_dir: "data/{ticker}/metrics"
+      command: "python3 skills/financial-calculator/scripts/main.py calculate --ticker {ticker} --parsed-dir data/{ticker}/parsed --output data/{ticker}/parsed/metrics.json"
+      output_dir: "data/{ticker}/parsed"
       depends_on: [parse]
       gates: null
     - id: report
       skill: financial-reporter
-      command: "python3 skills/financial-reporter/scripts/main.py --input data/{ticker}/metrics/ --output projects/{ticker}/report.md"
-      output_dir: "projects/{ticker}"
+      command: "python3 skills/financial-reporter/scripts/main.py --ticker {ticker} --metrics data/{ticker}/parsed/metrics.json --output-md data/{ticker}/reports/{ticker}_report.md --output-html data/{ticker}/reports/{ticker}_report.html"
+      output_dir: "data/{ticker}/reports"
       depends_on: [calculate]
       gates: null
