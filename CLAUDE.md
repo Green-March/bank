@@ -111,7 +111,7 @@ quality_check_required: true
 
 ### Send-keys rules (mandatory)
 
-#### Claude Code agents (manager, junior1-3): two-step method
+#### Claude Code agents (manager, senior, junior1-3): two-step method
 ```bash
 # Step 1: send message (without Enter)
 tmux send-keys -t <pane_id> "message"
@@ -120,8 +120,8 @@ tmux send-keys -t <pane_id> "message"
 sleep 1 && tmux send-keys -t <pane_id> Enter
 ```
 
-#### Codex agents (senior, reviewer): single chained command
-Codex may parallelize separate bash calls, causing Enter to arrive before the message.
+#### Codex agents (reviewer): single chained command
+Reviewer (Codex) may parallelize separate bash calls, causing Enter to arrive before the message.
 Always combine into one command:
 ```bash
 tmux send-keys -t <pane_id> "message" && sleep 1 && tmux send-keys -t <pane_id> Enter

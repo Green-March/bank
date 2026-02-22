@@ -1,6 +1,6 @@
 """Integration tests for financial-calculator calculate/report using real 7685 data.
 
-Uses data/7685/processed/financials.json as input.
+Uses data/7685/parsed/financials.json as input.
 All assertions use structural or normalized comparison — no exact string matching.
 """
 

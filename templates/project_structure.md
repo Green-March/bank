@@ -1,30 +1,18 @@
-# Project Structure (Per Ticker/Request)
-
-```
-projects/{ticker_or_request_id}/
-  context.md
-  notes/
-  reports/
-    report.md
-    report.html
-  figures/
-  logs/
-    analysis_log.md
-  sources/
-    source_index.csv
-```
-
-Data pipeline outputs:
+# Project Structure (Per Ticker)
 
 ```
 data/{ticker}/
-  raw/
-    jquants/
-    edinet/
-  parsed/
-    financials.json
-    metrics.json
-  reports/
-    {ticker}_report.md
-    {ticker}_report.html
+├── raw/
+│   ├── edinet/
+│   └── jquants/
+├── parsed/
+│   ├── financials.json
+│   ├── metrics.json
+│   ├── jquants_fins_statements.json
+│   └── {document_id}.json
+├── qa/
+├── schema/
+├── reports/
+├── logs/
+└── analysis/
 ```
