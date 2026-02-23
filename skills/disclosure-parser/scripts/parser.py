@@ -60,7 +60,10 @@ CONCEPT_ALIASES: dict[str, tuple[str, ...]] = {
         "profitattributabletoownersofparent",
     ),
     "operating_cf": ("netcashprovidedbyusedinoperatingactivities",),
-    "investing_cf": ("netcashprovidedbyusedininvestingactivities",),
+    "investing_cf": (
+        "netcashprovidedbyusedininvestingactivities",
+        "netcashprovidedbyusedininvestmentactivities",
+    ),
     "financing_cf": ("netcashprovidedbyusedinfinancingactivities",),
 }
 
