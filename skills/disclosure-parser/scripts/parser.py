@@ -262,18 +262,32 @@ def parse_numeric_value(raw_text: str, sign: str | None) -> int | float | None:
 
 
 def context_priority(context_id: str) -> int:
-    """Prioritize current year and consolidated contexts when duplicates exist."""
+    """Prioritize current year and consolidated contexts when duplicates exist.
+
+    EDINET 有報 context patterns:
+    - Plain (no member): consolidated data  e.g. ``CurrentYearDuration``
+    - ``NonConsolidatedMember``: non-consolidated  e.g. ``CurrentYearDuration_NonConsolidatedMember``
+    - ``ConsolidatedMember`` (rare, some filings)
+
+    The check for "consolidated" must exclude "nonconsolidated" to avoid
+    giving a false bonus to non-consolidated contexts (substring match).
+    """
     normalized = context_id.lower()
     score = 0
 
     if "currentyear" in normalized:
         score += 100
-    if "current" in normalized:
+    if "current" in normalized and "currentquarter" not in normalized:
         score += 60
-    if "consolidated" in normalized:
-        score += 40
-    if "nonconsolidated" in normalized:
+    if "currentquarter" in normalized:
+        score += 50
+
+    is_nonconsolidated = "nonconsolidated" in normalized
+    if is_nonconsolidated:
         score -= 25
+    elif "consolidated" in normalized:
+        score += 40
+
     if "prior" in normalized or "previous" in normalized:
         score -= 80
 
@@ -450,11 +464,66 @@ def parse_edinet_zip(zip_path: Path, ticker: str) -> ParsedDocument:
     )
 
 
+_XBRL_VERSION_PATTERN = re.compile(
+    r"_(\d{4}-\d{2}-\d{2})_(\d{2})_\d{4}-\d{2}-\d{2}\.xbrl$"
+)
+
+
+def _deduplicate_corrections(zip_files: list[Path]) -> list[Path]:
+    """Keep only the highest-version zip when corrections exist.
+
+    EDINET XBRL filenames encode a version number after the period-end date:
+    ``jpcrp030000-asr-001_E35116-000_2021-12-31_01_2022-03-23.xbrl``  (original)
+    ``jpcrp030000-asr-001_E35116-000_2021-12-31_02_2022-04-20.xbrl``  (correction)
+
+    For each (doc-type-prefix, period-end) pair, only the zip with the highest
+    version is retained.  This mirrors the rule: S100NXF7 > S100NPQQ, etc.
+    """
+    # Map (prefix, period_end) -> (version, zip_path)
+    best: dict[tuple[str, str], tuple[int, Path]] = {}
+    ungrouped: list[Path] = []
+
+    for zp in zip_files:
+        try:
+            with zipfile.ZipFile(zp) as archive:
+                member = _choose_xbrl_member(archive)
+        except (ParserError, zipfile.BadZipFile, OSError):
+            ungrouped.append(zp)
+            continue
+
+        fname = Path(member).name
+        match = _XBRL_VERSION_PATTERN.search(fname)
+        if not match:
+            ungrouped.append(zp)
+            continue
+
+        # prefix = everything before the period-end date
+        prefix_end = fname.index(match.group(0))
+        prefix = fname[:prefix_end]
+        period_end = match.group(1)
+        version = int(match.group(2))
+
+        key = (prefix, period_end)
+        existing = best.get(key)
+        if existing is None or version > existing[0]:
+            if existing is not None:
+                pass  # superseded zip is dropped
+            best[key] = (version, zp)
+
+    result = [zp for _, zp in best.values()] + ungrouped
+    return sorted(result)
+
+
 def parse_edinet_directory(input_dir: Path, ticker: str) -> list[ParsedDocument]:
-    """Parse all EDINET zip files under input_dir."""
+    """Parse all EDINET zip files under input_dir.
+
+    Corrections (higher version numbers) supersede their originals.
+    """
     zip_files = sorted(input_dir.glob("*.zip"))
     if not zip_files:
         raise ParserError(f"No zip files found in: {input_dir}")
+
+    zip_files = _deduplicate_corrections(zip_files)
 
     documents: list[ParsedDocument] = []
     for zip_file in zip_files:

@@ -2,126 +2,190 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_req_20260224_001_v2"
-  request_id: "req_20260224_001"
-  revision: 2
-  revision_note: "Reviewer指摘2件を反映: T1開始日変更+欠損許容条件追加、半期報告書収集フロー追加"
-  timestamp: "2026-02-24T20:05:00+09:00"
-
-  objective: "7685 BuySell Technologies の四半期報告書・半期報告書・決算短信を網羅的に収集する（IPO以降全期間）"
+  plan_id: "plan_20260225_001_r3"
+  request_id: "req_20260225_001"
+  revision: 3
+  revision_note: "Reviewer指摘対応: (1)FY2025欠損時の中断/継続判断ルール追加、(2)整合チェックの許容誤差・再実行条件を定量化"
   ticker: "7685"
-  edinet_code: "E35116"
+  objective: "7685 BuySell Technologies の四半期データ活用パイプライン（EDINET XBRLパース → J-Quants統合 → レポート再生成）"
+  priority: "high"
+  due_date: "2026-02-25"
 
-  background:
-    ipo_date: "2018-12-19"
-    fiscal_year_end: "12月"
-    quarterly_report_regime:
-      before_2024: "四半期報告書（Q1/Q2/Q3）をEDINETに提出"
-      from_2024: "四半期報告書制度廃止。半期報告書（H1）をEDINETに提出、四半期決算短信はTDnet/J-Quantsで開示"
-    existing_data:
-      yuho_xbrl: "18件 (data/7685/raw/edinet/*.zip)"
-      yuho_pdf: "5件 (data/7685/raw/edinet/shihanki_hokokusho/)"
-      jquants: "1件 (statements_2026-02-16.json)"
-      edinet_cache: "2021-01-01～2026-02-23 documents_*.json (約1900日分)"
+  scope_definition:
+    analysis_period: "FY2020-FY2025（全タスク共通）"
+    scope_rationale: |
+      FY2019 有報は EDINET 保持期限超過により未収集。
+      S100L11G（FY2020有報）内のFY2019比較情報は比較参考値のみ。
+      全タスクの分析対象期間を FY2020-FY2025 に統一する。
+    fy2019_handling: "S100L11G内のFY2019比較情報はパース対象に含むが、レポート分析対象はFY2020-FY2025"
 
-  task_decomposition:
-    - task_id: "T1"
-      assigned_to: junior1
-      title: "EDINET 四半期報告書 + 半期報告書 XBRL 収集"
-      parallel: true
+  fy2025_incompleteness_handling:
+    current_status: |
+      FY2025 本決算（12月期）は2026年2月中旬開示見込み、現時点で未開示。
+      取得済み: EDINET H1 (S100WIWT), J-Quants Q1-Q3短信 (3件)。
+      未取得: FY2025 Q4/FY通期（有報・決算短信とも未開示）。
+    continuation_rule: |
+      FY2025 は部分カバレッジ（Q1-Q3/H1まで）として処理を継続する。
+      パイプライン中断は行わない。以下の条件を満たせば全タスク継続可能:
+      - T1: FY2025 H1 (S100WIWT) が正常にパースできること
+      - T2: FY2025 はEDINET H1 + J-Quants Q1-Q3 の統合で部分カバレッジとして処理
+      - T3: FY2025通期指標は算出不可。Q1-Q3累計/H1データのみでレポートに明記
+    abort_conditions: |
+      以下の場合のみパイプラインを中断し、Seniorに報告:
+      - FY2020-FY2024 のいずれかの通期データ（有報）がパース不可
+      - T1 で document_count が 15件未満（全体の75%未満）
+      - T2 で FY2020-FY2024 の年次データに1期以上の完全欠損
+    report_disclosure: |
+      レポートに以下を必須記載:
+      - 「FY2025は Q1-Q3/H1 までの暫定データ。通期確定値は本決算開示後に更新予定」
+      - FY2025 の各指標に「暫定」フラグを付与
+      - データカバレッジ表に FY2025 FY を「未開示」と明記
+
+  consistency_check_quantitative:
+    quarterly_annual_reconciliation:
+      target: "四半期累計PL（Q1-Q3累計）と通期PL（有報）の整合性"
+      applicable_years: "FY2020-FY2024（FY2025は通期未開示のため対象外）"
+      metrics_checked:
+        - field: "revenue"
+          tolerance_pct: 1.0
+          note: "売上高の四半期累計Q1-Q3 vs 有報通期。Q4は差分として算出可能"
+        - field: "operating_income"
+          tolerance_pct: 2.0
+          note: "営業利益。季節性・一時要因で四半期配分に偏りがあるため緩め"
+        - field: "net_income"
+          tolerance_pct: 3.0
+          note: "当期純利益。特別損益・税効果で変動幅が大きいため最も緩い"
+      check_logic: |
+        各年度について:
+        1. Q1-Q3累計の revenue/operating_income/net_income を合算
+        2. 通期（有報）の同項目と比較
+        3. Q1-Q3累計 ≤ 通期 × (1 + tolerance_pct/100) であること
+        4. Q1-Q3累計が通期を超過する場合は異常値としてフラグ
+      pass_condition: "FY2020-FY2024 の5年度すべてで上記チェックがパスすること"
+      failure_action: |
+        1件でも tolerance 超過の場合:
+        1. integration_log.json に該当年度・項目・差分率を記録
+        2. 差分率 5% 以内: WARNING として記録し処理続行。レポートに注記追加
+        3. 差分率 5% 超過: ERROR としてタスク失敗。Senior に報告し原因調査を再委任
+    edinet_jquants_crossvalidation:
+      target: "FY2023 EDINET vs J-Quants の同一項目比較"
+      tolerance_pct: 1.0
+      check_logic: |
+        FY2023 通期の revenue/operating_income/net_income について:
+        - EDINET パース値と J-Quants 値を比較
+        - 差分率 = |EDINET - JQuants| / EDINET × 100
+      pass_condition: "全項目で差分率 1.0% 以内"
+      failure_action: |
+        差分率 1.0% 超過:
+        1. integration_log.json に差分詳細を記録
+        2. 差分率 5% 以内: EDINET を正とし、J-Quants 値を補助値として併記
+        3. 差分率 5% 超過: ERROR。連結/単体・会計基準の不一致を調査し Senior に報告
+    rerun_conditions: |
+      T2/T3 の再実行が必要な条件:
+      - T2: ERROR レベルの整合性エラーが1件以上 → 原因特定後に T2 再実行
+      - T3: metrics.json で NaN/Infinity が発生 → 入力データ修正後に T3 再実行
+      - T3: レポート内の数値がmetrics.jsonと不一致 → T3 再実行
+
+  correction_version_handling:
+    policy: "訂正版は常に原本より優先適用する"
+    target_corrections:
+      - original: "S100PMXQ (FY2022 Q3)"
+        correction: "S100Q7YR (訂正四半期報告書)"
+      - original: "対応する有報原本"
+        correction: "S100NXF7 (訂正有価証券報告書)"
+    auto_detection:
+      method: "disclosure-parser の既存マージロジックで自動適用を試行"
+      verification: "パース後に同一期間の重複 doc_id がないか確認"
+    fallback_if_not_implemented:
+      trigger: |
+        (a) financials.json に PMXQ と Q7YR が両方存在
+        (b) 訂正版 doc_id が含まれない
+        (c) document_count が 22（訂正統合なし）
+      manual_merge_procedure: |
+        1. 重複期間を特定し、訂正版の個別JSONで原本を上書き
+        2. financials.json を再構築（原本エントリ削除、訂正版のみ保持）
+        3. correction_diff.json に差分記録
+      diff_verification: "同一 fiscal_year+quarter の重複なし、document_count=20"
+      rerun_condition: "schema validation エラーまたはカバレッジ欠落時に T1 再実行"
+
+  tasks:
+    - task_id: "T1_edinet_parse"
+      title: "EDINET XBRL 全件パース（四半期データ含む）"
+      assignee: "junior1"
+      dependency: null
+      scope: "FY2020-FY2025"
       description: |
-        EDINET API (E35116) から以下2種類の書類を収集する:
-        (A) 四半期報告書: 2018-12-19～2026-02-24（2024年度以降は存在しない想定）
-        (B) 半期報告書: 2024-01-01～2026-02-24（2024年度からの新制度対応）
-        disclosure-collector スキルを使用し、2コマンドを順次実行。
-      commands:
-        - step: "A: 四半期報告書"
-          command: >
-            python3 skills/disclosure-collector/scripts/main.py edinet E35116
-            --ticker 7685
-            --report-keyword "四半期報告書"
-            --start-date 2018-12-19
-            --end-date 2026-02-24
-        - step: "B: 半期報告書"
-          command: >
-            python3 skills/disclosure-collector/scripts/main.py edinet E35116
-            --ticker 7685
-            --report-keyword "半期報告書"
-            --start-date 2024-01-01
-            --end-date 2026-02-24
-      pre_steps:
-        - "既存 manifest.json を manifest_yuho_backup.json にコピー（上書き防止）"
-      post_steps:
-        - "Aの結果: manifest.json を manifest_quarterly.json にコピー"
-        - "Bの結果: manifest.json を manifest_semiannual.json にコピー"
-        - "manifest_yuho_backup.json を manifest.json に復元"
-      output_path: "data/7685/raw/edinet/"
-      expected_docs:
-        quarterly: "~15件（2019Q1～2023Q3、各年3四半期。2018年度Q3は上場直後で存在しない可能性あり）"
-        semiannual: "~1-2件（2024H1、2025H1が存在する可能性）"
-      gap_tolerance:
-        - "2018年度Q3（2018年10-12月期）: IPO直後のため四半期報告書が存在しない場合は許容"
-        - "2024Q1以降: 四半期報告書制度廃止のため存在しないのが正常"
-      quality_criteria:
-        - "A/Bそれぞれの matched_doc_count, downloaded_count, failed_count を報告"
-        - "failed_count = 0 を確認"
-        - "2019-2023の各Q1/Q2/Q3がカバーされていることを確認"
-        - "2024-2025の半期報告書(H1)の有無を確認"
+        disclosure-parser で data/7685/raw/edinet/ の ZIP 22件を全件パースし、
+        四半期データを含む構造化 JSON を生成する。
+      command: "python3 skills/disclosure-parser/scripts/main.py --ticker 7685"
+      input: "data/7685/raw/edinet/*.zip (22件)"
+      output:
+        - "data/7685/parsed/{docID}.json"
+        - "data/7685/parsed/financials.json (期待 document_count=20)"
+        - "data/7685/parsed/correction_diff.json (フォールバック時)"
+      acceptance_criteria:
+        - "22件の ZIP すべてが処理されること"
+        - "訂正版優先適用: 同一期間の重複エントリなし"
+        - "document_count = 20（訂正2件が原本を置換）"
+        - "FY2020 Q1-Q3, FY2022 Q3 の四半期データが含まれること"
+        - "FY2025 H1 (S100WIWT) が正常にパースされていること"
+        - "document_count 15件未満の場合はタスク失敗として Senior に報告"
 
-    - task_id: "T2"
-      assigned_to: junior2
-      title: "J-Quants 決算短信 収集"
-      parallel: true
+    - task_id: "T2_jquants_integration"
+      title: "J-Quants + EDINET 統合データ構築"
+      assignee: "junior2"
+      dependency: "T1_edinet_parse"
+      scope: "FY2020-FY2025"
       description: |
-        J-Quants API から7685の決算短信データを最新収集。
-        既存ファイル(statements_2026-02-16.json)があるが、最新日付で再取得。
-      command: >
-        python3 skills/disclosure-collector/scripts/main.py jquants 7685
-      output_path: "data/7685/raw/jquants/"
-      expected_docs: "IPO以降の全四半期決算短信（約24-28件）"
-      quality_criteria:
-        - "record_count を報告"
-        - "最古レコードの決算期と最新レコードの決算期を報告"
-        - "期間内の欠損四半期を特定（特に2024年度以降の四半期決算短信を確認）"
+        T1 出力の financials.json と jquants_fins_statements.json を統合。
+        FY2020-2022: EDINET のみ、FY2023: クロスバリデーション、FY2024-25: 相互補完。
+        FY2025 は Q1-Q3/H1 の部分カバレッジとして処理。
+      input:
+        - "data/7685/parsed/financials.json"
+        - "data/7685/parsed/jquants_fins_statements.json"
+      output:
+        - "data/7685/parsed/integrated_financials.json"
+        - "data/7685/parsed/integration_log.json"
+      acceptance_criteria:
+        - "FY2020-FY2025 全期間カバー（FY2025はQ1-Q3/H1部分カバレッジ）"
+        - "各データポイントにソース帰属（edinet/jquants/both）記録"
+        - "FY2023 クロスバリデーション: 差分率 1.0%以内=PASS、5%以内=WARNING+EDINET正、5%超=ERROR→Senior報告"
+        - "四半期累計vs通期: revenue±1%, operating_income±2%, net_income±3%以内"
+        - "tolerance超過5%以内はWARNING続行、5%超はERROR→Senior報告"
+        - "FY2020-FY2024 年次データに完全欠損がある場合はタスク失敗"
 
-    - task_id: "T3"
-      assigned_to: junior3
-      title: "全書類棚卸し・収集状況一覧作成"
-      parallel: false
-      depends_on: ["T1", "T2"]
+    - task_id: "T3_report_regeneration"
+      title: "指標計算・レポート再生成（四半期データ含む）"
+      assignee: "junior3"
+      dependency: "T2_jquants_integration"
+      scope: "FY2020-FY2025"
       description: |
-        data/7685/ 配下の全書類を棚卸し、書類種別・期間・取得状況の一覧を作成。
-        T1(四半期報告書+半期報告書)とT2(決算短信)の成果物＋既存有価証券報告書データを統合分析。
-      input_files:
-        - "data/7685/raw/edinet/manifest_quarterly.json (T1-A結果)"
-        - "data/7685/raw/edinet/manifest_semiannual.json (T1-B結果)"
-        - "data/7685/raw/edinet/manifest.json (既存有価証券報告書)"
-        - "data/7685/raw/jquants/statements_2026-02-24.json (T2結果)"
-      output_path: "data/7685/inventory.md"
-      contents:
-        - "書類種別ごとの収集状況マトリクス（有価証券報告書、四半期報告書、半期報告書、決算短信）"
-        - "期間カバレッジ: 2019-2025の各年度・四半期の取得有無マトリクス"
-        - "欠損リスト: 取得できなかった期間、理由推定、許容/要対応の分類"
-        - "T1の gap_tolerance に基づく欠損の許容判定結果"
-        - "全収集コマンドの再現手順"
-      quality_criteria:
-        - "2019-2025の全期間をカバー"
-        - "書類種別×期間マトリクスの全セルに取得済/欠損(許容)/欠損(要対応)のステータスがあること"
-        - "再現コマンドが記載されていること"
+        T2 の統合データを入力に指標算出・レポート再生成。
+        FY2025は暫定データとしてフラグ付与。
+      command_sequence:
+        - "python3 skills/financial-calculator/scripts/main.py calculate --ticker 7685 --parsed-dir data/7685/parsed"
+        - "python3 skills/financial-reporter/scripts/main.py --ticker 7685 --number-format man_yen"
+      input: "data/7685/parsed/integrated_financials.json"
+      output:
+        - "data/7685/parsed/metrics.json"
+        - "data/7685/reports/7685_report.md"
+        - "data/7685/reports/7685_report.html"
+      acceptance_criteria:
+        - "metrics.json に四半期粒度の指標が含まれること"
+        - "FY2025 指標に「暫定」フラグが付与されていること"
+        - "レポートに「FY2025はQ1-Q3/H1暫定データ」の注記があること"
+        - "レポートにデータソース・前提・リスクが明記されていること"
+        - "metrics.json に NaN/Infinity がないこと（あればタスク失敗）"
+
+  execution_plan:
+    sequence: "T1 → T2 → T3（順序依存、全タスク FY2020-FY2025 スコープ）"
+    junior_assignment:
+      junior1: "T1 (EDINETパース)"
+      junior2: "T2 (統合、T1完了待ち)"
+      junior3: "T3 (レポート、T2完了待ち)"
 
   quality_criteria:
-    - "四半期報告書: 2019Q1-2023Q3 全件収集（failed_count=0）"
-    - "半期報告書: 2024H1以降の存在確認と収集"
-    - "決算短信: IPO以降全四半期のデータを含むこと"
-    - "棚卸し: 書類種別×期間マトリクスで100%カバレッジまたは欠損理由明示"
-    - "再現性: 全収集コマンドが inventory.md に記録"
-
-  race_condition_prevention:
-    - "T1: data/7685/raw/edinet/ のみ書き込み"
-    - "T2: data/7685/raw/jquants/ のみ書き込み"
-    - "T3: data/7685/inventory.md のみ書き込み（T1/T2完了後に実行）"
-
-  risk_notes:
-    - "EDINET API rate limit: 2018-12-19～2020-12-31分（約740日）は未キャッシュのため新規取得が必要。API制限に留意"
-    - "2024年度以降: 四半期報告書は存在せず、半期報告書が代替。半期報告書が見つからない場合は提出遅延の可能性も考慮"
-    - "J-Quants API: リフレッシュトークンの有効性を事前確認すること"
+    data_integrity: "訂正版優先適用、重複排除、ソース帰属の完全記録"
+    coverage: "FY2020-FY2025（FY2025は部分カバレッジ許容）"
+    traceability: "各数値のデータソースが追跡可能"
+    consistency: "定量的整合チェック（tolerance定義済み）"

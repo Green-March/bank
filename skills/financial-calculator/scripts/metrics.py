@@ -22,29 +22,45 @@ class FinancialRecord:
     investing_cf: float | None
     period_end: str | None
     period_start: str | None = None
+    provisional: bool = False
+    statement_type: str | None = None
+    source_attribution: str | None = None
+    source_details: dict | None = None
+    cumulative: bool = False
 
 
-def calculate_metrics_payload(parsed_dir: Path, ticker: str) -> dict[str, object]:
-    records = load_financial_records(parsed_dir=parsed_dir, ticker=ticker)
-    metrics_series = _build_metrics_series(records=records)
+def calculate_metrics_payload(
+    parsed_dir: Path | None = None,
+    ticker: str = "",
+    *,
+    input_file: Path | None = None,
+) -> dict[str, object]:
+    records = load_financial_records(
+        parsed_dir=parsed_dir, ticker=ticker, input_file=input_file
+    )
+    annual_series, quarterly_series = _build_metrics_series(records=records)
 
     company_name = None
     if records:
         company_name = records[-1].company_name
 
     latest_snapshot: dict[str, object] | None = None
-    if metrics_series:
-        last = metrics_series[-1]
+    if annual_series:
+        last = annual_series[-1]
         latest_snapshot = dict(last)
 
-    return {
+    payload: dict[str, object] = {
         "ticker": ticker,
         "company_name": company_name or "Unknown",
         "generated_at": _utc_now_iso(),
         "source_count": len(records),
-        "metrics_series": metrics_series,
+        "metrics_series": annual_series,
         "latest_snapshot": latest_snapshot,
     }
+    if quarterly_series:
+        payload["quarterly_series"] = quarterly_series
+
+    return payload
 
 
 def write_metrics_payload(payload: dict[str, object], output_path: Path) -> None:
@@ -52,12 +68,22 @@ def write_metrics_payload(payload: dict[str, object], output_path: Path) -> None
     output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def load_financial_records(parsed_dir: Path, ticker: str) -> list[FinancialRecord]:
-    if not parsed_dir.exists():
+def load_financial_records(
+    parsed_dir: Path | None = None,
+    ticker: str = "",
+    *,
+    input_file: Path | None = None,
+) -> list[FinancialRecord]:
+    # Determine which files to read
+    if input_file is not None:
+        json_paths = [input_file] if input_file.exists() else []
+    elif parsed_dir is not None and parsed_dir.exists():
+        json_paths = sorted(parsed_dir.glob("*.json"))
+    else:
         return []
 
     records: list[FinancialRecord] = []
-    for json_path in sorted(parsed_dir.glob("*.json")):
+    for json_path in json_paths:
         if json_path.name == "metrics.json":
             continue
         payload = _load_json(json_path)
@@ -71,11 +97,13 @@ def load_financial_records(parsed_dir: Path, ticker: str) -> list[FinancialRecor
 
     records = _deduplicate_records(records)
 
+    _PERIOD_ORDER = {"FY": 0, "Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}
+
     records.sort(
         key=lambda record: (
             record.fiscal_year is None,
             -1 if record.fiscal_year is None else record.fiscal_year,
-            record.period or "",
+            _PERIOD_ORDER.get((record.period or "").upper(), 99),
             record.period_end or "",
         )
     )
@@ -155,6 +183,14 @@ def _to_financial_record(payload: dict[str, object], fallback_ticker: str) -> Fi
         fallback=all_map,
     )
 
+    # Extract metadata fields
+    provisional = bool(payload.get("provisional", False))
+    statement_type = _as_str(payload.get("statement_type"))
+    source_attribution = _as_str(payload.get("source_attribution"))
+    source_details_raw = payload.get("source_details")
+    source_details = dict(source_details_raw) if isinstance(source_details_raw, dict) else None
+    cumulative = bool(payload.get("cumulative", False))
+
     return FinancialRecord(
         ticker=ticker,
         company_name=company_name,
@@ -169,10 +205,28 @@ def _to_financial_record(payload: dict[str, object], fallback_ticker: str) -> Fi
         investing_cf=investing_cf,
         period_end=period_end,
         period_start=period_start,
+        provisional=provisional,
+        statement_type=statement_type,
+        source_attribution=source_attribution,
+        source_details=source_details,
+        cumulative=cumulative,
     )
 
 
 def _build_metrics_series(records: Sequence[FinancialRecord]) -> list[dict[str, object]]:
+    """Build metrics series from records, computing growth rates within same period type."""
+    # Separate annual and quarterly records
+    annual_records = [r for r in records if (r.period or "").upper() in ("FY", "MIXED", "DURATION", "INSTANT", "N/A", "")]
+    quarterly_records = [r for r in records if (r.period or "").upper() in ("Q1", "Q2", "Q3", "Q4")]
+
+    annual_series = _build_series_for_group(annual_records)
+    quarterly_series = _build_quarterly_series(quarterly_records)
+
+    return annual_series, quarterly_series
+
+
+def _build_series_for_group(records: Sequence[FinancialRecord]) -> list[dict[str, object]]:
+    """Build annual metrics series with YoY growth."""
     series: list[dict[str, object]] = []
     previous: FinancialRecord | None = None
 
@@ -187,25 +241,94 @@ def _build_metrics_series(records: Sequence[FinancialRecord]) -> list[dict[str, 
 
         period_months = _compute_period_months(record.period_start, record.period_end)
 
-        series.append(
-            {
-                "fiscal_year": record.fiscal_year,
-                "period": record.period or "N/A",
-                "period_months": period_months,
-                "revenue": _round_num(record.revenue),
-                "operating_income": _round_num(record.operating_income),
-                "net_income": _round_num(record.net_income),
-                "roe_percent": _round_num(roe),
-                "roa_percent": _round_num(roa),
-                "operating_margin_percent": _round_num(operating_margin),
-                "revenue_growth_yoy_percent": _round_num(revenue_growth),
-                "profit_growth_yoy_percent": _round_num(profit_growth),
-                "equity_ratio_percent": _round_num(equity_ratio),
-                "operating_cf": _round_num(record.operating_cf),
-                "free_cash_flow": _round_num(free_cash_flow),
-            }
-        )
+        entry: dict[str, object] = {
+            "fiscal_year": record.fiscal_year,
+            "period": record.period or "N/A",
+            "period_months": period_months,
+            "revenue": _round_num(record.revenue),
+            "operating_income": _round_num(record.operating_income),
+            "net_income": _round_num(record.net_income),
+            "roe_percent": _round_num(roe),
+            "roa_percent": _round_num(roa),
+            "operating_margin_percent": _round_num(operating_margin),
+            "revenue_growth_yoy_percent": _round_num(revenue_growth),
+            "profit_growth_yoy_percent": _round_num(profit_growth),
+            "equity_ratio_percent": _round_num(equity_ratio),
+            "operating_cf": _round_num(record.operating_cf),
+            "free_cash_flow": _round_num(free_cash_flow),
+        }
+        # Add metadata if available
+        if record.provisional:
+            entry["provisional"] = True
+        if record.statement_type:
+            entry["statement_type"] = record.statement_type
+        if record.source_attribution:
+            entry["source_attribution"] = record.source_attribution
+        if record.source_details:
+            entry["source_details"] = record.source_details
+
+        series.append(entry)
         previous = record
+
+    return series
+
+
+def _build_quarterly_series(records: Sequence[FinancialRecord]) -> list[dict[str, object]]:
+    """Build quarterly metrics series with YoY growth (same quarter comparison)."""
+    series: list[dict[str, object]] = []
+
+    # Build lookup for same-quarter prior year comparison
+    quarter_lookup: dict[tuple[int, str], FinancialRecord] = {}
+    for record in records:
+        if record.fiscal_year is not None and record.period:
+            quarter_lookup[(record.fiscal_year, record.period.upper())] = record
+
+    for record in records:
+        roe = _ratio_percent(record.net_income, record.equity)
+        roa = _ratio_percent(record.net_income, record.total_assets)
+        operating_margin = _ratio_percent(record.operating_income, record.revenue)
+        equity_ratio = _ratio_percent(record.equity, record.total_assets)
+        free_cash_flow = _sum_nullable(record.operating_cf, record.investing_cf)
+
+        period_months = _compute_period_months(record.period_start, record.period_end)
+
+        # YoY: compare with same quarter in previous fiscal year
+        prev_key = (record.fiscal_year - 1, (record.period or "").upper()) if record.fiscal_year else None
+        prev_record = quarter_lookup.get(prev_key) if prev_key else None
+        revenue_growth_yoy = _growth_percent(
+            record.revenue, prev_record.revenue if prev_record else None
+        )
+        profit_growth_yoy = _growth_percent(
+            record.net_income, prev_record.net_income if prev_record else None
+        )
+
+        entry: dict[str, object] = {
+            "fiscal_year": record.fiscal_year,
+            "period": record.period or "N/A",
+            "period_months": period_months,
+            "cumulative": record.cumulative,
+            "revenue": _round_num(record.revenue),
+            "operating_income": _round_num(record.operating_income),
+            "net_income": _round_num(record.net_income),
+            "roe_percent": _round_num(roe),
+            "roa_percent": _round_num(roa),
+            "operating_margin_percent": _round_num(operating_margin),
+            "revenue_growth_yoy_percent": _round_num(revenue_growth_yoy),
+            "profit_growth_yoy_percent": _round_num(profit_growth_yoy),
+            "equity_ratio_percent": _round_num(equity_ratio),
+            "operating_cf": _round_num(record.operating_cf),
+            "free_cash_flow": _round_num(free_cash_flow),
+        }
+        if record.provisional:
+            entry["provisional"] = True
+        if record.statement_type:
+            entry["statement_type"] = record.statement_type
+        if record.source_attribution:
+            entry["source_attribution"] = record.source_attribution
+        if record.source_details:
+            entry["source_details"] = record.source_details
+
+        series.append(entry)
 
     return series
 
@@ -379,6 +502,31 @@ def _extract_candidates(payload: dict[str, object], fallback_ticker: str) -> lis
                     )
                 )
 
+    # Handle integrated_financials.json format (annual/quarterly arrays)
+    annual = payload.get("annual")
+    if isinstance(annual, list):
+        top_ticker = _as_str(payload.get("ticker")) or fallback_ticker
+        top_company = _as_str(payload.get("company_name"))
+        for entry in annual:
+            if isinstance(entry, dict):
+                merged = dict(entry)
+                merged["ticker"] = top_ticker
+                merged["company_name"] = top_company
+                merged["period"] = "FY"
+                candidates.append(merged)
+
+    quarterly = payload.get("quarterly")
+    if isinstance(quarterly, list):
+        top_ticker = _as_str(payload.get("ticker")) or fallback_ticker
+        top_company = _as_str(payload.get("company_name"))
+        for entry in quarterly:
+            if isinstance(entry, dict):
+                merged = dict(entry)
+                merged["ticker"] = top_ticker
+                merged["company_name"] = top_company
+                merged["period"] = _as_str(entry.get("quarter")) or "Q"
+                candidates.append(merged)
+
     if candidates:
         return candidates
     # Fallback: only use payload if it has a valid fiscal_year to prevent None pollution
@@ -453,10 +601,19 @@ def _deduplicate_records(records: list[FinancialRecord]) -> list[FinancialRecord
         seen.add(key)
         unique.append(record)
 
-    # Phase 2: one representative per fiscal_year
-    groups: dict[int | None, list[FinancialRecord]] = {}
+    # Phase 2: one representative per (fiscal_year, period_group)
+    # Normalize period to group key: FY/Q1/Q2/Q3/Q4 stay as-is,
+    # other values (mixed/duration/instant) group as "FY"
+    def _period_group(record: FinancialRecord) -> str:
+        p = (record.period or "").upper()
+        if p in ("Q1", "Q2", "Q3", "Q4"):
+            return p
+        return "FY"
+
+    groups: dict[tuple[int | None, str], list[FinancialRecord]] = {}
     for record in unique:
-        groups.setdefault(record.fiscal_year, []).append(record)
+        key = (record.fiscal_year, _period_group(record))
+        groups.setdefault(key, []).append(record)
 
     result: list[FinancialRecord] = []
     for group in groups.values():

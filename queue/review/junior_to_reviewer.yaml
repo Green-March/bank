@@ -2,20 +2,51 @@ review_request:
   request_type: deliverable_review
   review_type: deliverable
   request_id: "rev_T3_001"
-  task_id: "T3"
+  task_id: "T3_report_regeneration"
   junior_id: "junior3"
   status: pending
-  timestamp: "2026-02-24T20:52:00+09:00"
+  timestamp: "2026-02-25T22:45:00+09:00"
   payload:
     summary: |
-      全書類棚卸し・収集状況一覧を data/7685/inventory.md に作成完了。
-      書類総数30件（有報6+四半期報14+半期報2(有効)+決算短信8）。
-      EDINET開示マトリクス35セル、J-Quants決算短信マトリクス28セル、全セルにステータス記入済。
-      重複解決ルール適用済(S100TETK/S100Q7YR)。
-      欠損は全て理由明記、許容/要対応に分類済。
+      指標計算・レポート再生成完了。T2b 統合データを入力に financial-calculator で指標算出、
+      financial-reporter で四半期データ含むフルレポートを生成。
+      受入基準 7/7 PASS、テスト 492 passed (5 skipped)。
+
+      【スキル拡張】
+      - financial-calculator: integrated_financials.json の annual/quarterly 配列パース対応、
+        --input-file オプション追加、provisional/statement_type フィールド対応
+      - financial-reporter: 四半期推移セクション、provisional 注記、statement_type 注記、
+        データソースセクション、前提条件セクション追加
     outputs:
-      - "data/7685/inventory.md"
-    report_file: "queue/reports/junior3_report.yaml"
+      - "data/7685/parsed/metrics.json (四半期指標含む、NaN/Infinity なし)"
+      - "data/7685/reports/7685_report.md (四半期推移・注記・ソース明記)"
+      - "data/7685/reports/7685_report.html (同上)"
+    validation_results:
+      - "acceptance_1: quarterly_series=18件, YoY成長率あり — PASS"
+      - "acceptance_2: NaN/Infinity なし — PASS"
+      - "acceptance_3: FY2025 provisional=true (3件) — PASS"
+      - "acceptance_4: 四半期推移セクションあり — PASS"
+      - "acceptance_5: データソース/前提/リスク明記 — PASS"
+      - "acceptance_6: FY2020 standalone / FY2021+ consolidated 注記あり — PASS"
+      - "acceptance_7: md + html 両形式生成 — PASS"
+      - "tests: 492 passed, 5 skipped"
+    code_changes:
+      - "skills/financial-calculator/scripts/metrics.py (annual/quarterly対応、input-file対応)"
+      - "skills/financial-calculator/scripts/main.py (--input-file CLIオプション)"
+      - "skills/financial-reporter/scripts/render.py (四半期推移・注記・ソース)"
+      - "テスト更新 (test_metrics.py, test_cli_real_data.py)"
+    caveats:
+      - "FY2025 は Q1-Q3/H1 暫定データ"
+      - "FY2020 standalone, FY2021+ consolidated"
+      - "四半期データは累計値（Q1=3ヶ月, Q2=6ヶ月累計, Q3=9ヶ月累計）"
+    review_focus:
+      - "metrics.json の四半期指標が正しく算出されているか"
+      - "レポートの四半期推移セクションの可読性と正確性"
+      - "FY2025 provisional 注記の適切性"
+      - "FY2020 standalone / FY2021+ consolidated 注記の適切性"
+      - "データソース・前提・リスクの記載品質"
+      - "スキル拡張（calculator/reporter）が既存機能を壊していないか（492 passed）"
+      - "パイプライン全体（T1b→T2b→T3）の一貫性"
 review_followup:
   request_id: null
   task_id: null

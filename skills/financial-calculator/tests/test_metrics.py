@@ -207,7 +207,7 @@ class TestBuildMetricsSeries:
     def test_single_record_no_previous(self):
         """1期分のみ: YoY 成長率は None になる."""
         records = [_make_record(2024)]
-        series = _build_metrics_series(records)
+        series, _ = _build_metrics_series(records)
 
         assert len(series) == 1
         entry = series[0]
@@ -224,7 +224,7 @@ class TestBuildMetricsSeries:
         """2期分: YoY 成長率が算出される."""
         r1 = _make_record(2023, revenue=1000.0, net_income=80.0, period_end="2023-03-31")
         r2 = _make_record(2024, revenue=1200.0, net_income=100.0, period_end="2024-03-31")
-        series = _build_metrics_series([r1, r2])
+        series, _ = _build_metrics_series([r1, r2])
 
         assert len(series) == 2
         first, second = series[0], series[1]
@@ -238,7 +238,7 @@ class TestBuildMetricsSeries:
         assert second["profit_growth_yoy_percent"] == pytest.approx(25.0)
 
     def test_empty_records(self):
-        series = _build_metrics_series([])
+        series, _ = _build_metrics_series([])
         assert series == []
 
     def test_all_none_financials(self):
@@ -253,7 +253,7 @@ class TestBuildMetricsSeries:
             operating_cf=None,
             investing_cf=None,
         )
-        series = _build_metrics_series([record])
+        series, _ = _build_metrics_series([record])
 
         assert len(series) == 1
         entry = series[0]
@@ -269,7 +269,7 @@ class TestBuildMetricsSeries:
         """2期目の net_income が None → 利益成長率は None, 売上成長率は算出."""
         r1 = _make_record(2023, revenue=1000.0, net_income=80.0, period_end="2023-03-31")
         r2 = _make_record(2024, revenue=1200.0, net_income=None, period_end="2024-03-31")
-        series = _build_metrics_series([r1, r2])
+        series, _ = _build_metrics_series([r1, r2])
 
         second = series[1]
         assert second["revenue_growth_yoy_percent"] == pytest.approx(20.0)
@@ -278,22 +278,22 @@ class TestBuildMetricsSeries:
 
     def test_free_cash_flow(self):
         record = _make_record(2024, operating_cf=120.0, investing_cf=-50.0)
-        series = _build_metrics_series([record])
+        series, _ = _build_metrics_series([record])
         assert series[0]["free_cash_flow"] == pytest.approx(70.0)
 
     def test_free_cash_flow_both_none(self):
         record = _make_record(2024, operating_cf=None, investing_cf=None)
-        series = _build_metrics_series([record])
+        series, _ = _build_metrics_series([record])
         assert series[0]["free_cash_flow"] is None
 
     def test_free_cash_flow_one_none(self):
         record = _make_record(2024, operating_cf=120.0, investing_cf=None)
-        series = _build_metrics_series([record])
+        series, _ = _build_metrics_series([record])
         assert series[0]["free_cash_flow"] == pytest.approx(120.0)
 
     def test_period_defaults_to_na(self):
         record = _make_record(2024, period=None)
-        series = _build_metrics_series([record])
+        series, _ = _build_metrics_series([record])
         assert series[0]["period"] == "N/A"
 
 
@@ -375,19 +375,19 @@ class TestPeriodMonthsInSeries:
             period_start="2025-01-01",
             period_end="2025-06-30",
         )
-        series = _build_metrics_series([record])
+        series, _ = _build_metrics_series([record])
         assert series[0]["period_months"] == 6
 
     def test_period_months_none_without_start(self):
         """period_start がない場合、period_months は None."""
         record = _make_record(2024)
-        series = _build_metrics_series([record])
+        series, _ = _build_metrics_series([record])
         assert series[0]["period_months"] is None
 
     def test_backward_compat_existing_fields(self):
         """period_months 追加後も既存フィールドが全て存在する."""
         record = _make_record(2024)
-        series = _build_metrics_series([record])
+        series, _ = _build_metrics_series([record])
         entry = series[0]
         for key in ("fiscal_year", "period", "revenue", "operating_income",
                      "net_income", "roe_percent", "roa_percent",

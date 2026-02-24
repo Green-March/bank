@@ -40,8 +40,16 @@ def _data_root() -> Path:
     return _resolve_root("DATA_PATH", "data")
 
 
-def calculate_command(ticker: str, parsed_dir: Path, output_path: Path) -> int:
-    payload = calculate_metrics_payload(parsed_dir=parsed_dir, ticker=ticker)
+def calculate_command(
+    ticker: str,
+    parsed_dir: Path | None,
+    output_path: Path,
+    *,
+    input_file: Path | None = None,
+) -> int:
+    payload = calculate_metrics_payload(
+        parsed_dir=parsed_dir, ticker=ticker, input_file=input_file
+    )
     write_metrics_payload(payload=payload, output_path=output_path)
     print(f"metrics.json を生成しました: {output_path}")
     print(f"解析期数: {payload['source_count']}")
@@ -86,6 +94,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="出力JSONパス（省略時: data/{ticker}/parsed/metrics.json）",
     )
+    calc_parser.add_argument(
+        "--input-file",
+        default=None,
+        help="単一入力ファイルパス（指定時: parsed-dir を無視しこのファイルのみ読む）",
+    )
 
     report_parser = subparsers.add_parser("report", help="metrics.jsonからreport.mdを生成")
     report_parser.add_argument("--ticker", required=True, help="銘柄コード（例: 2780）")
@@ -111,17 +124,21 @@ def main() -> int:
     ticker = str(args.ticker)
 
     if args.command == "calculate":
+        input_file = Path(args.input_file) if args.input_file else None
         parsed_dir = (
             Path(args.parsed_dir)
             if args.parsed_dir
             else (data_root / ticker / "parsed")
-        )
+        ) if not input_file else None
         output_path = (
             Path(args.output)
             if args.output
             else (data_root / ticker / "parsed" / "metrics.json")
         )
-        return calculate_command(ticker=ticker, parsed_dir=parsed_dir, output_path=output_path)
+        return calculate_command(
+            ticker=ticker, parsed_dir=parsed_dir, output_path=output_path,
+            input_file=input_file,
+        )
 
     metrics_path = (
         Path(args.metrics)

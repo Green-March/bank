@@ -154,6 +154,98 @@ def _fiscal_year_display(row: dict[str, Any]) -> str:
     return str(fy)
 
 
+def _statement_type_label(st: str | None) -> str:
+    """Convert statement_type to Japanese label."""
+    if st == "standalone":
+        return "単体"
+    if st == "consolidated":
+        return "連結"
+    return "-"
+
+
+def _build_statement_type_notes(
+    series: list[dict[str, Any]], quarterly: list[dict[str, Any]]
+) -> list[str]:
+    """Build statement type annotation notes."""
+    notes: list[str] = []
+    standalone_years: list[int] = []
+    consolidated_years: list[int] = []
+    for row in series:
+        fy = row.get("fiscal_year")
+        st = row.get("statement_type")
+        if fy is not None and st == "standalone":
+            standalone_years.append(fy)
+        elif fy is not None and st == "consolidated":
+            consolidated_years.append(fy)
+
+    if standalone_years:
+        years_str = ", ".join(f"FY{y}" for y in sorted(standalone_years))
+        notes.append(f"{years_str} は単体（standalone）財務諸表")
+    if consolidated_years:
+        if len(consolidated_years) > 2:
+            first = min(consolidated_years)
+            last = max(consolidated_years)
+            notes.append(f"FY{first}-FY{last} は連結（consolidated）財務諸表")
+        else:
+            years_str = ", ".join(f"FY{y}" for y in sorted(consolidated_years))
+            notes.append(f"{years_str} は連結（consolidated）財務諸表")
+    return notes
+
+
+def _provisional_fiscal_years(
+    series: list[dict[str, Any]], quarterly: list[dict[str, Any]]
+) -> set[int]:
+    """Collect fiscal years that have provisional data."""
+    years: set[int] = set()
+    for row in series:
+        if row.get("provisional") and row.get("fiscal_year") is not None:
+            years.add(row["fiscal_year"])
+    for row in quarterly:
+        if row.get("provisional") and row.get("fiscal_year") is not None:
+            years.add(row["fiscal_year"])
+    return years
+
+
+def _append_source_details(
+    lines: list[str],
+    series: list[dict[str, Any]],
+    quarterly: list[dict[str, Any]],
+) -> None:
+    """Append data source details section."""
+    all_rows = list(series) + list(quarterly)
+    edinet_docs: dict[str, str] = {}  # doc_id -> period_end
+    jquants_dates: dict[str, str] = {}  # period_end -> disclosed_date
+
+    for row in all_rows:
+        sd = row.get("source_details")
+        if not isinstance(sd, dict):
+            continue
+        edinet = sd.get("edinet")
+        if isinstance(edinet, dict):
+            doc_id = edinet.get("document_id", "")
+            pe = edinet.get("period_end", "")
+            if doc_id:
+                edinet_docs[doc_id] = pe
+        jq = sd.get("jquants")
+        if isinstance(jq, dict):
+            pe = jq.get("period_end", "")
+            dd = jq.get("disclosed_date", "")
+            if pe and dd:
+                jquants_dates[pe] = dd
+
+    if edinet_docs:
+        lines.append("")
+        lines.append("### EDINET")
+        for doc_id in sorted(edinet_docs):
+            lines.append(f"- {doc_id} (期末: {edinet_docs[doc_id]})")
+
+    if jquants_dates:
+        lines.append("")
+        lines.append("### J-Quants API")
+        for pe in sorted(jquants_dates):
+            lines.append(f"- 期末 {pe} (開示日: {jquants_dates[pe]})")
+
+
 def render_markdown(
     metrics_payload: dict[str, Any],
     ticker: str,
@@ -201,6 +293,12 @@ def render_markdown(
             absence_reason=abs_reason,
         )
 
+    # Extract quarterly series
+    quarterly_raw = metrics_payload.get("quarterly_series")
+    quarterly: list[dict[str, Any]] = [
+        row for row in quarterly_raw if isinstance(row, dict)
+    ] if isinstance(quarterly_raw, list) else []
+
     lines: list[str] = []
     lines.append(f"# {ticker} {company_name} 分析レポート")
     lines.append("")
@@ -209,26 +307,50 @@ def render_markdown(
     lines.append(f"- 企業名: {company_name}")
     lines.append(f"- 生成日時 (UTC): {generated_at}")
     lines.append("")
-    lines.append("## 主要指標（直近）")
+
+    # Statement type notes
+    _st_notes = _build_statement_type_notes(series, quarterly)
+    if _st_notes:
+        lines.append("### 財務諸表の種類")
+        for note in _st_notes:
+            lines.append(f"- {note}")
+        lines.append("")
+
+    # Provisional notes
+    prov_years = _provisional_fiscal_years(series, quarterly)
+    if prov_years:
+        prov_str = ", ".join(f"FY{y}" for y in sorted(prov_years))
+        lines.append(f"> **暫定データ注記**: {prov_str} は Q1-Q3/H1 暫定データ。通期確定値は本決算開示後に更新予定。")
+        lines.append("")
+
+    lines.append("## 主要指標（直近通期）")
     latest_label = _period_label(latest.get("period_months"))
     latest_suffix = f" ({latest_label})" if latest_label and latest_label != "通期" else ""
-    lines.append(f"- 売上高{latest_suffix}: {fmt(latest.get('revenue'), field='revenue', row_abs=latest_abs)}{unit_label}")
-    lines.append(f"- 営業利益{latest_suffix}: {fmt(latest.get('operating_income'), field='operating_income', row_abs=latest_abs)}{unit_label}")
-    lines.append(f"- 当期純利益{latest_suffix}: {fmt(latest.get('net_income'), field='net_income', row_abs=latest_abs)}{unit_label}")
-    lines.append(f"- ROE: {fmt(latest.get('roe_percent'), '%', field='roe_percent', row_abs=latest_abs)}")
-    lines.append(f"- ROA: {fmt(latest.get('roa_percent'), '%', field='roa_percent', row_abs=latest_abs)}")
-    lines.append(f"- 営業利益率: {fmt(latest.get('operating_margin_percent'), '%', field='operating_margin_percent', row_abs=latest_abs)}")
-    lines.append(f"- 自己資本比率: {fmt(latest.get('equity_ratio_percent'), '%', field='equity_ratio_percent', row_abs=latest_abs)}")
-    lines.append(f"- フリーキャッシュフロー{latest_suffix}: {fmt(latest.get('free_cash_flow'), field='free_cash_flow', row_abs=latest_abs)}{unit_label}")
+    prov_tag = " **[暫定]**" if latest.get("provisional") else ""
+    lines.append(f"- 売上高{latest_suffix}: {fmt(latest.get('revenue'), field='revenue', row_abs=latest_abs)}{unit_label}{prov_tag}")
+    lines.append(f"- 営業利益{latest_suffix}: {fmt(latest.get('operating_income'), field='operating_income', row_abs=latest_abs)}{unit_label}{prov_tag}")
+    lines.append(f"- 当期純利益{latest_suffix}: {fmt(latest.get('net_income'), field='net_income', row_abs=latest_abs)}{unit_label}{prov_tag}")
+    lines.append(f"- ROE: {fmt(latest.get('roe_percent'), '%', field='roe_percent', row_abs=latest_abs)}{prov_tag}")
+    lines.append(f"- ROA: {fmt(latest.get('roa_percent'), '%', field='roa_percent', row_abs=latest_abs)}{prov_tag}")
+    lines.append(f"- 営業利益率: {fmt(latest.get('operating_margin_percent'), '%', field='operating_margin_percent', row_abs=latest_abs)}{prov_tag}")
+    lines.append(f"- 自己資本比率: {fmt(latest.get('equity_ratio_percent'), '%', field='equity_ratio_percent', row_abs=latest_abs)}{prov_tag}")
+    lines.append(f"- フリーキャッシュフロー{latest_suffix}: {fmt(latest.get('free_cash_flow'), field='free_cash_flow', row_abs=latest_abs)}{unit_label}{prov_tag}")
     lines.append("")
-    lines.append("## 推移表")
-    lines.append("| 会計年度 | 売上高 | 営業利益 | 当期純利益 | ROE(%) | ROA(%) | 営業利益率(%) | 自己資本比率(%) | FCF |")
-    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+
+    # Annual table
+    lines.append("## 通期推移表")
+    lines.append("| 会計年度 | 区分 | 売上高 | 営業利益 | 当期純利益 | ROE(%) | ROA(%) | 営業利益率(%) | 自己資本比率(%) | FCF |")
+    lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|")
     for row in series:
         row_abs = _row_absence(row, absence_map, fy_end_month=fy_end_month)
+        fy_display = _fiscal_year_display(row)
+        if row.get("provisional"):
+            fy_display += " [暫定]"
+        st = _statement_type_label(row.get("statement_type"))
         lines.append(
-            "| {fy} | {rev} | {op} | {net} | {roe} | {roa} | {margin} | {equity} | {fcf} |".format(
-                fy=_fiscal_year_display(row),
+            "| {fy} | {st} | {rev} | {op} | {net} | {roe} | {roa} | {margin} | {equity} | {fcf} |".format(
+                fy=fy_display,
+                st=st,
                 rev=fmt(row.get("revenue"), field="revenue", row_abs=row_abs),
                 op=fmt(row.get("operating_income"), field="operating_income", row_abs=row_abs),
                 net=fmt(row.get("net_income"), field="net_income", row_abs=row_abs),
@@ -239,13 +361,64 @@ def render_markdown(
                 fcf=fmt(row.get("free_cash_flow"), field="free_cash_flow", row_abs=row_abs),
             )
         )
-
     lines.append("")
+
+    # Quarterly section
+    if quarterly:
+        lines.append("## 四半期推移")
+        lines.append("")
+        lines.append("四半期データは累計値（Q1=3ヶ月, Q2=6ヶ月累計, Q3=9ヶ月累計）。")
+        lines.append("")
+        lines.append("| 会計年度 | 四半期 | 売上高 | 営業利益 | 当期純利益 | 営業利益率(%) | YoY売上成長(%) | YoY利益成長(%) |")
+        lines.append("|---|---|---:|---:|---:|---:|---:|---:|")
+        for row in quarterly:
+            fy = row.get("fiscal_year", "N/A")
+            period = row.get("period", "N/A")
+            prov_mark = " [暫定]" if row.get("provisional") else ""
+            lines.append(
+                "| {fy}{prov} | {period} | {rev} | {op} | {net} | {margin} | {rev_g} | {prof_g} |".format(
+                    fy=fy,
+                    prov=prov_mark,
+                    period=period,
+                    rev=fmt(row.get("revenue"), field="revenue"),
+                    op=fmt(row.get("operating_income"), field="operating_income"),
+                    net=fmt(row.get("net_income"), field="net_income"),
+                    margin=fmt(row.get("operating_margin_percent"), field="operating_margin_percent"),
+                    rev_g=fmt(row.get("revenue_growth_yoy_percent"), field="revenue_growth_yoy_percent"),
+                    prof_g=fmt(row.get("profit_growth_yoy_percent"), field="profit_growth_yoy_percent"),
+                )
+            )
+        lines.append("")
+
+    # Data sources section
+    lines.append("## データソース")
+    _append_source_details(lines, series, quarterly)
+    lines.append("")
+
+    # Assumptions
+    lines.append("## 前提条件")
+    lines.append("- 数値は開示資料（有価証券報告書、四半期報告書、半期報告書、決算短信）に基づく")
+    lines.append("- EDINET（金融庁 電子開示システム）及び J-Quants API をデータソースとして使用")
+    if _st_notes:
+        for note in _st_notes:
+            lines.append(f"- {note}")
+    if prov_years:
+        prov_str = ", ".join(f"FY{y}" for y in sorted(prov_years))
+        lines.append(f"- {prov_str} は暫定データ（通期確定値は本決算開示後に更新予定）")
+    lines.append("")
+
+    # Risks
     lines.append("## リスクと注意点")
     lines.append("- データ遅延リスク: 直近の開示情報がまだ反映されていない可能性があります。")
     lines.append("- 会計方針やセグメント変更により、前年同期比較が歪む場合があります。")
     lines.append("- 一時的な損益が収益性指標を歪める可能性があります。")
     lines.append("- 株価バリュエーションには本レポート範囲外の市場データが必要です。")
+    if prov_years:
+        lines.append(f"- 暫定データリスク: FY{'/'.join(str(y) for y in sorted(prov_years))} のデータは通期未確定のため、最終値と乖離する可能性があります。")
+    # Check for statement_type change
+    st_types = [(row.get("fiscal_year"), row.get("statement_type")) for row in series if row.get("statement_type")]
+    if any(st == "standalone" for _, st in st_types) and any(st == "consolidated" for _, st in st_types):
+        lines.append("- 財務諸表の種類が変更されています（単体→連結）。前年比較時は注意が必要です。")
     lines.append("")
 
     # Data Quality Notes (only when absence_map has entries)
