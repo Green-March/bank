@@ -1,52 +1,43 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_T3_001"
-  task_id: "T3_report_regeneration"
-  junior_id: "junior3"
+  request_id: "rev_20260226_T3"
+  task_id: "T3_metrics_report"
+  junior_id: junior3
   status: pending
-  timestamp: "2026-02-25T22:45:00+09:00"
+  timestamp: "2026-02-26T23:15:00+09:00"
   payload:
     summary: |
-      指標計算・レポート再生成完了。T2b 統合データを入力に financial-calculator で指標算出、
-      financial-reporter で四半期データ含むフルレポートを生成。
-      受入基準 7/7 PASS、テスト 492 passed (5 skipped)。
-
-      【スキル拡張】
-      - financial-calculator: integrated_financials.json の annual/quarterly 配列パース対応、
-        --input-file オプション追加、provisional/statement_type フィールド対応
-      - financial-reporter: 四半期推移セクション、provisional 注記、statement_type 注記、
-        データソースセクション、前提条件セクション追加
-    outputs:
-      - "data/7685/parsed/metrics.json (四半期指標含む、NaN/Infinity なし)"
-      - "data/7685/reports/7685_report.md (四半期推移・注記・ソース明記)"
-      - "data/7685/reports/7685_report.html (同上)"
+      2780 コメ兵HD メトリクス再計算 + レポート生成 + QA 完了。
+      company_name修正済み（"Unknown"→"コメ兵ホールディングス"）。source_count=17。
+      通期2件（FY2024, FY2025）+ 四半期15件。レポート（md+html）生成済み。
+    deliverables:
+      - "data/2780/parsed/metrics.json（company_name修正済み、source_count=17）"
+      - "data/2780/reports/2780_report.md（新規）"
+      - "data/2780/reports/2780_report.html（新規）"
     validation_results:
-      - "acceptance_1: quarterly_series=18件, YoY成長率あり — PASS"
-      - "acceptance_2: NaN/Infinity なし — PASS"
-      - "acceptance_3: FY2025 provisional=true (3件) — PASS"
-      - "acceptance_4: 四半期推移セクションあり — PASS"
-      - "acceptance_5: データソース/前提/リスク明記 — PASS"
-      - "acceptance_6: FY2020 standalone / FY2021+ consolidated 注記あり — PASS"
-      - "acceptance_7: md + html 両形式生成 — PASS"
-      - "tests: 492 passed, 5 skipped"
-    code_changes:
-      - "skills/financial-calculator/scripts/metrics.py (annual/quarterly対応、input-file対応)"
-      - "skills/financial-calculator/scripts/main.py (--input-file CLIオプション)"
-      - "skills/financial-reporter/scripts/render.py (四半期推移・注記・ソース)"
-      - "テスト更新 (test_metrics.py, test_cli_real_data.py)"
+      company_name: "コメ兵ホールディングス（修正済み、ISSUE-002解消）"
+      source_count: "17（integrated_financials.json期間数と一致）"
+      annual_metrics: "2件（FY2024, FY2025）"
+      quarterly_metrics: "15件（FY2021 Q3 ~ FY2026 Q2）"
+      key_metrics_fy2024: "ROE=18.18%, ROA=7.85%, OPM=6.24%, FCF=-37.6億"
+      key_metrics_fy2025: "ROE=15.22%, ROA=5.39%, OPM=3.88%, RevGrowth=+33.1%, FCF=-118.9億"
+      data_sources_in_report: "EDINET文書ID=12件, J-Quants=8件"
+      report_sections: "概要, 財務諸表種類, 分析期間方針, 主要指標, 通期推移, 四半期推移, データソース, 前提条件, リスク注意点"
+      number_format: "億円単位（--number-format oku_yen）"
+    quality_criteria_check:
+      company_name_not_unknown: true
+      roe_roa_opm_calculated: true
+      metrics_count_matches_integrated: true
+      data_sources_documented: true
+      assumptions_and_risks_stated: true
+      fy2019_2020_reference_noted: true
+      fy2026_in_progress_noted: true
     caveats:
-      - "FY2025 は Q1-Q3/H1 暫定データ"
-      - "FY2020 standalone, FY2021+ consolidated"
-      - "四半期データは累計値（Q1=3ヶ月, Q2=6ヶ月累計, Q3=9ヶ月累計）"
-    review_focus:
-      - "metrics.json の四半期指標が正しく算出されているか"
-      - "レポートの四半期推移セクションの可読性と正確性"
-      - "FY2025 provisional 注記の適切性"
-      - "FY2020 standalone / FY2021+ consolidated 注記の適切性"
-      - "データソース・前提・リスクの記載品質"
-      - "スキル拡張（calculator/reporter）が既存機能を壊していないか（492 passed）"
-      - "パイプライン全体（T1b→T2b→T3）の一貫性"
+      - "FY2021-FY2023通期データなし（有報未収集）→四半期推移で代替"
+      - "FY2024 Revenue Growth YoY=null（前年FY通期なし）"
+      - "FY2019-FY2020はintegrated対象外、参考値注記のみ"
+      - "FY2026は進行期（Q1-Q2半期）として注記"
 review_followup:
   request_id: null
   task_id: null

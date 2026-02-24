@@ -1,16 +1,16 @@
 review_response:
   request_type: deliverable_review_response
   review_type: deliverable
-  request_id: 'rev_T3_001'
-  task_id: 'T3_report_regeneration'
+  request_id: 'rev_20260226_T3'
+  task_id: 'T3_metrics_report'
   junior_id: 'junior3'
   verdict: 'ok'
   comments:
-    data_integrity: 'metrics.json は annual 5件・quarterly 18件でFY2025はQ1-Q3がprovisional=true、NaN/Infinityはなし。'
-    source_traceability: '各行にsource_detailsが残存し、reportはEDINET doc_idとJ-Quants開示日を表示して再現性を確保。'
-    analytical_validity: 'FY2023-2024のYOY比較・四半期推移・年度推移の算定ロジックは実データ上で一貫し、calculator/reporterの変更で整合している。'
-    clarity: '四半期推移、statement_type注記、暫定注記がmd/html双方に明記され、解釈に必要な前提が追いやすい。'
-    risk_disclosure: 'FY2020単体→FY2021+連結の切替、FY2025通期未確定・部分開示のリスクを前提・リスクとして明示済み。'
+    data_integrity: 'metricsはannual2件+quarterly15件でintegrated17件と整合、主要指標と期間扱いは妥当。'
+    source_traceability: 'metrics.json、integrated_financials.json、レポート内データソースセクション（EDINET doc_id/J-Quants開示日）が追跡可能。'
+    analytical_validity: 'FY2019-2020除外、FY2026進行期を注記し、通期不在年度は四半期累計で代替している。'
+    clarity: '分析方針、対象期間、前提条件、リスク注記が報告本文に明示されている。'
+    risk_disclosure: 'FY2021-2023年次データ未収集とFY2026進行期の比較制約を明確に開示している。'
   suggested_changes: []
   status: 'completed'
-  timestamp: '2026-02-24 21:44:03'
+  timestamp: '2026-02-24 22:38:18'
