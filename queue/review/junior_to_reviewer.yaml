@@ -1,12 +1,21 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: null
-  task_id: null
-  junior_id: null
-  status: idle
-  timestamp: ""
-  payload: null
+  request_id: "rev_T3_001"
+  task_id: "T3"
+  junior_id: "junior3"
+  status: pending
+  timestamp: "2026-02-24T20:52:00+09:00"
+  payload:
+    summary: |
+      全書類棚卸し・収集状況一覧を data/7685/inventory.md に作成完了。
+      書類総数30件（有報6+四半期報14+半期報2(有効)+決算短信8）。
+      EDINET開示マトリクス35セル、J-Quants決算短信マトリクス28セル、全セルにステータス記入済。
+      重複解決ルール適用済(S100TETK/S100Q7YR)。
+      欠損は全て理由明記、許容/要対応に分類済。
+    outputs:
+      - "data/7685/inventory.md"
+    report_file: "queue/reports/junior3_report.yaml"
 review_followup:
   request_id: null
   task_id: null

@@ -1,11 +1,16 @@
 review_response:
   request_type: deliverable_review_response
   review_type: deliverable
-  request_id: null
-  task_id: null
-  junior_id: null
-  verdict: null
-  comments: null
-  suggested_changes: null
-  status: idle
-  timestamp: ""
+  request_id: 'rev_T3_001'
+  task_id: 'T3'
+  junior_id: 'junior3'
+  verdict: 'ok'
+  comments:
+    data_integrity: '有報6件/四半期14件/半期2件/決算短信8件の棚卸しとセル充填は整合し、欠損理由と許容区分の対応付けが明瞭。'
+    source_traceability: 'T1/T2成果物と収集コマンド・再実行条件を明記し、追跡可能性は確保されている。'
+    analytical_validity: '重複解消規則(S100TETK/S100Q7YR/S100NXF7)を前提に統合方針を明示しており、後続パースの前提整合に有用。'
+    clarity: '対象期間・マトリクス・欠損リスト・要対応項目が網羅され、受入判断の根拠が読み取りやすい。'
+    risk_disclosure: 'FY2019有報とFY2019-22決算短信の非収集理由、FY2025未発表、S100NXF7期間特定未確定を明示し、受入時の留保条件が明記されている。'
+  suggested_changes: []
+  status: 'completed'
+  timestamp: '2026-02-24 20:21:51'

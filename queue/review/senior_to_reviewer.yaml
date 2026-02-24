@@ -1,1 +1,127 @@
-plan_review_request: null
+plan_review_request:
+  request_type: senior_plan_review
+  review_type: plan
+  plan_scope: senior_master_plan
+  plan_id: "plan_req_20260224_001_v2"
+  request_id: "req_20260224_001"
+  revision: 2
+  revision_note: "Reviewer指摘2件を反映: T1開始日変更+欠損許容条件追加、半期報告書収集フロー追加"
+  timestamp: "2026-02-24T20:05:00+09:00"
+
+  objective: "7685 BuySell Technologies の四半期報告書・半期報告書・決算短信を網羅的に収集する（IPO以降全期間）"
+  ticker: "7685"
+  edinet_code: "E35116"
+
+  background:
+    ipo_date: "2018-12-19"
+    fiscal_year_end: "12月"
+    quarterly_report_regime:
+      before_2024: "四半期報告書（Q1/Q2/Q3）をEDINETに提出"
+      from_2024: "四半期報告書制度廃止。半期報告書（H1）をEDINETに提出、四半期決算短信はTDnet/J-Quantsで開示"
+    existing_data:
+      yuho_xbrl: "18件 (data/7685/raw/edinet/*.zip)"
+      yuho_pdf: "5件 (data/7685/raw/edinet/shihanki_hokokusho/)"
+      jquants: "1件 (statements_2026-02-16.json)"
+      edinet_cache: "2021-01-01～2026-02-23 documents_*.json (約1900日分)"
+
+  task_decomposition:
+    - task_id: "T1"
+      assigned_to: junior1
+      title: "EDINET 四半期報告書 + 半期報告書 XBRL 収集"
+      parallel: true
+      description: |
+        EDINET API (E35116) から以下2種類の書類を収集する:
+        (A) 四半期報告書: 2018-12-19～2026-02-24（2024年度以降は存在しない想定）
+        (B) 半期報告書: 2024-01-01～2026-02-24（2024年度からの新制度対応）
+        disclosure-collector スキルを使用し、2コマンドを順次実行。
+      commands:
+        - step: "A: 四半期報告書"
+          command: >
+            python3 skills/disclosure-collector/scripts/main.py edinet E35116
+            --ticker 7685
+            --report-keyword "四半期報告書"
+            --start-date 2018-12-19
+            --end-date 2026-02-24
+        - step: "B: 半期報告書"
+          command: >
+            python3 skills/disclosure-collector/scripts/main.py edinet E35116
+            --ticker 7685
+            --report-keyword "半期報告書"
+            --start-date 2024-01-01
+            --end-date 2026-02-24
+      pre_steps:
+        - "既存 manifest.json を manifest_yuho_backup.json にコピー（上書き防止）"
+      post_steps:
+        - "Aの結果: manifest.json を manifest_quarterly.json にコピー"
+        - "Bの結果: manifest.json を manifest_semiannual.json にコピー"
+        - "manifest_yuho_backup.json を manifest.json に復元"
+      output_path: "data/7685/raw/edinet/"
+      expected_docs:
+        quarterly: "~15件（2019Q1～2023Q3、各年3四半期。2018年度Q3は上場直後で存在しない可能性あり）"
+        semiannual: "~1-2件（2024H1、2025H1が存在する可能性）"
+      gap_tolerance:
+        - "2018年度Q3（2018年10-12月期）: IPO直後のため四半期報告書が存在しない場合は許容"
+        - "2024Q1以降: 四半期報告書制度廃止のため存在しないのが正常"
+      quality_criteria:
+        - "A/Bそれぞれの matched_doc_count, downloaded_count, failed_count を報告"
+        - "failed_count = 0 を確認"
+        - "2019-2023の各Q1/Q2/Q3がカバーされていることを確認"
+        - "2024-2025の半期報告書(H1)の有無を確認"
+
+    - task_id: "T2"
+      assigned_to: junior2
+      title: "J-Quants 決算短信 収集"
+      parallel: true
+      description: |
+        J-Quants API から7685の決算短信データを最新収集。
+        既存ファイル(statements_2026-02-16.json)があるが、最新日付で再取得。
+      command: >
+        python3 skills/disclosure-collector/scripts/main.py jquants 7685
+      output_path: "data/7685/raw/jquants/"
+      expected_docs: "IPO以降の全四半期決算短信（約24-28件）"
+      quality_criteria:
+        - "record_count を報告"
+        - "最古レコードの決算期と最新レコードの決算期を報告"
+        - "期間内の欠損四半期を特定（特に2024年度以降の四半期決算短信を確認）"
+
+    - task_id: "T3"
+      assigned_to: junior3
+      title: "全書類棚卸し・収集状況一覧作成"
+      parallel: false
+      depends_on: ["T1", "T2"]
+      description: |
+        data/7685/ 配下の全書類を棚卸し、書類種別・期間・取得状況の一覧を作成。
+        T1(四半期報告書+半期報告書)とT2(決算短信)の成果物＋既存有価証券報告書データを統合分析。
+      input_files:
+        - "data/7685/raw/edinet/manifest_quarterly.json (T1-A結果)"
+        - "data/7685/raw/edinet/manifest_semiannual.json (T1-B結果)"
+        - "data/7685/raw/edinet/manifest.json (既存有価証券報告書)"
+        - "data/7685/raw/jquants/statements_2026-02-24.json (T2結果)"
+      output_path: "data/7685/inventory.md"
+      contents:
+        - "書類種別ごとの収集状況マトリクス（有価証券報告書、四半期報告書、半期報告書、決算短信）"
+        - "期間カバレッジ: 2019-2025の各年度・四半期の取得有無マトリクス"
+        - "欠損リスト: 取得できなかった期間、理由推定、許容/要対応の分類"
+        - "T1の gap_tolerance に基づく欠損の許容判定結果"
+        - "全収集コマンドの再現手順"
+      quality_criteria:
+        - "2019-2025の全期間をカバー"
+        - "書類種別×期間マトリクスの全セルに取得済/欠損(許容)/欠損(要対応)のステータスがあること"
+        - "再現コマンドが記載されていること"
+
+  quality_criteria:
+    - "四半期報告書: 2019Q1-2023Q3 全件収集（failed_count=0）"
+    - "半期報告書: 2024H1以降の存在確認と収集"
+    - "決算短信: IPO以降全四半期のデータを含むこと"
+    - "棚卸し: 書類種別×期間マトリクスで100%カバレッジまたは欠損理由明示"
+    - "再現性: 全収集コマンドが inventory.md に記録"
+
+  race_condition_prevention:
+    - "T1: data/7685/raw/edinet/ のみ書き込み"
+    - "T2: data/7685/raw/jquants/ のみ書き込み"
+    - "T3: data/7685/inventory.md のみ書き込み（T1/T2完了後に実行）"
+
+  risk_notes:
+    - "EDINET API rate limit: 2018-12-19～2020-12-31分（約740日）は未キャッシュのため新規取得が必要。API制限に留意"
+    - "2024年度以降: 四半期報告書は存在せず、半期報告書が代替。半期報告書が見つからない場合は提出遅延の可能性も考慮"
+    - "J-Quants API: リフレッシュトークンの有効性を事前確認すること"
