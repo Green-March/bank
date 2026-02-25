@@ -488,5 +488,65 @@ class DisclosureParserTests(unittest.TestCase):
             self.assertIn("differ", result.stderr)
 
 
+    def test_total_liabilities_fallback_from_components(self) -> None:
+        """current_liabilities + noncurrent_liabilities → total_liabilities フォールバック"""
+        xbrl = """<?xml version="1.0" encoding="UTF-8"?>
+<xbrl
+  xmlns="http://www.xbrl.org/2003/instance"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+  xmlns:jppfs_cor="http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2023-03-31/jppfs_cor">
+  <context id="CurrentYearInstant">
+    <entity><identifier scheme="http://disclosure.edinet-fsa.go.jp">E99999</identifier></entity>
+    <period><instant>2024-03-31</instant></period>
+  </context>
+  <unit id="JPY"><measure>iso4217:JPY</measure></unit>
+  <jppfs_cor:CurrentLiabilities contextRef="CurrentYearInstant" unitRef="JPY">300</jppfs_cor:CurrentLiabilities>
+  <jppfs_cor:NoncurrentLiabilities contextRef="CurrentYearInstant" unitRef="JPY">700</jppfs_cor:NoncurrentLiabilities>
+  <jppfs_cor:TotalAssets contextRef="CurrentYearInstant" unitRef="JPY">2000</jppfs_cor:TotalAssets>
+  <jppfs_cor:NetAssets contextRef="CurrentYearInstant" unitRef="JPY">1000</jppfs_cor:NetAssets>
+</xbrl>"""
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = Path(tmp) / "S100COMP.zip"
+            _create_sample_zip(zip_path, xbrl_body=xbrl)
+            parsed = disclosure_parser.parse_edinet_zip(zip_path, ticker="9999")
+            period = parsed.periods[0]
+            self.assertEqual(period.bs["total_liabilities"], 1000)
+            self.assertIn("total_liabilities", period._calculated_fields)
+
+    def test_total_liabilities_fallback_components_preferred_over_assets_minus_net(self) -> None:
+        """両方計算可能な場合に current+noncurrent が total_assets-net_assets より優先される"""
+        xbrl = """<?xml version="1.0" encoding="UTF-8"?>
+<xbrl
+  xmlns="http://www.xbrl.org/2003/instance"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+  xmlns:jppfs_cor="http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2023-03-31/jppfs_cor">
+  <context id="CurrentYearInstant">
+    <entity><identifier scheme="http://disclosure.edinet-fsa.go.jp">E99999</identifier></entity>
+    <period><instant>2024-03-31</instant></period>
+  </context>
+  <unit id="JPY"><measure>iso4217:JPY</measure></unit>
+  <jppfs_cor:CurrentLiabilities contextRef="CurrentYearInstant" unitRef="JPY">300</jppfs_cor:CurrentLiabilities>
+  <jppfs_cor:NoncurrentLiabilities contextRef="CurrentYearInstant" unitRef="JPY">700</jppfs_cor:NoncurrentLiabilities>
+  <jppfs_cor:TotalAssets contextRef="CurrentYearInstant" unitRef="JPY">5000</jppfs_cor:TotalAssets>
+  <jppfs_cor:NetAssets contextRef="CurrentYearInstant" unitRef="JPY">3000</jppfs_cor:NetAssets>
+</xbrl>"""
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = Path(tmp) / "S100PREF.zip"
+            _create_sample_zip(zip_path, xbrl_body=xbrl)
+            parsed = disclosure_parser.parse_edinet_zip(zip_path, ticker="9999")
+            period = parsed.periods[0]
+            # current+noncurrent = 300+700 = 1000 が優先 (total_assets-net_assets = 2000 ではない)
+            self.assertEqual(period.bs["total_liabilities"], 1000)
+            self.assertIn("total_liabilities", period._calculated_fields)
+
+    def test_noncurrent_liabilities_alias_maps_correctly(self) -> None:
+        """NoncurrentLiabilities → noncurrent_liabilities マッピング確認"""
+        canonical = disclosure_parser.canonical_key_for_concept("NoncurrentLiabilities")
+        self.assertEqual(canonical, "noncurrent_liabilities")
+
+        canonical2 = disclosure_parser.canonical_key_for_concept("FixedLiabilities")
+        self.assertEqual(canonical2, "noncurrent_liabilities")
+
+
 if __name__ == "__main__":
     unittest.main()

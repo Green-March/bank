@@ -1,16 +1,16 @@
 review_response:
   request_type: deliverable_review_response
   review_type: deliverable
-  request_id: 'rev_req025_T2_002'
-  task_id: 'T2_comparison_report'
-  junior_id: 'junior2'
+  request_id: 'rev_026_02'
+  task_id: 'task_026'
+  junior_id: 'junior1'
   verdict: 'ok'
   comments:
-    data_integrity: '修正により比較単位・指標定義・データ源と期間が明記され、層別化前提下で再現性が担保されている。'
-    source_traceability: '§0b比較表で銘柄別データセット、欠測条件、取得時期が追跡可能となり、検証時系列の辿りやすさが向上した。'
-    analytical_validity: '自動完走/回復完走/未完走で比較軸を分離し、因果分析と限界記載で評価バイアスが低減されている。'
-    clarity: '品質要件（3層別化・欠測影響表・汎用性結論）に対応し、判断根拠が報告本文で構造化されている。'
-    risk_disclosure: '比較の限界（暫定データ、未完走データの推定性）を明記し、意思決定上の影響を明確化している。'
+    data_integrity: 'None 回帰ケースを追加し、既存13 + 追加31 + 計44 テスト構成の整合性を確認しました。'
+    source_traceability: '修正は skills/disclosure-parser/tests/test_context_priority.py に集約され、前回差分の2点(件数/None)に対応しています。'
+    analytical_validity: 'context_priority の主要分岐は既存ロジックと整合し、追加ケースも意図どおり既存仕様上で再現性高く検証されています。'
+    clarity: 'テスト名・サブテスト・注釈が明快で、None ハンドリング方針（例外を許容）まで読み取り可能です。'
+    risk_disclosure: 'None 入力の扱いを例外化で固定する設計なので、仕様変更時は戻り値仕様の変更に注意が必要です。'
   suggested_changes: []
   status: 'completed'
-  timestamp: '2026-02-25 21:41:52'
+  timestamp: '2026-02-25 22:57:07'

@@ -162,23 +162,34 @@ def validate_key_coverage(
         keys = req.get("keys", [])
         min_required = req.get("min_required", 1)
 
+        # Filter to periods where at least one check-target key is non-null
+        # (excludes stub periods that only hold unrelated instant values)
+        relevant = [
+            p for p in periods
+            if any(p.get(section, {}).get(k) is not None for k in keys)
+        ]
+        total_periods = len(relevant)
+
         coverage: dict[str, int] = {}
         for key in keys:
             non_null = sum(
-                1 for p in periods
+                1 for p in relevant
                 if p.get(section, {}).get(key) is not None
             )
             coverage[key] = non_null
 
-        # Count how many keys are non-null in ALL periods
-        total_periods = len(periods)
-        all_period_keys = sum(1 for k in keys if coverage.get(k, 0) == total_periods)
-        section_pass = all_period_keys >= min_required
+        if total_periods == 0:
+            section_pass = False
+            all_period_keys = 0
+        else:
+            all_period_keys = sum(1 for k in keys if coverage.get(k, 0) == total_periods)
+            section_pass = all_period_keys >= min_required
 
         detail[section] = {
             "pass": section_pass,
             "all_period_keys": all_period_keys,
             "min_required": min_required,
+            "total_periods": total_periods,
             "coverage": coverage,
         }
 

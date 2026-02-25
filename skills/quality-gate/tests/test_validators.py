@@ -675,3 +675,87 @@ class TestKeyCoverageEmptyPeriods:
         assert result.detail["bs"]["pass"] is False
         assert result.detail["bs"]["all_period_keys"] == 0
         assert result.detail["pl"]["pass"] is False
+
+
+# ---------------------------------------------------------------------------
+# test_validate_key_coverage: stub period handling
+# ---------------------------------------------------------------------------
+
+class TestKeyCoverageStubPeriods:
+    """validate_key_coverage must exclude stub periods from relevant count."""
+
+    def test_key_coverage_stub_period_excluded(self):
+        """Stub period (bs all null) + 3 normal periods -> all_period_keys=3."""
+        stub = {
+            "period_end": "2021-01-31",
+            "bs": {"total_assets": None, "total_liabilities": None, "total_equity": None},
+            "pl": {"revenue": None, "operating_income": None, "net_income": None},
+            "cf": {},
+        }
+        normal = _make_periods(3)
+        periods = [stub] + normal
+        requirements = {
+            "bs": {"keys": ["total_assets", "total_liabilities", "total_equity"], "min_required": 3},
+        }
+        result = validate_key_coverage(periods, requirements)
+        assert result.gate_pass is True
+        assert result.detail["bs"]["all_period_keys"] == 3
+        assert result.detail["bs"]["total_periods"] == 3
+
+    def test_key_coverage_all_stub_periods_fails(self):
+        """All periods are stubs -> section_pass = False."""
+        stubs = [
+            {
+                "period_end": f"2021-0{i+1}-31",
+                "bs": {"total_assets": None, "total_liabilities": None, "total_equity": None},
+            }
+            for i in range(3)
+        ]
+        requirements = {
+            "bs": {"keys": ["total_assets", "total_liabilities", "total_equity"], "min_required": 1},
+        }
+        result = validate_key_coverage(stubs, requirements)
+        assert result.gate_pass is False
+        assert result.detail["bs"]["pass"] is False
+        assert result.detail["bs"]["all_period_keys"] == 0
+        assert result.detail["bs"]["total_periods"] == 0
+
+    def test_key_coverage_mixed_sections_different_relevant_counts(self):
+        """bs has 4 relevant periods, cf has 3 relevant periods."""
+        periods = [
+            {
+                "period_end": "2021-01-31",
+                "bs": {"total_assets": 1000, "net_assets": 500},
+                "cf": {},  # stub for cf
+            },
+            *[
+                {
+                    "period_end": f"2024-03-{i+1:02d}",
+                    "bs": {"total_assets": 100_000 * (i+1), "net_assets": 40_000 * (i+1)},
+                    "cf": {"operating_cf": 8_000 * (i+1), "investing_cf": -2_000 * (i+1)},
+                }
+                for i in range(3)
+            ],
+        ]
+        requirements = {
+            "bs": {"keys": ["total_assets", "net_assets"], "min_required": 2},
+            "cf": {"keys": ["operating_cf", "investing_cf"], "min_required": 2},
+        }
+        result = validate_key_coverage(periods, requirements)
+        assert result.gate_pass is True
+        assert result.detail["bs"]["total_periods"] == 4
+        assert result.detail["cf"]["total_periods"] == 3
+        assert result.detail["bs"]["all_period_keys"] == 2
+        assert result.detail["cf"]["all_period_keys"] == 2
+
+    def test_key_coverage_detail_includes_total_periods(self):
+        """detail must include total_periods field."""
+        periods = _make_periods(2)
+        requirements = {
+            "bs": {"keys": ["total_assets"], "min_required": 1},
+            "pl": {"keys": ["revenue"], "min_required": 1},
+        }
+        result = validate_key_coverage(periods, requirements)
+        for section in ("bs", "pl"):
+            assert "total_periods" in result.detail[section]
+            assert result.detail[section]["total_periods"] == 2

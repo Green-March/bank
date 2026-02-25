@@ -1,17 +1,43 @@
 queue:
-  - request_id: "req_20260225_025"
-    objective: "9743 丹青社のフルパイプライン実行 — ticker-resolve → disclosure-collect → disclosure-parse → financial-integrate → financial-calculate → comparable-analyze → financial-report の7ステップを pipeline-runner で一括実行し、汎用性を検証する"
-    ticker: "9743"
+  - request_id: "req_20260225_026"
+    objective: "context_priority() 回帰テストを追加する。Reviewer からの過去フィードバックに基づき、context-checkpoint スキルの context_priority() 関数に対する回帰テストを作成・追加する"
+    ticker: null
     universe: null
-    analysis_type: "full_pipeline"
-    timeframe: "available"
-    output_format: ["md", "html"]
+    analysis_type: "skill_improvement"
+    timeframe: null
+    output_format: ["py"]
     priority: "high"
     due_date: "2026-02-25"
     constraints:
-      - "pipeline-runner の example_pipeline.yaml (7ステップ) を使用すること"
-      - "--vars ticker=9743 のみで全パイプライン実行可能であることを検証"
-      - "fye_month は ticker-resolver の output_vars で自動供給されることを確認"
-      - "利用データソースを明記する"
-      - "前提とリスクを明示する"
-      - "過去2銘柄 (2780, 7685) との違い・新たな知見があれば記録する"
+      - "既存テストとの整合性を保つ"
+      - "エッジケース（空入力、重複、境界値）を網羅する"
+      - "pytest で実行可能であること"
+
+  - request_id: "req_20260225_027"
+    objective: "disclosure-parser の total_liabilities フォールバック計算を実装する。XBRL パース時に total_liabilities が直接取得できない場合、他の負債項目（流動負債 + 固定負債等）から算出するフォールバックロジックを追加する"
+    ticker: null
+    universe: null
+    analysis_type: "skill_improvement"
+    timeframe: null
+    output_format: ["py"]
+    priority: "medium"
+    due_date: "2026-02-25"
+    constraints:
+      - "既存のパースロジックを壊さない"
+      - "フォールバック使用時はログに記録する"
+      - "テストを追加する"
+
+  - request_id: "req_20260225_028"
+    objective: "quality-gate の all_period_keys ロジックを修正する。現在パイプラインでバイパスされている all_period_keys チェックを、EDINET 3期データなど短期間データでも正しく動作するように修正する"
+    ticker: null
+    universe: null
+    analysis_type: "skill_improvement"
+    timeframe: null
+    output_format: ["py"]
+    priority: "medium"
+    due_date: "2026-02-25"
+    constraints:
+      - "3期分データでもパスするようロジックを調整する"
+      - "既存のバリデーション精度を下げない"
+      - "テストを追加する"
+      - "修正後、パイプラインからバイパスを除去可能であることを確認する"

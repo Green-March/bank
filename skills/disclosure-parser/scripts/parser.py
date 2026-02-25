@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import json
+import logging
 from pathlib import Path
 import re
 from typing import Iterable, cast
@@ -12,12 +13,15 @@ import zipfile
 
 from lxml import etree
 
+logger = logging.getLogger(__name__)
+
 BS_KEYS: tuple[str, ...] = (
     "total_assets",
     "current_assets",
     "noncurrent_assets",
     "total_liabilities",
     "current_liabilities",
+    "noncurrent_liabilities",
     "total_equity",
     "net_assets",
 )
@@ -43,6 +47,7 @@ CONCEPT_ALIASES: dict[str, tuple[str, ...]] = {
     "noncurrent_assets": ("noncurrentassets", "fixedassets"),
     "total_liabilities": ("totalliabilities", "liabilitiestotal", "liabilities"),
     "current_liabilities": ("currentliabilities",),
+    "noncurrent_liabilities": ("noncurrentliabilities", "fixedliabilities"),
     "total_equity": (
         "totalequity",
         "shareholdersequity",
@@ -73,6 +78,7 @@ CONCEPT_TO_STATEMENT: dict[str, str] = {
     "noncurrent_assets": "bs",
     "total_liabilities": "bs",
     "current_liabilities": "bs",
+    "noncurrent_liabilities": "bs",
     "total_equity": "bs",
     "net_assets": "bs",
     "revenue": "pl",
@@ -168,6 +174,15 @@ class PeriodFinancial:
                 self.bs["total_assets"] = current + noncurrent
                 self._calculated_fields.add("total_assets")
 
+        # BS fallback — total_liabilities = current_liabilities + noncurrent_liabilities
+        if self.bs.get("total_liabilities") is None:
+            current = self.bs.get("current_liabilities")
+            noncurrent = self.bs.get("noncurrent_liabilities")
+            if current is not None and noncurrent is not None:
+                self.bs["total_liabilities"] = current + noncurrent
+                self._calculated_fields.add("total_liabilities")
+                logger.info("total_liabilities calculated from current + noncurrent liabilities")
+
         # BS fallback — total_liabilities = total_assets - net_assets
         if self.bs.get("total_liabilities") is None:
             total_assets = self.bs.get("total_assets")
@@ -175,6 +190,7 @@ class PeriodFinancial:
             if total_assets is not None and net_assets is not None:
                 self.bs["total_liabilities"] = total_assets - net_assets
                 self._calculated_fields.add("total_liabilities")
+                logger.info("total_liabilities calculated from total_assets - net_assets")
 
         operating_cf = self.cf["operating_cf"]
         investing_cf = self.cf["investing_cf"]

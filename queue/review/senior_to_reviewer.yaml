@@ -2,61 +2,138 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_req025_9743_full_pipeline"
-  request_id: "req_20260225_025"
-  timestamp: "2026-02-25T19:00:00+09:00"
-  objective: "9743 丹青社のフルパイプライン実行 — pipeline-runner の example_pipeline.yaml (7ステップ) を --vars ticker=9743 のみで一括実行し、汎用性を検証する"
-  background: |
-    pipeline-runner は過去に 2780, 7685 で実行済み。今回は 9743（丹青社）を対象に、
-    resolve → collect → parse → integrate → calculate → inventory → report の
-    7ステップパイプラインを実行し、新しい銘柄でも --vars ticker=XXXX のみで
-    全パイプラインが自動完走することを検証する。
-    fye_month は resolve ステップの output_vars から自動供給されることも確認ポイント。
-  task_decomposition:
-    - task_id: "T1_pipeline_execution"
-      assignee: "junior1"
+  plan_id: "plan_20260225_026_028"
+  timestamp: "2026-02-25T22:45:00+09:00"
+  source_requests:
+    - req_20260225_026
+    - req_20260225_027
+    - req_20260225_028
+
+  overview: |
+    Manager から 3件のスキル改善タスクを受領。
+    全件独立タスクのため 3 Junior に並列割り当て可能。
+
+  tasks:
+    - task_id: "task_026"
+      request_id: "req_20260225_026"
+      assign_to: junior1
+      objective: "context_priority() 回帰テストを追加する"
       description: |
-        9743 丹青社のフルパイプライン実行と検証:
-        1. pipeline-runner で example_pipeline.yaml を実行
-           コマンド: python3 skills/pipeline-runner/scripts/main.py run \
-             --pipeline skills/pipeline-runner/references/example_pipeline.yaml \
-             --vars ticker=9743 \
-             --log data/9743/logs/pipeline_run.json
-        2. 検証項目:
-           - --vars ticker=9743 のみで全7ステップが完走するか
-           - resolve ステップの output_vars (fye_month, edinet_code, company_name) が後続ステップに正しく伝搬されるか
-           - 各ステップの成果物が data/9743/ 配下に正しく生成されるか
-        3. 成果物ドキュメント作成:
-           - 利用データソース一覧（EDINET, J-Quants 等）
-           - 前提条件とリスクの明示
-           - パイプライン実行ログの確認と要約
-      output_path: "data/9743/"
-      priority: "high"
-    - task_id: "T2_comparison_report"
-      assignee: "junior2"
-      depends_on: ["T1_pipeline_execution"]
+        skills/disclosure-parser/tests/test_context_priority.py に回帰テストを追加。
+        既存12テストケースを補完し、以下のエッジケースを網羅する:
+        1. 空文字列・None入力のハンドリング（既存の test_empty_string を拡張）
+        2. 大文字小文字混在パターン（"CURRENTyearDURATION" 等）
+        3. 重複キーワードを含むコンテキストID（"CurrentYearDuration_CurrentYearInstant" 等）
+        4. 境界値テスト: スコアが0になるパターンの網羅
+        5. 全修飾子の組み合わせ（current + nonconsolidated + prior 等の競合ケース）
+        6. Reviewer 過去指摘の回帰防止: nonconsolidated 部分文字列マッチの誤判定防止確認
+      files:
+        - "skills/disclosure-parser/scripts/parser.py (参照のみ: context_priority 関数 L277-307)"
+        - "skills/disclosure-parser/tests/test_context_priority.py (編集対象)"
+      quality_criteria:
+        - "pytest で全テストが pass すること"
+        - "既存テストとの整合性 (テストクラス構造を維持)"
+        - "各テストケースに assert の根拠コメントを付与"
+      priority: high
+
+    - task_id: "task_027"
+      request_id: "req_20260225_027"
+      assign_to: junior2
+      objective: "disclosure-parser の total_liabilities フォールバック計算を強化する"
       description: |
-        9743 の実行結果と過去2銘柄 (2780, 7685) の比較分析:
-        1. data/9743/reports/ の最終レポートを確認
-        2. 過去のパイプライン実行結果 (data/2780/, data/7685/) と比較
-        3. 記録事項:
-           - パイプライン動作の違い（エラー、スキップ、データ不足等）
-           - 財務指標の特徴的な差異
-           - pipeline-runner 汎用性に関する新たな知見
-        4. 比較レポートを data/9743/reports/comparison_notes.md に出力
-      output_path: "data/9743/reports/comparison_notes.md"
-      priority: "medium"
-  quality_criteria:
-    - "パイプライン全7ステップが status: completed で完走すること"
-    - "output_vars (fye_month, edinet_code, company_name) が正しく伝搬されていること"
-    - "--vars ticker=9743 のみで実行可能（追加の手動変数指定不要）であること"
-    - "data/9743/ 配下に成果物（resolved, raw, parsed, integrated, reports）が生成されること"
-    - "利用データソース・前提・リスクが明記されていること"
-    - "過去2銘柄との比較分析が記録されていること"
+        skills/disclosure-parser/scripts/parser.py の PeriodFinancial クラスに
+        total_liabilities のフォールバック計算を追加・強化する。
+
+        現状のフォールバック (L171-177):
+          total_liabilities = total_assets - net_assets
+
+        追加するフォールバック (優先度高、上記より前に実行):
+          total_liabilities = current_liabilities + noncurrent_liabilities
+
+        実装手順:
+        1. CONCEPT_ALIASES に noncurrent_liabilities を追加:
+           "noncurrent_liabilities": ("noncurrentliabilities", "fixedliabilities")
+        2. BS_KEYS に noncurrent_liabilities を追加
+        3. CONCEPT_TO_STATEMENT に noncurrent_liabilities: "bs" を追加
+        4. PeriodFinancial.__init__() の bs dict に noncurrent_liabilities: None を追加
+        5. PeriodFinancial.finalize() を修正:
+           - 既存の total_assets - net_assets フォールバックの前に
+             current_liabilities + noncurrent_liabilities フォールバックを挿入
+           - フォールバック使用時は logger.info() でログ出力
+           - _calculated_fields への記録は維持
+        6. テスト追加 (skills/disclosure-parser/tests/test_parser.py):
+           - test_total_liabilities_fallback_from_components:
+             current_liabilities=300, noncurrent_liabilities=700 → total_liabilities=1000
+           - test_total_liabilities_fallback_components_preferred_over_assets_minus_net:
+             両方計算可能な場合に current+noncurrent が優先されることを確認
+           - test_noncurrent_liabilities_alias_maps_correctly:
+             XBRL概念名からの正しいマッピング確認
+      files:
+        - "skills/disclosure-parser/scripts/parser.py (編集対象)"
+        - "skills/disclosure-parser/tests/test_parser.py (編集対象)"
+      quality_criteria:
+        - "既存テスト全 pass"
+        - "フォールバック使用時にログ出力されること"
+        - "既存の total_assets - net_assets フォールバックが引き続き動作すること"
+      priority: medium
+
+    - task_id: "task_028"
+      request_id: "req_20260225_028"
+      assign_to: junior3
+      objective: "quality-gate の all_period_keys ロジックを修正する"
+      description: |
+        skills/quality-gate/scripts/validators.py の validate_key_coverage() を修正。
+
+        現在のバグ:
+          EDINET 3-4期データの場合、period_index に stub 期間（instant のみ、
+          net_assets しかない）が含まれる。total_periods にこの stub が含まれるため、
+          coverage[key]=4 でも total_periods=5 となり all_period_keys=0 になる。
+          実データ (9743): period[0] は 2021-01-31 instant で net_assets のみ。
+
+        修正方針:
+          各セクション (bs/pl/cf) の key_coverage 評価時に、当該セクションの
+          チェック対象キーのうち1つ以上が非nullである期間のみを relevant_periods
+          としてカウントする。stub期間（当該セクションのチェック対象キーが全てnull）
+          は total_periods から除外する。
+
+        実装手順:
+        1. validators.py L161-176 の validate_key_coverage() を修正:
+           - 各セクションのループ内で、まず relevant_periods を算出:
+             relevant = [p for p in periods
+                         if any(p.get(section, {}).get(k) is not None for k in keys)]
+             total_periods = len(relevant)  # セクションごとに計算
+           - total_periods == 0 の場合は section_pass = False とする
+           - coverage の計算も relevant periods に対して行う
+        2. detail に "total_periods" フィールドを追加して透明性を確保
+        3. テスト追加 (skills/quality-gate/tests/test_validators.py):
+           - test_key_coverage_stub_period_excluded:
+             stub期間 (bs全null) + 通常3期間 → all_period_keys が正しくカウント
+           - test_key_coverage_all_stub_periods_fails:
+             全期間が stub → section_pass = False
+           - test_key_coverage_mixed_sections_different_relevant_counts:
+             bs は 4 relevant、cf は 3 relevant のケースで各セクション独立計算確認
+        4. parse_gate_results.json を削除するか、修正後の結果で更新する
+           (パイプラインからバイパスを除去可能であることの確認)
+      files:
+        - "skills/quality-gate/scripts/validators.py (編集対象)"
+        - "skills/quality-gate/tests/test_validators.py (編集対象)"
+      quality_criteria:
+        - "既存テスト全 pass"
+        - "9743 実データで all_period_keys > 0 となること"
+        - "stub 期間が3期以上ある極端ケースでも正しく動作すること"
+        - "修正後にパイプラインからバイパスを除去可能であること"
+      priority: medium
+
+  parallelization:
+    strategy: "3 Junior 完全並列"
+    rationale: "3件は完全に独立 (異なるスキル/ファイル) のため同時実行可能。レースコンディションなし。"
+    assignments:
+      junior1: task_026
+      junior2: task_027
+      junior3: task_028
+
   risk_assessment:
-    - risk: "9743 が EDINET に登録されていない、またはキャッシュに存在しない可能性"
-      mitigation: "resolve ステップで失敗した場合、ticker-resolver のキャッシュ更新 (update --force) を実施"
-    - risk: "EDINET API や J-Quants API のレート制限・一時障害"
-      mitigation: "market-data-collector のリトライ機能を活用。それでも失敗する場合はログに記録し報告"
-    - risk: "丹青社の開示書類フォーマットが既存パーサーに非対応"
-      mitigation: "parse ステップの quality gate で検出。失敗時はログに記録し、対応策を提案"
+    - risk: "req_028 の修正が既存の key_coverage テストを破壊する可能性"
+      mitigation: "既存テストは total_periods == len(periods) 前提。stub のないテストデータでは relevant == total なので既存テストは影響なし"
+    - risk: "req_027 の noncurrent_liabilities 追加が BS_KEYS 変更を伴い、他箇所に影響する可能性"
+      mitigation: "BS_KEYS はスキーマ定義のみ。下流の quality-gate default_gates.yaml は bs.keys に total_assets/total_liabilities/total_equity のみ指定しており noncurrent_liabilities は含まない"
