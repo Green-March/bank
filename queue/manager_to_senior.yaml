@@ -1,60 +1,69 @@
 queue:
-  - request_id: "req_20260225_005"
-    objective: "period_index calculated_fields 伝播修正 — disclosure-parser の build_period_index() が calculated_fields メタデータを落としている問題を修正する。Session 18 の Reviewer 指摘事項。修正量は約10行と軽微"
+  - request_id: "req_20260225_009"
+    objective: "quality-gate の period_index キー不整合修正。validators.py が financials.get('period_index', []) を参照しているが、実際のキーは documents[].periods。null_rate と key_coverage ゲートが空リストに対して評価され品質保証が形骸化している。validate_value_range() も最初の period のみから concept_section を構築しているため Q1/Q3 で CF がスキップされる。キー名修正 + 全 period 走査 + テスト追加"
     ticker: null
     universe: null
     analysis_type: "skill_fix"
     timeframe: null
-    output_format: null
+    output_format: ["py", "test"]
     priority: "high"
     due_date: "2026-02-25"
     constraints:
-      - "disclosure-parser の build_period_index() を修正し calculated_fields を period_index に伝播させる"
-      - "既存テスト121件が全PASS維持であること"
-      - "回帰テストを追加すること"
+      - "validators.py のキー参照を documents[].periods に修正"
+      - "validate_value_range() を全 period 走査に変更"
+      - "修正後 pytest 全件 PASS を確認"
 
-  - request_id: "req_20260225_006"
-    objective: "レポートリセット自動化ガード — Senior のタスク割り当て前に queue/reports/junior{N}_report.yaml をリセットする義務を、スクリプトで強制する仕組みを作成する。リセット忘れによる成果物レビューフロー破綻を防止"
+  - request_id: "req_20260225_010"
+    objective: "senior.md ゴースト参照3件修正。(1) scripts/send_clear_reinit.sh → 正しくは templates/senior_clear_junior.sh に修正 (2) queue/review/junior_plan_to_reviewer.yaml / reviewer_to_junior_plan.yaml の実在しない孤立サブフローの記述を削除 (3) send-keys 3ステップ法（sleep 2 + capture-pane）を CLAUDE.md の2ステップ法（sleep 1）と整合させる"
     ticker: null
     universe: null
     analysis_type: "workflow_fix"
     timeframe: null
-    output_format: null
+    output_format: ["md"]
     priority: "medium"
     due_date: "2026-02-25"
     constraints:
-      - "templates/ 配下にリセットスクリプトを作成する"
-      - "go.sh の reset 処理（行154-163）と同一テンプレートでリセットすること"
-      - "Senior がタスク割り当て時にこのスクリプトを呼ぶだけで済む設計にする"
-      - "CLAUDE.md のワークフロー記載と整合させる"
+      - "senior.md の実在しないパス参照をすべて修正"
+      - "CLAUDE.md の send-keys ルールとの整合性を確認"
+      - "孤立サブフローの記述を削除"
 
-  - request_id: "req_20260225_007"
-    objective: "inventory-builder manifest 型異常入力テスト追加 — Reviewer 指摘の残件。manifest.json の型異常（null、空配列、不正な型）に対する防御テストを追加する"
+  - request_id: "req_20260225_011"
+    objective: "senior_clear_junior.sh 堅牢化。(1) 非アトミック書き込み（cat > heredoc）を mktemp+mv に変更 (2) Junior番号を正規表現で抽出している箇所を明示的引数に変更。senior_reset_report.sh の実装パターン（mktemp+mv + trap cleanup + 引数バリデーション）を参考にする"
     ticker: null
     universe: null
-    analysis_type: "test_addition"
+    analysis_type: "workflow_fix"
     timeframe: null
-    output_format: null
+    output_format: ["sh"]
     priority: "medium"
     due_date: "2026-02-25"
     constraints:
-      - "manifest.json が null, 空配列, 不正な型, キー欠損などの異常入力をテスト"
-      - "既存テストが全PASS維持であること"
-      - "エラー時の適切なエラーメッセージまたはフォールバック動作を確認"
+      - "mktemp+mv によるアトミック書き込みに変更"
+      - "Junior番号は明示的引数で受け取る"
+      - "senior_reset_report.sh のパターンに合わせる"
 
-  - request_id: "req_20260225_008"
-    objective: "comparable-analyzer スキル新規作成 — 業種コードから比較企業群を自動選定し、財務指標ベンチマーク比較を行うスキルを開発する。単独分析から相対分析への拡張"
+  - request_id: "req_20260225_012"
+    objective: "CLAUDE.md Dashboard セクション補完 + 行番号修正。(1) Dashboard sections リストに '## In Progress' セクションが欠落しているので追加 (2) go.sh レポートリセットの行番号参照「行154-163」を実際の行番号に修正"
     ticker: null
     universe: null
-    analysis_type: "new_skill"
+    analysis_type: "doc_fix"
     timeframe: null
-    output_format: null
-    priority: "medium"
+    output_format: ["md"]
+    priority: "low"
     due_date: "2026-02-25"
     constraints:
-      - "J-Quants の上場銘柄一覧APIまたはEDINET提出者一覧CSVから業種コードを取得"
-      - "同一業種の企業群を自動選定（最大10社程度）"
-      - "financial-calculator の指標（ROE/ROA/margin/growth）で比較マトリクスを生成"
-      - "CLI: python3 skills/comparable-analyzer/scripts/main.py --ticker XXXX"
-      - "SKILL.md, scripts/main.py, scripts/analyzer.py, tests/ を作成"
-      - "既存スキル（ticker-resolver, financial-calculator）との連携を活用"
+      - "go.sh の実際の行番号を確認して記載を修正"
+      - "Dashboard sections に In Progress を追加"
+
+  - request_id: "req_20260225_013"
+    objective: "inventory-builder エントリポイント不整合修正。エントリポイントは builder.py だが SKILL.md と生成される inventory.md 内の再現コマンドが scripts/main.py を参照している。(1) SKILL.md の CLI 使用例を builder.py に修正するか、または (2) main.py をエントリポイントとして新規作成して builder.py をモジュールとしてインポートする方式にする。他スキル（financial-integrator, comparable-analyzer 等）と同様に main.py + モジュール構成が推奨"
+    ticker: null
+    universe: null
+    analysis_type: "skill_fix"
+    timeframe: null
+    output_format: ["py", "md"]
+    priority: "low"
+    due_date: "2026-02-25"
+    constraints:
+      - "他スキルとの構成統一を優先（main.py + モジュール構成推奨）"
+      - "SKILL.md と生成 inventory.md 内のコマンドを実際のエントリポイントと整合"
+      - "修正後 pytest 全件 PASS を確認"

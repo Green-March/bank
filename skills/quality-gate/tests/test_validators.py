@@ -22,6 +22,7 @@ from validators import (
     NullRateResult,
     RangeResult,
     SchemaResult,
+    extract_periods,
     load_financials,
     run_all_gates,
     validate_file_exists,
@@ -501,3 +502,176 @@ class TestLoadFinancials:
         with tempfile.TemporaryDirectory() as tmpdir:
             result = load_financials(Path(tmpdir))
             assert result is None
+
+
+# ---------------------------------------------------------------------------
+# test_extract_periods (fallback logic)
+# ---------------------------------------------------------------------------
+
+class TestExtractPeriods:
+    """Tests for extract_periods fallback from documents[].periods."""
+
+    def test_period_index_present(self):
+        periods = _make_periods(2)
+        financials = {"period_index": periods}
+        result = extract_periods(financials)
+        assert len(result) == 2
+        assert result[0]["period_end"] == "2024-03-01"
+
+    def test_period_index_empty_fallback_to_documents(self):
+        """period_index is empty; should fall back to documents[].periods."""
+        doc_periods = _make_periods(2)
+        financials = {
+            "period_index": [],
+            "documents": [
+                {"doc_id": "E00001", "periods": doc_periods},
+            ],
+        }
+        result = extract_periods(financials)
+        assert len(result) == 2
+        assert result[0]["bs"]["total_assets"] == 100_000
+
+    def test_period_index_missing_fallback_to_documents(self):
+        """period_index key missing entirely; should fall back."""
+        doc_periods = _make_periods(1)
+        financials = {
+            "documents": [
+                {"doc_id": "E00001", "periods": doc_periods},
+            ],
+        }
+        result = extract_periods(financials)
+        assert len(result) == 1
+
+    def test_multiple_documents_merged(self):
+        """Periods from multiple documents should be merged."""
+        p1 = _make_periods(1)
+        p2 = _make_periods(1)
+        p2[0]["period_end"] = "2024-09-30"
+        financials = {
+            "period_index": [],
+            "documents": [
+                {"doc_id": "E00001", "periods": p1},
+                {"doc_id": "E00002", "periods": p2},
+            ],
+        }
+        result = extract_periods(financials)
+        assert len(result) == 2
+
+    def test_no_periods_anywhere(self):
+        """No period_index and no documents → empty list."""
+        financials = {"company_name": "Test"}
+        result = extract_periods(financials)
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# test_extract_periods integration with run_all_gates
+# ---------------------------------------------------------------------------
+
+class TestRunAllGatesFallback:
+    """Integration: run_all_gates with period_index empty, data in documents."""
+
+    def test_fallback_periods_used_by_gates(self):
+        """Gates should receive fallback periods and produce valid results."""
+        doc_periods = _make_periods(2)
+        financials = {
+            "company_name": "Fallback Corp",
+            "ticker": "8888",
+            "period_index": [],
+            "documents": [
+                {"doc_id": "E99999", "periods": doc_periods},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            (data_dir / "financials.json").write_text(
+                json.dumps(financials, ensure_ascii=False, indent=2)
+            )
+            gates_config = [
+                {"id": "null_rate", "type": "null_rate", "params": {"threshold": 0.5}},
+                {
+                    "id": "key_coverage",
+                    "type": "key_coverage",
+                    "params": {
+                        "bs": {"keys": ["total_assets", "total_equity"], "min_required": 2},
+                    },
+                },
+            ]
+            result = run_all_gates(gates_config, data_dir)
+            assert result.overall_pass is True
+            assert all(g["pass"] for g in result.gates)
+
+
+# ---------------------------------------------------------------------------
+# test_validate_value_range: full period CF scan
+# ---------------------------------------------------------------------------
+
+class TestValueRangeAllPeriods:
+    """validate_value_range must scan ALL periods for concept_section."""
+
+    def test_cf_only_in_later_periods(self):
+        """CF keys present only from period 2 onward must still be validated."""
+        periods = [
+            {
+                "period_end": "2024-06-30",
+                "bs": {"total_assets": 100_000},
+                "pl": {"revenue": 50_000},
+                # No CF in Q1
+            },
+            {
+                "period_end": "2024-09-30",
+                "bs": {"total_assets": 200_000},
+                "pl": {"revenue": 100_000},
+                "cf": {"operating_cf": 8_000, "investing_cf": -2_000, "financing_cf": -1_000},
+            },
+            {
+                "period_end": "2025-03-31",
+                "bs": {"total_assets": 300_000},
+                "pl": {"revenue": 150_000},
+                "cf": {"operating_cf": -999, "investing_cf": -3_000, "financing_cf": -2_000},
+            },
+        ]
+        rules = {"operating_cf": {"min": 0}}
+        result = validate_value_range(periods, rules)
+        # operating_cf = -999 in period 3 should be caught as a violation
+        assert result.gate_pass is False
+        assert len(result.violations) == 1
+        assert result.violations[0]["concept"] == "operating_cf"
+        assert result.violations[0]["value"] == -999
+
+    def test_cf_in_all_periods_validated(self):
+        """CF present in multiple periods should all be range-checked."""
+        periods = _make_periods(3)
+        # All operating_cf values are positive (8000, 16000, 24000)
+        rules = {"operating_cf": {"min": 0}}
+        result = validate_value_range(periods, rules)
+        assert result.gate_pass is True
+        assert len(result.violations) == 0
+
+    def test_cf_violation_in_middle_period(self):
+        """Violation in a non-first period must be detected."""
+        periods = _make_periods(3)
+        periods[1]["cf"]["operating_cf"] = -500
+        rules = {"operating_cf": {"min": 0}}
+        result = validate_value_range(periods, rules)
+        assert result.gate_pass is False
+        assert any(v["value"] == -500 for v in result.violations)
+
+
+# ---------------------------------------------------------------------------
+# test_validate_key_coverage: empty periods guard
+# ---------------------------------------------------------------------------
+
+class TestKeyCoverageEmptyPeriods:
+    """validate_key_coverage must fail when periods list is empty."""
+
+    def test_empty_periods_fails(self):
+        requirements = {
+            "bs": {"keys": ["total_assets", "total_equity"], "min_required": 1},
+            "pl": {"keys": ["revenue"], "min_required": 1},
+        }
+        result = validate_key_coverage([], requirements)
+        assert result.gate_pass is False
+        assert result.detail["bs"]["pass"] is False
+        assert result.detail["bs"]["all_period_keys"] == 0
+        assert result.detail["pl"]["pass"] is False

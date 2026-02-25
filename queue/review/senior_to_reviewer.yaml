@@ -2,138 +2,143 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_20260225_005_008"
-  request_id: "plan_20260225_005_008"
-  timestamp: "2026-02-25T14:30:00+09:00"
-  objective: "4件の依頼を計画的に実行: (1) disclosure-parser build_period_index calculated_fields伝播修正, (2) レポートリセット自動化ガードスクリプト作成, (3) inventory-builder異常入力テスト追加, (4) comparable-analyzerスキル新規作成"
-  parent_cmd: "req_20260225_005, req_20260225_006, req_20260225_007, req_20260225_008"
+  plan_id: "plan_20260225_session21_v2"
+  timestamp: "2026-02-25T16:05:00+09:00"
+  revision_note: "Reviewer指摘対応: T2/T3のsenior.md競合排除、検証手順追加"
+  source_request_ids:
+    - req_20260225_009
+    - req_20260225_010
+    - req_20260225_011
+    - req_20260225_012
+    - req_20260225_013
 
-  task_decomposition:
+  overview: |
+    5件の修正・改善依頼を3名の Junior に並列分配。
+    Round 1（3件並列）→ Round 2（2件順次）で処理。
+    【v2修正】T2とT3の編集ファイルを厳密分離。senior.md のコマンド例更新は
+    Round 2 の T4 に集約し、衝突リスクを排除。検証手順を全タスクに追加。
+
+  workplan:
     round_1_parallel:
-      description: "3件の独立タスクを3名のJuniorに並列割り当て"
-      tasks:
-        - task_id: "T1-req005"
-          assign_to: junior1
-          request_id: "req_20260225_005"
-          title: "period_index calculated_fields 伝播修正"
-          description: |
-            disclosure-parser の build_period_index() 関数（parser.py:547-578）が
-            PeriodFinancial._calculated_fields メタデータを出力に伝播していない問題を修正する。
-            修正箇所:
-            1. build_period_index() の period entry 初期化時に "calculated_fields": set() を追加
-            2. _merge_statement() またはマージループ内で各 PeriodFinancial の _calculated_fields を
-               集約して merged dict に反映する
-            3. 回帰テスト追加: build_period_index() の出力に calculated_fields が含まれることを検証
-            4. 既存テスト121件が全PASS維持であること (pytest skills/disclosure-parser/tests/)
-          output_path: "skills/disclosure-parser/scripts/parser.py"
-          priority: high
-          acceptance_criteria:
-            - "build_period_index() 出力の各period dictに calculated_fields キーが存在する"
-            - "calculated_fields は元の PeriodFinancial._calculated_fields の和集合である"
-            - "calculated_fields が空の場合はキーを省略可（to_dict()と同じ挙動）"
-            - "既存テスト121件が全PASS"
-            - "回帰テスト1件以上追加"
+      - task_id: "T1_req009"
+        assign_to: junior1
+        request_id: req_20260225_009
+        priority: HIGH
+        edit_files:
+          - "skills/quality-gate/scripts/validators.py"
+          - "skills/quality-gate/tests/test_validators.py"
+        description: |
+          quality-gate validators.py の修正:
+          1. financials.get('period_index', []) が空の場合、documents[].periods からフォールバック取得するロジックを追加
+          2. validate_value_range() の concept_section 構築を periods[:1] → 全 period 走査に変更（Q1/Q3 で CF がスキップされる問題を修正）
+          3. null_rate / key_coverage ゲートが空リストで形骸化しない検証ロジック追加
+          4. テスト追加: period_index 空時のフォールバック、全 period CF 走査のケース
+          5. pytest 全件 PASS 確認
+        verification: |
+          - pytest skills/quality-gate/tests/ -v を実行し全件 PASS
+          - period_index が空の financials.json でフォールバックが動作するテストケースが存在すること
+          - CF を持つ period が2期以上あるケースで value_range ゲートが全期間を検証するテストが存在すること
+        risk: "既存テストが期待する挙動が変わる可能性 — テスト修正も範囲内"
 
-        - task_id: "T2-req006"
-          assign_to: junior2
-          request_id: "req_20260225_006"
-          title: "レポートリセット自動化ガードスクリプト作成"
-          description: |
-            templates/senior_reset_report.sh を新規作成する。
-            Senior がタスク割り当て前に呼ぶだけで queue/reports/junior{N}_report.yaml を
-            idle 状態にリセットするスクリプト。
-            設計要件:
-            1. 引数: junior番号 (1-3)
-            2. バリデーション: 番号が1-3の範囲外ならエラー終了 (exit 2)
-            3. リセットテンプレート: go.sh 行166-176と同一
-               worker_id: junior{N}, task_id: null, ticker: null, analysis_type: null,
-               timestamp: "", status: idle, result: null, quality_check_required: true
-            4. アトミック書き込み (tmp + mv) + cleanup trap
-            5. 既存テンプレート (senior_clear_junior.sh, reviewer_finalize.sh) と同等のエラーハンドリング
-            6. CLAUDE.md の「Report reset rule (mandatory)」セクションに本スクリプトの使用方法を追記
-          output_path: "templates/senior_reset_report.sh"
-          priority: medium
-          acceptance_criteria:
-            - "templates/senior_reset_report.sh が存在し実行可能"
-            - "引数1で junior1, 引数2で junior2, 引数3で junior3 のレポートをリセット"
-            - "リセット後の YAML が go.sh テンプレートと完全一致"
-            - "範囲外引数でexit 2"
-            - "アトミック書き込み (tmp+mv)"
+      - task_id: "T2_req010"
+        assign_to: junior2
+        request_id: req_20260225_010
+        priority: MEDIUM
+        edit_files:
+          - "instructions/senior.md"
+        edit_files_excluded:
+          - "templates/senior_clear_junior.sh (T3担当)"
+          - "CLAUDE.md (T4担当)"
+        description: |
+          senior.md ゴースト参照修正（senior.md のみ編集、他ファイルに触れないこと）:
+          1. scripts/send_clear_reinit.sh（存在しない）→ templates/senior_clear_junior.sh に修正（行389, 393付近）
+          2. queue/review/junior_plan_to_reviewer.yaml / reviewer_to_junior_plan.yaml の孤立サブフロー記述を削除（行198-199のファイルリスト、行296-300のサブフロー手順、関連する workflow step）
+          3. send-keys 3ステップ法（sleep 2 + capture-pane 到達確認）を CLAUDE.md の2ステップ法（sleep 1）と整合させる
+          【重要】senior_clear_junior.sh のコマンド引数例の更新は T4 で実施するため、T2 では現行の引数形式のまま パス名のみ修正すること
+        verification: |
+          - grep -rn で senior.md 内に scripts/send_clear_reinit.sh が残っていないことを確認
+          - grep -rn で senior.md 内に junior_plan_to_reviewer.yaml / reviewer_to_junior_plan.yaml が残っていないことを確認
+          - senior.md 内の全ファイルパス参照について ls で実在確認
+        risk: "ワークフロー文書変更のみ — エージェント動作に影響なし"
 
-        - task_id: "T3-req007"
-          assign_to: junior3
-          request_id: "req_20260225_007"
-          title: "inventory-builder manifest 型異常入力テスト追加"
-          description: |
-            skills/inventory-builder/tests/test_builder.py にマニフェスト型異常テストを追加する。
-            調査により以下の未テストケースを特定:
-            1. manifest.json が null → JSONDecodeError でスキップされるが明示テストなし
-            2. manifest.json が dict でない (文字列, 配列, 整数) → .get() で AttributeError (未捕捉)
-            3. results が null → data.get("results", []) で [] になる (safe) が明示テストなし
-            4. results が配列でない (文字列, 整数, dict) → for ループで TypeError (未捕捉)
-            5. results[i] が dict でない → .get("doc_id") で AttributeError (未捕捉)
-            6. manifest が配列 [{...}] → .get() で AttributeError (未捕捉)
-            テスト追加と共に、builder.py の _load_all_manifests() に必要な型チェックを追加して
-            適切なエラーメッセージまたはフォールバック動作（スキップ + stderr 警告）を実装する。
-            既存テストが全PASS維持であること。
-          output_path: "skills/inventory-builder/tests/test_builder.py"
-          priority: medium
-          acceptance_criteria:
-            - "上記6パターンの型異常入力テストが全て追加されている"
-            - "各異常入力で適切なエラーハンドリング（スキップ+警告 or InventoryBuildError）"
-            - "既存テスト全PASS維持"
-            - "テスト名が test_manifest_* パターンで一貫している"
+      - task_id: "T3_req011"
+        assign_to: junior3
+        request_id: req_20260225_011
+        priority: MEDIUM
+        edit_files:
+          - "templates/senior_clear_junior.sh"
+        edit_files_excluded:
+          - "instructions/senior.md (T2担当)"
+          - "CLAUDE.md (T4担当)"
+        description: |
+          senior_clear_junior.sh 堅牢化（スクリプト本体のみ編集、ドキュメントに触れないこと）:
+          1. cat > heredoc による非アトミック書き込みを mktemp+mv パターンに変更
+          2. Junior番号をメッセージからの正規表現抽出ではなく、明示的な第3引数 <junior_number> として受け取るように変更
+             新Usage: senior_clear_junior.sh <pane_id> <message> <junior_number>
+          3. senior_reset_report.sh の実装パターンを参考にする: mktemp+mv, trap cleanup, 引数バリデーション（1-3の範囲チェック）
+          4. 既存の /clear + Enter + message + Enter の4ステップ tmux 送信はそのまま維持
+        verification: |
+          - bash -n templates/senior_clear_junior.sh で構文エラーがないことを確認
+          - 引数なし実行で Usage メッセージが表示されることを確認
+          - 不正な junior_number（0, 4, abc）で適切にエラーになることを確認
+        risk: "インターフェース変更あり — 呼び出し元ドキュメントの更新は T4 に集約"
 
-    round_2:
-      description: "Round 1完了後、最も負荷の低いJuniorに割り当て"
-      tasks:
-        - task_id: "T4-req008"
-          assign_to: "Round 1で最初に完了したJunior"
-          request_id: "req_20260225_008"
-          title: "comparable-analyzer スキル新規作成"
-          description: |
-            skills/comparable-analyzer/ に新規スキルを作成する。
-            業種コードから比較企業群を自動選定し、財務指標ベンチマーク比較を行う。
-            構成:
-            - SKILL.md: スキル仕様書
-            - scripts/__init__.py
-            - scripts/main.py: CLI エントリポイント (argparse, --ticker XXXX)
-            - scripts/analyzer.py: コアロジック
-              - EDINET CSV (data/.ticker_cache/EdinetcodeDlInfo.csv) の「提出者業種」列から業種コード取得
-              - 同一業種の企業を自動選定（最大10社）
-              - financial-calculator の FinancialRecord / metrics.json から指標取得
-              - 比較マトリクス生成 (ROE, ROA, margin, growth)
-              - 四分位ランキング算出
-            - tests/__init__.py
-            - tests/test_analyzer.py: ユニットテスト
-            依存スキル: ticker-resolver (銘柄解決), financial-calculator (指標計算)
-            CLI: python3 skills/comparable-analyzer/scripts/main.py --ticker XXXX
-          output_path: "skills/comparable-analyzer/"
-          priority: medium
-          acceptance_criteria:
-            - "SKILL.md が存在し、既存スキルと同等の記述品質"
-            - "python3 skills/comparable-analyzer/scripts/main.py --help が動作"
-            - "analyzer.py が EDINET CSV から業種コードを取得し同業他社を選定"
-            - "比較マトリクス (ROE/ROA/margin/growth) を JSON 出力"
-            - "ユニットテストが存在し PASS"
-            - "既存スキルとの import 連携が正常"
+    round_2_sequential:
+      - task_id: "T4_req012"
+        assign_to: first_available_junior
+        request_id: req_20260225_012
+        priority: LOW
+        edit_files:
+          - "CLAUDE.md"
+          - "instructions/senior.md (T3由来のコマンド例更新のみ)"
+        depends_on: ["T2_req010", "T3_req011"]
+        description: |
+          CLAUDE.md 補完 + T3 インターフェース変更の反映:
+          1. CLAUDE.md: Dashboard sections リストに "In Progress" セクションを追加
+          2. CLAUDE.md: go.sh レポートリセットの行番号参照「行154-163」を「行165-176」に修正
+          3. CLAUDE.md: senior_clear_junior.sh の呼び出し例を T3 の新インターフェース（第3引数追加）に合わせて更新
+          4. senior.md: senior_clear_junior.sh のコマンド例を T3 の新インターフェースに合わせて更新（T2 が未修正で残した箇所）
+        verification: |
+          - CLAUDE.md の Dashboard sections リストに "In Progress" が含まれることを確認
+          - CLAUDE.md の go.sh 行番号が「行165-176」になっていることを確認
+          - grep -rn で CLAUDE.md / senior.md 内の senior_clear_junior.sh 呼び出し例が新インターフェースになっていることを確認
+
+      - task_id: "T5_req013"
+        assign_to: next_available_junior
+        request_id: req_20260225_013
+        priority: LOW
+        edit_files:
+          - "skills/inventory-builder/scripts/builder.py"
+          - "skills/inventory-builder/SKILL.md"
+        description: |
+          inventory-builder エントリポイント整合:
+          1. main.py は既に存在し正しいエントリポイントになっている
+          2. builder.py 内の generate_inventory_md() が生成する再現コマンドで builder.py を参照している箇所を main.py に修正
+          3. builder.py に if __name__ == "__main__" ブロックがあれば削除（main.py に統合済み）
+          4. SKILL.md の CLI 使用例が main.py を一貫して参照していることを確認
+          5. pytest 全件 PASS 確認
+        verification: |
+          - pytest skills/inventory-builder/tests/ -v を実行し全件 PASS
+          - grep -rn builder.py で再現コマンド内に builder.py 直接実行が残っていないことを確認
+
+  file_ownership_matrix:
+    "instructions/senior.md": "T2(Round1: ゴースト参照修正) → T4(Round2: コマンド例更新)"
+    "templates/senior_clear_junior.sh": "T3 専任"
+    "CLAUDE.md": "T4 専任"
+    "skills/quality-gate/scripts/validators.py": "T1 専任"
+    "skills/inventory-builder/scripts/builder.py": "T5 専任"
 
   quality_criteria:
-    - "各タスクの既存テストが全PASS維持"
-    - "新規テストは命名規則に従い、テスト対象が明確"
-    - "新規スキルは既存スキルの構造パターンに準拠"
-    - "シェルスクリプトは set -euo pipefail + アトミック書き込み"
+    - "pytest 全件 PASS（req_009, req_013）"
+    - "bash -n 構文検証 PASS（req_011）"
+    - "senior.md / CLAUDE.md 内の全ファイルパス参照が実在する"
+    - "ゴースト参照（存在しないファイルパス）がゼロ"
+    - "senior_clear_junior.sh の引数バリデーションが正常動作"
 
-  risk_assessment:
-    - risk: "req_005 の修正が既存テストを破壊する可能性"
-      mitigation: "修正後に pytest 全件実行を必須とする"
-    - risk: "req_007 の型チェック追加が既存動作を変更する可能性"
-      mitigation: "新規の型チェックは graceful degradation (スキップ+警告) 方針"
-    - risk: "req_008 が EDINET CSV の業種列に依存するが、CSV フォーマット変更の可能性"
-      mitigation: "列名のフォールバック検索を実装し、見つからない場合は明示エラー"
-
-  scheduling:
-    strategy: "Round 1 並列 + Round 2 逐次"
-    round_1: "junior1=T1-req005, junior2=T2-req006, junior3=T3-req007 (並列)"
-    round_2: "最初に完了したJuniorにT4-req008を割り当て"
-    rationale: "T1/T2/T3は完全に独立。T4は最大規模だが他タスクとの依存なし"
+  parallelization_strategy: |
+    Round 1: junior1(T1), junior2(T2), junior3(T3) を同時並列実行。
+    編集ファイルは厳密に分離済み — 競合なし。
+    Round 2: T2+T3 完了後に T4（CLAUDE.md + senior.md コマンド例更新）、
+    次に T5（inventory-builder）を割り当て。
+    senior.md への変更は T2(ゴースト参照) → T4(コマンド例更新) の順序で実施し、
+    1つのファイルに対する同時書き込みを完全に排除。

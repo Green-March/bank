@@ -81,6 +81,24 @@ def load_financials(data_dir: Path) -> dict | None:
         return json.load(f)
 
 
+def extract_periods(financials: dict) -> list[dict]:
+    """Extract periods from financials, falling back to documents[].periods.
+
+    Primary source is ``period_index``.  When it is empty or missing,
+    collect periods from ``documents[].periods`` as a fallback.
+    """
+    periods = financials.get("period_index") or []
+    if periods:
+        return periods
+
+    # Fallback: gather periods from documents
+    for doc in financials.get("documents", []):
+        doc_periods = doc.get("periods")
+        if doc_periods:
+            periods.extend(doc_periods)
+    return periods
+
+
 # ---------------------------------------------------------------------------
 # Validators
 # ---------------------------------------------------------------------------
@@ -125,6 +143,18 @@ def validate_key_coverage(
     requirements: {"bs": {"keys": [...], "min_required": 2}, "pl": {...}, "cf": {...}}
     A section passes if at least min_required keys are non-null in ALL periods.
     """
+    if not periods:
+        detail = {
+            section: {
+                "pass": False,
+                "all_period_keys": 0,
+                "min_required": req.get("min_required", 1),
+                "coverage": {k: 0 for k in req.get("keys", [])},
+            }
+            for section, req in requirements.items()
+        }
+        return CoverageResult(gate_pass=False, detail=detail)
+
     detail: dict[str, dict] = {}
     all_pass = True
 
@@ -168,12 +198,14 @@ def validate_value_range(
     """
     violations: list[dict] = []
 
-    # Build a lookup: concept -> section
+    # Build a lookup: concept -> section (scan ALL periods so that
+    # concepts present only in later periods, e.g. CF in Q3, are captured)
     concept_section: dict[str, str] = {}
-    for period in periods[:1]:
+    for period in periods:
         for section in ("bs", "pl", "cf"):
             for key in period.get(section, {}):
-                concept_section[key] = section
+                if key not in concept_section:
+                    concept_section[key] = section
 
     for concept, rule in rules.items():
         section = concept_section.get(concept)
@@ -254,7 +286,7 @@ def run_all_gates(
     Each gate dict has: {"id": str, "type": str, "params": dict}
     """
     financials = load_financials(data_dir)
-    periods = financials.get("period_index", []) if financials else []
+    periods = extract_periods(financials) if financials else []
 
     results: list[dict] = []
 

@@ -1,37 +1,30 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_T4-req008_001"
-  task_id: "T4-req008"
-  junior_id: junior2
+  request_id: "rev_T4_001"
+  task_id: "T4_req012"
+  junior_id: "junior2"
   status: pending_review
-  timestamp: "2026-02-25T15:11:00+09:00"
+  timestamp: "2026-02-25T16:48:00+09:00"
   payload:
-    title: "comparable-analyzer スキル新規作成"
+    description: |
+      CLAUDE.md 補完 + T3 インターフェース変更の反映:
+      1. CLAUDE.md: Dashboard sections に "In Progress" 追加（Action Required と Intake の間）
+      2. CLAUDE.md: go.sh 行番号参照を「行154-163」→「行165-176」に修正
+      3. instructions/senior.md: senior_clear_junior.sh 呼び出し例2箇所に第3引数 <junior_number> 追加
+      4. CLAUDE.md の senior_clear_junior.sh 参照は引数なし記述のため変更不要と判断
     outputs:
-      - "skills/comparable-analyzer/SKILL.md"
-      - "skills/comparable-analyzer/scripts/__init__.py"
-      - "skills/comparable-analyzer/scripts/analyzer.py"
-      - "skills/comparable-analyzer/scripts/main.py"
-      - "skills/comparable-analyzer/tests/__init__.py"
-      - "skills/comparable-analyzer/tests/test_analyzer.py"
-    validation:
-      - "pytest 11 passed, 0 failed"
-      - "CLI --help 動作確認済み"
-      - "テストカバレッジ: find_peers, excludes_target, insufficient, max_limit, comparison_matrix, benchmarks, single_value, missing_metrics, missing_cache, missing_cache_run_analysis, full_flow"
-    caveats:
-      - "ticker-resolver キャッシュ未存在時は明示エラー停止"
-      - "比較対象 metrics.json 未存在時は null + warnings で継続"
-      - "CSV エンコーディング UTF-8 / Shift-JIS 両対応"
-    acceptance_criteria:
-      - "SKILL.md が存在し、既存スキルと同等の記述品質"
-      - "python3 skills/comparable-analyzer/scripts/main.py --help が動作"
-      - "analyzer.py が EDINET CSV から業種コードを取得し同業他社を選定"
-      - "比較マトリクス (ROE/ROA/margin/growth) を JSON 出力"
-      - "ユニットテストが存在し PASS"
-      - "既存スキルとの import 連携が正常"
-      - "業種候補不足時の警告・フォールバック動作"
-      - "欠損指標の null 許容 + warnings フィールド"
+      - "CLAUDE.md"
+      - "instructions/senior.md"
+    validation_results:
+      - "Dashboard sections に In Progress 追加済み"
+      - "go.sh 行番号: 行165-176 に修正済み"
+      - "senior.md: senior_clear_junior.sh 呼び出し例2箇所に第3引数追加済み"
+    review_criteria:
+      - "Dashboard sections リストに In Progress が含まれているか"
+      - "go.sh 行番号が実際の行165-176と整合しているか"
+      - "senior.md の senior_clear_junior.sh コマンド例が新インターフェースになっているか"
+      - "CLAUDE.md の引数なし参照の維持判断が妥当か"
 review_followup:
   request_id: null
   task_id: null
