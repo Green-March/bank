@@ -11,18 +11,13 @@ from datetime import date
 from pathlib import Path
 
 from dotenv import load_dotenv
+from skills.common.auth import JQuantsAuth, JQuantsAuthError
 
 # スクリプト直接実行とパッケージインポートの両方に対応
 if __name__ == "__main__":
-    # 直接実行時はパッケージルートをパスに追加
-    _script_dir = Path(__file__).resolve().parent
-    if str(_script_dir) not in sys.path:
-        sys.path.insert(0, str(_script_dir))
-    from auth import JQuantsAuth, JQuantsAuthError
     from edinet import EdinetError, collect_edinet_pdfs, collect_edinet_reports
     from statements import StatementsClient, StatementsError
 else:
-    from .auth import JQuantsAuth, JQuantsAuthError
     from .edinet import EdinetError, collect_edinet_pdfs, collect_edinet_reports
     from .statements import StatementsClient, StatementsError
 

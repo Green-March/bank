@@ -2,14 +2,9 @@ from __future__ import annotations
 
 import builtins
 import json
-import sys
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
-
-SCRIPT_DIR = Path(__file__).resolve().parents[1] / "scripts"
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
 
 from edinet import (
     NAMING_STRATEGIES,

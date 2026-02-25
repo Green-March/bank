@@ -10,12 +10,10 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
+from skills.common.auth import JQuantsAuth, JQuantsAuthError
 
 # スクリプト直接実行とパッケージインポートの両方に対応
 if __name__ == "__main__":
-    _script_dir = Path(__file__).resolve().parent
-    if str(_script_dir) not in sys.path:
-        sys.path.insert(0, str(_script_dir))
     from collector import (
         DailyQuotesClient,
         DailyQuotesError,
@@ -30,27 +28,24 @@ else:
         ListedInfoError,
     )
 
-# disclosure-collector の JQuantsAuth を再利用
-_repo_root = Path(__file__).resolve().parents[3]
-_auth_dir = str(_repo_root / "skills" / "disclosure-collector" / "scripts")
-if _auth_dir not in sys.path:
-    sys.path.insert(0, _auth_dir)
-
-from auth import JQuantsAuth, JQuantsAuthError  # noqa: E402
-
 load_dotenv()
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
 
 
 def _data_root() -> Path:
     import os
 
+    root = _repo_root()
     configured = os.environ.get("DATA_PATH")
     if not configured:
-        return _repo_root / "data"
+        return root / "data"
     path = Path(configured).expanduser()
     if path.is_absolute():
         return path
-    return (_repo_root / path).resolve()
+    return (root / path).resolve()
 
 
 def _parse_iso_date(value: str) -> date:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import statistics
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,14 @@ METRIC_OUTPUT_NAMES = {
     "operating_margin_percent": "operating_margin",
     "revenue_growth_yoy_percent": "revenue_growth",
 }
+
+
+def _validate_ticker(ticker: str) -> None:
+    """ticker が4桁数字であることを検証する。パストラバーサル防止。"""
+    if not re.fullmatch(r"\d{4}", ticker):
+        raise ValueError(
+            f"Invalid ticker: {ticker!r}. Ticker must be exactly 4 digits."
+        )
 
 
 class CacheNotFoundError(Exception):
@@ -182,6 +191,7 @@ def build_comparison_matrix(
         peer_ticker = sec_code[:-1] if len(sec_code) == 5 else sec_code
         peer_name = peer_row.get("提出者名", "").strip()
 
+        _validate_ticker(peer_ticker)
         peer_snapshot = _load_metrics(data_root, peer_ticker)
         peer_metrics = _extract_metrics(peer_snapshot)
         peer_warnings: list[str] = []
@@ -264,6 +274,7 @@ def run_analysis(
     max_peers: int = 10,
 ) -> dict[str, Any]:
     """comparable-analyzer のメインエントリポイント."""
+    _validate_ticker(ticker)
     cache_dir = data_root / ".ticker_cache"
     rows = _load_edinet_csv(cache_dir)
 

@@ -1,11 +1,7 @@
 """J-Quants API 決算短信データ取得モジュール"""
 
 import httpx
-
-try:
-    from .auth import JQuantsAuth
-except ImportError:
-    from auth import JQuantsAuth
+from skills.common.auth import JQuantsAuth
 
 BASE_URL = "https://api.jquants.com/v1"
 DEFAULT_TIMEOUT = 30.0

@@ -1,18 +1,8 @@
 """CLI 引数パースのユニットテスト"""
 
-import sys
 from datetime import date, timedelta
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
-
-_repo_root = Path(__file__).resolve().parents[3]
-_mdc_dir = str(_repo_root / "skills" / "market-data-collector")
-_auth_dir = str(_repo_root / "skills" / "disclosure-collector" / "scripts")
-for p in (_auth_dir, _mdc_dir):
-    if p not in sys.path:
-        sys.path.insert(0, p)
 
 from scripts.main import build_parser, _parse_iso_date
 

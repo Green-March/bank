@@ -1,23 +1,38 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: rev_018_T4_001
-  task_id: req_20260225_018_T4
+  request_id: "rev_20260225_T5_req022"
+  task_id: "T5_req022"
   junior_id: junior1
-  status: pending
-  timestamp: "2026-02-25T19:15:00"
+  status: pending_review
+  timestamp: "2026-02-25T19:02:00+09:00"
   payload:
-    summary: "market-data-collector テスト一式 — 25テスト全PASS (DailyQuotes 9件, ListedInfo 8件, CLI 8件)"
+    objective: "ticker-resolver に J-Quants ソースを実装。source='jquants'/'all' 対応、EDINET+J-Quants マージ"
     outputs:
-      - "skills/market-data-collector/tests/__init__.py"
-      - "skills/market-data-collector/tests/test_collector.py"
-      - "skills/market-data-collector/tests/test_main.py"
-    review_criteria:
-      - "DailyQuotesClient: 正常取得、ページネーション複数ページ、APIエラー(400,401,403,429,500)、タイムアウト、空レスポンス(銘柄未存在)"
-      - "ListedInfoClient: 正常取得、銘柄未存在(空リスト)、APIエラー"
-      - "CLI引数パース: --ticker, --from-date, --to-date, --output-dir、デフォルト値、不正引数"
-      - "httpx.Client のモック化が適切か（実API呼び出しなし）"
-      - "全25テスト pytest PASS"
+      - "skills/ticker-resolver/scripts/resolver.py"
+      - "skills/ticker-resolver/tests/test_resolver.py"
+      - "skills/ticker-resolver/SKILL.md"
+    validation:
+      - "既存27テスト全通過"
+      - "新規J-Quantsテスト11件全通過（合計38テスト）"
+      - "フィールドマッピングドキュメント記載済み"
+      - "SKILL.md ロードマップ更新済み"
+    details:
+      - "update_cache(source='jquants') の NotImplementedError を解消"
+      - "J-Quants GET /v1/listed/info から上場銘柄一覧取得実装"
+      - "skills/common/auth.py (req_020成果物) を使用"
+      - "source='all' で EDINET + J-Quants マージ実現"
+      - "EDINET CSV と J-Quants のフィールドマッピング明記"
+    caveats:
+      - "J-Quants /v1/listed/info には fye_month 相当フィールドがないため、J-Quants のみの銘柄は fye_month=None"
+      - "source='all' 時の J-Quants 取得失敗は best-effort でスキップ（EDINET のみで続行）"
+      - "JQuantsAuth の import は遅延インポート（ImportError 時は NetworkError に変換）"
+    quality_criteria:
+      - "既存27テスト全通過"
+      - "J-Quantsソーステスト追加・全通過"
+      - "skills/common/auth.py 使用（sys.path.insert 禁止準拠）"
+      - "SKILL.md ロードマップ最新化"
+      - "フィールドマッピング明記"
 review_followup:
   request_id: null
   task_id: null

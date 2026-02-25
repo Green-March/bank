@@ -14,10 +14,11 @@ if __name__ == "__main__":
     from analyzer import (  # type: ignore[import-untyped]
         CacheNotFoundError,
         TickerNotFoundError,
+        _validate_ticker,
         run_analysis,
     )
 else:
-    from .analyzer import CacheNotFoundError, TickerNotFoundError, run_analysis
+    from .analyzer import CacheNotFoundError, TickerNotFoundError, _validate_ticker, run_analysis
 
 try:
     from dotenv import load_dotenv
@@ -71,6 +72,12 @@ def main() -> int:
     args = parser.parse_args()
 
     data_root = Path(args.data_root) if args.data_root else _data_root()
+
+    try:
+        _validate_ticker(args.ticker)
+    except ValueError as exc:
+        print(f"エラー: {exc}", file=sys.stderr)
+        return 1
 
     try:
         result = run_analysis(

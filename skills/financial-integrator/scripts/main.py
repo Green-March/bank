@@ -11,8 +11,10 @@ if __name__ == "__main__":
     script_dir = Path(__file__).resolve().parent
     if str(script_dir) not in sys.path:
         sys.path.insert(0, str(script_dir))
+    from exceptions import IntegrationError
     from integrator import integrate
 else:
+    from .exceptions import IntegrationError
     from .integrator import integrate
 
 load_dotenv()
@@ -85,21 +87,17 @@ def main() -> int:
         else (data_root / ticker / "parsed" / "integrated_financials.json")
     )
 
-    edinet_file = parsed_dir / "financials.json"
-    if not edinet_file.exists():
-        print(
-            f"EDINET ファイルが見つかりません: {edinet_file}",
-            file=sys.stderr,
+    try:
+        result = integrate(
+            ticker=ticker,
+            fye_month=args.fye_month,
+            parsed_dir=parsed_dir,
+            output_path=output_path,
+            company_name=args.company_name,
         )
+    except IntegrationError as exc:
+        print(f"エラー: {exc}", file=sys.stderr)
         return 1
-
-    result = integrate(
-        ticker=ticker,
-        fye_month=args.fye_month,
-        parsed_dir=parsed_dir,
-        output_path=output_path,
-        company_name=args.company_name,
-    )
 
     annual_count = len(result.get("annual", []))
     quarterly_count = len(result.get("quarterly", []))

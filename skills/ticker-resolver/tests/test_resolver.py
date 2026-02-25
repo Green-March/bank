@@ -24,6 +24,7 @@ from resolver import (
     CACHE_CSV_NAME,
     CACHE_META_NAME,
     CACHE_TTL_DAYS,
+    JQUANTS_CACHE_JSON_NAME,
     CacheExpiredError,
     NetworkError,
     TickerNotFoundError,
@@ -380,3 +381,263 @@ class TestEdgeCases:
 
         resolver = TickerResolver(cache_dir=cache_dir)
         assert len(resolver._data) == 1  # 証券コードなしはスキップ
+
+
+# ---------------------------------------------------------------------------
+# J-Quants ソーステスト
+# ---------------------------------------------------------------------------
+
+# J-Quants listed/info 形式のサンプルデータ
+JQUANTS_TOYOTA = {
+    "Code": "72030",
+    "CompanyName": "トヨタ自動車（株）",
+    "CompanyNameEnglish": "TOYOTA MOTOR CORPORATION",
+    "Sector17Code": "7",
+    "Sector17CodeName": "自動車・輸送機",
+    "Sector33Code": "3700",
+    "Sector33CodeName": "輸送用機器",
+    "ScaleCategory": "TOPIX Large70",
+    "MarketCode": "0111",
+    "MarketCodeName": "プライム",
+}
+
+JQUANTS_KEYENCE = {
+    "Code": "68610",
+    "CompanyName": "（株）キーエンス",
+    "CompanyNameEnglish": "KEYENCE CORPORATION",
+    "Sector17Code": "12",
+    "Sector17CodeName": "電機・精密",
+    "Sector33Code": "3650",
+    "Sector33CodeName": "電気機器",
+    "ScaleCategory": "TOPIX Large70",
+    "MarketCode": "0111",
+    "MarketCodeName": "プライム",
+}
+
+
+def _write_jquants_cache(cache_dir: Path, records: list[dict]) -> None:
+    """テスト用 J-Quants JSON キャッシュを書き込む."""
+    import json
+
+    jquants_path = cache_dir / JQUANTS_CACHE_JSON_NAME
+    jquants_path.write_text(
+        json.dumps(records, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+class TestJQuantsLoadCache:
+    """J-Quants キャッシュ読み込みテスト."""
+
+    def test_load_jquants_only(self, tmp_path: Path) -> None:
+        """J-Quants JSON のみでキャッシュを読み込む."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        _write_jquants_cache(cache_dir, [JQUANTS_TOYOTA, JQUANTS_KEYENCE])
+        _write_cache_meta(cache_dir)
+
+        resolver = TickerResolver(cache_dir=cache_dir)
+        assert len(resolver._data) == 2
+
+        # J-Quants のみの場合、edinet_code は空、fye_month は None
+        result = resolver.resolve("7203")
+        assert result["company_name"] == "トヨタ自動車（株）"
+        assert result["edinet_code"] == ""
+        assert result["fye_month"] is None
+
+    def test_load_jquants_merge_with_edinet(self, tmp_path: Path) -> None:
+        """EDINET + J-Quants のマージ: EDINET 優先、J-Quants 固有銘柄も追加."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        _write_cache_csv(cache_dir, [TOYOTA_ROW, SONY_ROW])
+        _write_jquants_cache(cache_dir, [JQUANTS_TOYOTA, JQUANTS_KEYENCE])
+        _write_cache_meta(cache_dir)
+
+        resolver = TickerResolver(cache_dir=cache_dir)
+        # トヨタ(EDINET+J-Quants) + ソニー(EDINETのみ) + キーエンス(J-Quantsのみ)
+        assert len(resolver._data) == 3
+
+        # EDINET 側データが優先される
+        toyota = resolver.resolve("7203")
+        assert toyota["edinet_code"] == "E02144"
+        assert toyota["company_name"] == "トヨタ自動車株式会社"  # EDINET側
+        assert toyota["fye_month"] == 3
+
+        # J-Quants のみの銘柄
+        keyence = resolver.resolve("6861")
+        assert keyence["edinet_code"] == ""
+        assert keyence["company_name"] == "（株）キーエンス"
+        assert keyence["fye_month"] is None
+
+    def test_load_jquants_empty_code_skipped(self, tmp_path: Path) -> None:
+        """Code が空の J-Quants レコードはスキップされる."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        _write_jquants_cache(
+            cache_dir,
+            [{"Code": "", "CompanyName": "テスト"}, JQUANTS_KEYENCE],
+        )
+        _write_cache_meta(cache_dir)
+
+        resolver = TickerResolver(cache_dir=cache_dir)
+        assert len(resolver._data) == 1
+
+    def test_load_jquants_invalid_json(self, tmp_path: Path) -> None:
+        """不正な JSON ファイルはスキップされる."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        jquants_path = cache_dir / JQUANTS_CACHE_JSON_NAME
+        jquants_path.write_text("invalid json{{{", encoding="utf-8")
+        _write_cache_meta(cache_dir)
+
+        resolver = TickerResolver(cache_dir=cache_dir)
+        assert len(resolver._data) == 0
+
+
+class TestJQuantsUpdateCache:
+    """update_cache() J-Quants ソーステスト."""
+
+    def test_update_cache_jquants_source(self, tmp_path: Path) -> None:
+        """source='jquants' で J-Quants API から取得成功."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
+        mock_jquants_resp = MagicMock()
+        mock_jquants_resp.json.return_value = {
+            "info": [JQUANTS_TOYOTA, JQUANTS_KEYENCE]
+        }
+        mock_jquants_resp.raise_for_status = MagicMock()
+
+        with (
+            patch(
+                "resolver.TickerResolver._download_jquants_listed_info",
+                return_value=[JQUANTS_TOYOTA, JQUANTS_KEYENCE],
+            ),
+        ):
+            resolver = TickerResolver(cache_dir=cache_dir)
+            count = resolver.update_cache(source="jquants", force=True)
+
+        assert count == 2
+        assert (cache_dir / JQUANTS_CACHE_JSON_NAME).exists()
+        assert (cache_dir / CACHE_META_NAME).exists()
+
+    def test_update_cache_jquants_auth_error(self, tmp_path: Path) -> None:
+        """source='jquants' で認証エラー → NetworkError."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
+        with patch(
+            "resolver.TickerResolver._download_jquants_listed_info",
+            side_effect=NetworkError("J-Quants 認証エラー"),
+        ):
+            resolver = TickerResolver(cache_dir=cache_dir)
+            with pytest.raises(NetworkError, match="認証エラー"):
+                resolver.update_cache(source="jquants", force=True)
+
+    def test_update_cache_all_jquants_failure_is_best_effort(
+        self, tmp_path: Path
+    ) -> None:
+        """source='all' で J-Quants 失敗時は EDINET のみで成功する."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
+        csv_text = io.StringIO()
+        writer = csv.DictWriter(csv_text, fieldnames=CSV_HEADER)
+        writer.writeheader()
+        full = {h: "" for h in CSV_HEADER}
+        full.update(TOYOTA_ROW)
+        writer.writerow(full)
+        zip_bytes = _make_edinet_zip_bytes(csv_text.getvalue())
+
+        mock_edinet_resp = MagicMock()
+        mock_edinet_resp.content = zip_bytes
+        mock_edinet_resp.raise_for_status = MagicMock()
+
+        with (
+            patch("resolver.requests.get", return_value=mock_edinet_resp),
+            patch(
+                "resolver.TickerResolver._download_jquants_listed_info",
+                side_effect=NetworkError("J-Quants 認証エラー"),
+            ),
+        ):
+            resolver = TickerResolver(cache_dir=cache_dir)
+            count = resolver.update_cache(source="all", force=True)
+
+        assert count == 1  # EDINET のみ
+        assert (cache_dir / CACHE_CSV_NAME).exists()
+
+    def test_update_cache_all_both_success(self, tmp_path: Path) -> None:
+        """source='all' で EDINET + J-Quants 両方成功 → マージ結果."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
+        csv_text = io.StringIO()
+        writer = csv.DictWriter(csv_text, fieldnames=CSV_HEADER)
+        writer.writeheader()
+        full = {h: "" for h in CSV_HEADER}
+        full.update(TOYOTA_ROW)
+        writer.writerow(full)
+        zip_bytes = _make_edinet_zip_bytes(csv_text.getvalue())
+
+        mock_edinet_resp = MagicMock()
+        mock_edinet_resp.content = zip_bytes
+        mock_edinet_resp.raise_for_status = MagicMock()
+
+        with (
+            patch("resolver.requests.get", return_value=mock_edinet_resp),
+            patch(
+                "resolver.TickerResolver._download_jquants_listed_info",
+                return_value=[JQUANTS_TOYOTA, JQUANTS_KEYENCE],
+            ),
+        ):
+            resolver = TickerResolver(cache_dir=cache_dir)
+            count = resolver.update_cache(source="all", force=True)
+
+        # トヨタ(マージ) + キーエンス(J-Quantsのみ) = 2
+        assert count == 2
+        assert (cache_dir / CACHE_CSV_NAME).exists()
+        assert (cache_dir / JQUANTS_CACHE_JSON_NAME).exists()
+
+    def test_update_cache_invalid_source(self, tmp_path: Path) -> None:
+        """不正な source 値 → ValueError."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
+        resolver = TickerResolver(cache_dir=cache_dir)
+        with pytest.raises(ValueError, match="不正な source"):
+            resolver.update_cache(source="invalid", force=True)
+
+
+class TestJQuantsDownload:
+    """_download_jquants_listed_info() テスト."""
+
+    def test_download_jquants_connection_error(self, tmp_path: Path) -> None:
+        """J-Quants API 接続エラー → NetworkError."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
+        mock_auth_instance = MagicMock()
+        mock_auth_instance.get_id_token.return_value = "test_token"
+
+        with (
+            patch(
+                "resolver.TickerResolver._download_jquants_listed_info",
+                side_effect=NetworkError("J-Quants API 接続エラー"),
+            ),
+        ):
+            resolver = TickerResolver(cache_dir=cache_dir)
+            with pytest.raises(NetworkError, match="接続エラー"):
+                resolver.update_cache(source="jquants", force=True)
+
+    def test_download_jquants_import_error(self, tmp_path: Path) -> None:
+        """skills.common.auth がインポートできない → NetworkError."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
+        with patch(
+            "resolver.TickerResolver._download_jquants_listed_info",
+            side_effect=NetworkError("J-Quants 認証モジュールが利用できません"),
+        ):
+            resolver = TickerResolver(cache_dir=cache_dir)
+            with pytest.raises(NetworkError, match="認証モジュール"):
+                resolver.update_cache(source="jquants", force=True)

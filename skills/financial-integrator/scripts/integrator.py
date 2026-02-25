@@ -15,6 +15,17 @@ import warnings
 from datetime import date, datetime
 from pathlib import Path
 
+try:
+    from .exceptions import (
+        InvalidFinancialsFormatError,
+        MissingEdinetFileError,
+    )
+except ImportError:
+    from exceptions import (
+        InvalidFinancialsFormatError,
+        MissingEdinetFileError,
+    )
+
 logger = logging.getLogger(__name__)
 
 
@@ -343,7 +354,20 @@ def integrate(
     jquants_path = parsed_dir / "jquants_fins_statements.json"
 
     # --- Load EDINET ---
-    edinet_data = json.loads(edinet_path.read_text(encoding="utf-8"))
+    if not edinet_path.exists():
+        raise MissingEdinetFileError(
+            f"EDINET ファイルが見つかりません: {edinet_path}"
+        )
+    try:
+        edinet_data = json.loads(edinet_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise InvalidFinancialsFormatError(
+            f"EDINET ファイルの JSON が不正です: {edinet_path}: {e}"
+        ) from e
+    if not isinstance(edinet_data, dict) or "documents" not in edinet_data:
+        raise InvalidFinancialsFormatError(
+            f"EDINET ファイルに 'documents' キーがありません: {edinet_path}"
+        )
     edinet_sha = hashlib.sha256(
         edinet_path.read_bytes()
     ).hexdigest()

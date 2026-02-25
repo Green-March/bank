@@ -2,119 +2,120 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: plan_req_017_018_rev5
-  timestamp: "2026-02-25T17:55:00"
-  revision_note: |
-    Reviewer rev4 指摘2点に対応:
-    1. T1: subprocess.run(text=True) に統一。result.stdout/stderr は str 型。
-       .decode() 呼び出しを全廃し、bytes/str 混在を完全排除。
-    2. T2: smoke test に subprocess モックによる最小実行テストを追加。
-       validate だけでなく、モック step 実行で output_vars フロー全体を検証。
+  plan_id: "plan_20260225_session24"
+  timestamp: "2026-02-25T18:00:00+09:00"
+  objective: "6件のスキル改善・セキュリティ修正タスクを2ウェーブで並列実行"
+  source_requests:
+    - req_20260225_019
+    - req_20260225_020
+    - req_20260225_021
+    - req_20260225_022
+    - req_20260225_023
+    - req_20260225_024
 
-  overview: |
-    req_20260225_017 (高): pipeline-runner output_vars 実装。
-    req_20260225_018 (中): market-data-collector 新規作成。
+  dependency_analysis:
+    - from: req_022
+      to: req_020
+      reason: "req_022 (ticker-resolver J-Quants) は req_020 (共有認証モジュール skills/common/auth.py) に依存。req_020 完了後に req_022 を開始する"
+    - note: "req_019, req_021, req_023, req_024 は全て独立、並列実行可能"
 
-  tasks:
-    - task_id: T1
-      request_id: req_20260225_017
-      junior: junior1
-      title: "pipeline-runner output_vars 機能実装 + バリデーション + テスト"
-      description: |
-        pipeline-runner に output_vars 機能を実装する。
-        1. skills/pipeline-runner/scripts/pipeline.py の修正:
-           a. PipelineStep に output_vars: dict[str, str] フィールド追加
-           b. subprocess.run() の呼び出し方式（★rev5統一）:
-              - subprocess.run(cmd, shell=True, text=True, capture_output=True)
-              - text=True により result.stdout, result.stderr は str 型
-              - .decode() は一切使わない（bytes/str 混在を完全排除）
-           c. stderr の処理:
-              - キャプチャした result.stderr を即時 sys.stderr.write(result.stderr) で親に転送
-              - StepLog.error = result.stderr if result.stderr else f"Step failed with exit code {result.returncode}"
-              - str 型で統一、encode/decode 不要
-           d. output_vars 処理:
-              - json.loads(result.stdout) で解析（str → dict）
-              - パース失敗: PipelineError（stdout[:200] 含む）
-              - 型チェック: isinstance(data, dict) でなければ PipelineError
-              - キー欠損: PipelineError
-              - 正常時: str(value) で vars_dict に追加（--vars 既存キーは上書きしない）
-           e. 段階的 resolve_vars()
-        2. バリデーション:
-           a. 全ステップの {placeholder} を正規表現で収集
-           b. --vars + output_vars(DAG先行) + prev_output で解決可能性検証
-           c. 解決不能時: 明確なエラーメッセージ
-        3. ユニットテスト (skills/pipeline-runner/tests/test_output_vars.py):
-           a. output_vars ステップ間変数伝搬
-           b. --vars オーバーライド優先度
-           c. 未解決 placeholder バリデーションエラー
-           d. JSON パース失敗
-           e. JSON 型チェック（list/int/str → PipelineError）
-           f. JSONキー欠損
-           g. stderr 転送 + StepLog.error 格納確認（str 型）
-           h. stderr 空時 exit-code フォールバック
-           i. 既存テスト回帰なし
-      depends_on: []
+  task_decomposition:
+    wave_1:
+      description: "高優先度タスク＋独立タスクを3Junior並列実行"
+      tasks:
+        - task_id: "T1_req019"
+          request_id: req_20260225_019
+          assigned_to: junior2
+          title: "market-data-collector リトライ機能追加"
+          description: >
+            skills/market-data-collector/scripts/collector.py の DailyQuotesClient, ListedInfoClient に
+            exponential backoff with jitter（最大3回リトライ）を実装。429/一時障害時に自動リトライ。
+            既存25テストを壊さず、リトライ用テストを追加。
+          priority: high
+          estimated_complexity: medium
 
-    - task_id: T2
-      request_id: req_20260225_017
-      junior: junior2
-      title: "example_pipeline.yaml + SKILL.md + smoke test（validate + モック実行）"
-      description: |
-        T1 の output_vars を使い、パイプライン定義・ドキュメント・統合テストを更新。
-        1. example_pipeline.yaml 更新:
-           step 1 (resolve) に output_vars: {fye_month: fye_month, edinet_code: edinet_code, company_name: company_name}
-        2. SKILL.md 更新:
-           output_vars 機能説明、エラー仕様、--vars 優先度、バリデーション
-        3. Smoke test (skills/pipeline-runner/tests/test_smoke_pipeline.py)（★rev5強化）:
-           a. test_validate_example_pipeline:
-              example_pipeline.yaml を読み込み、--vars ticker=TEST のみで
-              validate（placeholder 解決可能性チェック）が通ることを確認
-           b. test_mock_run_example_pipeline（★rev5追加）:
-              subprocess.run を unittest.mock.patch でモック化して最小実行テスト:
-              - step 1 (resolve) のモック stdout: '{"fye_month": 3, "edinet_code": "E99999", "company_name": "テスト株式会社"}'
-              - step 2-7 のモック stdout: '{}'（空 JSON）
-              - 全モック step の returncode: 0
-              - PipelineRunner.run() を実行し、全7ステップが成功することを検証
-              - step 4, 7 のコマンド文字列に fye_month=3 が展開されていることを確認
-              - subprocess モックにより実 API 呼び出しなし
-        4. YAML 構文チェック + pytest 全 PASS
-      depends_on: [T1]
+        - task_id: "T2_req020"
+          request_id: req_20260225_020
+          assigned_to: junior1
+          title: "J-Quants 認証モジュール共有化"
+          description: >
+            disclosure-collector/scripts/auth.py の機能を skills/common/auth.py に移動。
+            disclosure-collector, market-data-collector が skills/common/auth.py を参照するよう修正。
+            sys.path.insert() ハックを全排除。既存テスト維持。
+          priority: high
+          estimated_complexity: high
+          blocks: ["T5_req022"]
 
-    - task_id: T3
-      request_id: req_20260225_018
-      junior: junior3
-      title: "market-data-collector スキル実装"
-      description: |
-        J-Quants daily_quotes + listed_info CLIスキル新規作成。
-        1. skills/market-data-collector/ (SKILL.md, scripts/__init__.py, main.py, collector.py)
-        2. collector.py:
-           JQuantsAuth: Path(__file__).resolve().parents[3] → sys.path 追加 → from auth import
-           DailyQuotesClient: GET /v1/prices/daily_quotes, pagination_key 対応
-           ListedInfoClient: GET /v1/listed/info
-        3. main.py: --ticker, --from-date(1年前), --to-date(今日), --output-dir
-           出力: market_data.json + listed_info.json, 終了コード 0/1
-        4. SKILL.md
-      depends_on: []
+        - task_id: "T3_req021"
+          request_id: req_20260225_021
+          assigned_to: junior3
+          title: "financial-integrator カスタム例外クラス追加"
+          description: >
+            IntegrationError, MissingEdinetFileError, InvalidFinancialsFormatError を定義。
+            ticker-resolver の例外設計を参考。main.py で except IntegrationError による統一ハンドリング。
+            既存48テスト維持、例外テスト追加。
+          priority: medium
+          estimated_complexity: medium
 
-    - task_id: T4
-      request_id: req_20260225_018
-      junior: junior1
-      title: "market-data-collector テスト一式"
-      description: |
-        T3 のテスト作成。
-        tests/__init__.py, test_collector.py, test_main.py
-        DailyQuotes(正常,ページネーション,APIエラー,タイムアウト,空), ListedInfo(正常,未存在,APIエラー)
-        CLI引数パース, デフォルト値, 不正引数。全テスト pytest PASS。
-      depends_on: [T3]
+    wave_2:
+      description: "Wave1完了後、残り3タスクを並列実行。req_022はreq_020完了が前提"
+      tasks:
+        - task_id: "T4_req023"
+          request_id: req_20260225_023
+          assigned_to: junior2
+          title: "pipeline-runner テストカバレッジ拡大"
+          description: >
+            DAG複雑シナリオ（ダイヤモンド型依存、中間ステップ失敗時の後続スキップ、
+            複数未定義変数のvalidate_vars、ゲート失敗時のパイプライン停止）をテスト追加。
+            本体コード変更なし、既存22テスト維持。
+          priority: medium
+          estimated_complexity: medium
 
-  parallelization:
-    phase_1: "T1 (junior1) + T3 (junior3) — 並行実行"
-    phase_2: "T2 (junior2, T1承認後) + T4 (junior1, T3承認後) — 並行実行"
+        - task_id: "T5_req022"
+          request_id: req_20260225_022
+          assigned_to: junior1
+          title: "ticker-resolver J-Quants ソース実装"
+          description: >
+            update_cache(source='jquants') の NotImplementedError を解消。
+            J-Quants GET /v1/listed/info から上場銘柄一覧取得しキャッシュ。
+            source='all' で EDINET + J-Quants マージ。
+            skills/common/auth.py (req_020成果物) を使用。SKILL.md 更新。
+            既存27テスト維持、J-Quantsソーステスト追加。
+          priority: medium
+          estimated_complexity: high
+          blocked_by: ["T2_req020"]
+
+        - task_id: "T6_req024"
+          request_id: req_20260225_024
+          assigned_to: junior3
+          title: "comparable-analyzer パストラバーサル検証"
+          description: >
+            analyzer.py の run_analysis() 入口に _validate_ticker() 追加（re.fullmatch(r'\d{4}', ticker)）。
+            main.py の引数パース直後にも検証追加。peer ticker の _load_metrics() 呼び出し前にも検証。
+            既存テスト維持、不正入力テスト追加。
+          priority: medium
+          estimated_complexity: low
+
+  junior_distribution:
+    junior1: ["T2_req020 (Wave1)", "T5_req022 (Wave2)"]
+    junior2: ["T1_req019 (Wave1)", "T4_req023 (Wave2)"]
+    junior3: ["T3_req021 (Wave1)", "T6_req024 (Wave2)"]
+    rationale: >
+      各Junior均等2タスク。依存チェーン(req_020→req_022)はJunior1に集約し、
+      共有認証モジュール作成→利用のコンテキスト効率を最大化。
+      高優先度タスク(req_019, req_020)をWave1に配置。
 
   quality_criteria:
-    - "全テスト pytest PASS、既存テスト回帰なし"
-    - "subprocess.run(text=True) 統一、bytes/str 混在なし"
-    - "StepLog.error が None にならない（str 型保証 + exit-code フォールバック）"
-    - "smoke test: validate + モック実行の両方 PASS"
-    - "example_pipeline.yaml validate 通過"
-    - "market-data-collector J-Quants API 正常通信 + ページネーション対応"
+    - "全既存テストが通ること（pytest 各スキルディレクトリ）"
+    - "新規テストが追加され全パスすること"
+    - "sys.path.insert() ハックが完全排除されていること（req_020）"
+    - "セキュリティ検証が適切に実装されていること（req_024）"
+    - "コード品質: black, ruff チェック通過"
+
+  risk_assessment:
+    - risk: "req_020 の共有化がインポートパス変更により広範囲に影響"
+      mitigation: "変更対象スキル（disclosure-collector, market-data-collector）のテスト全通過を確認"
+    - risk: "req_022 が req_020 成果物に依存するため、Wave2 開始が遅延する可能性"
+      mitigation: "req_020 を高優先度としWave1で最優先処理。Junior1に集約しコンテキスト維持"
+    - risk: "パストラバーサル検証の正規表現が厳しすぎて正当な入力を拒否"
+      mitigation: "4桁数字のfullmatchで日本株ティッカーコード形式を正確に制限"

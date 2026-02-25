@@ -1,19 +1,9 @@
 """DailyQuotesClient / ListedInfoClient のユニットテスト"""
 
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-
-# テスト対象モジュールのインポートパスを設定
-_repo_root = Path(__file__).resolve().parents[3]
-_scripts_dir = str(_repo_root / "skills" / "market-data-collector" / "scripts")
-_auth_dir = str(_repo_root / "skills" / "disclosure-collector" / "scripts")
-for p in (_scripts_dir, _auth_dir):
-    if p not in sys.path:
-        sys.path.insert(0, p)
 
 from collector import (
     DailyQuotesClient,

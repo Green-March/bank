@@ -5,19 +5,13 @@ httpxモック使用。実APIは呼ばない。
 
 from __future__ import annotations
 
-import sys
 import time
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
 
-SCRIPT_DIR = Path(__file__).resolve().parents[1] / "scripts"
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
-
-from auth import JQuantsAuth, JQuantsAuthError, TokenCache
+from skills.common.auth import JQuantsAuth, JQuantsAuthError, TokenCache
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +72,7 @@ def test_constructor_from_env(monkeypatch):
 def test_constructor_missing_token_raises(monkeypatch):
     """トークン未設定でエラー"""
     monkeypatch.delenv("JQUANTS_REFRESH_TOKEN", raising=False)
-    with patch("auth.load_dotenv"):  # 実.envからの再読込を防止
+    with patch("skills.common.auth.load_dotenv"):  # 実.envからの再読込を防止
         with pytest.raises(JQuantsAuthError, match="リフレッシュトークンが見つかりません"):
             JQuantsAuth()
 
@@ -191,7 +185,7 @@ def test_fetch_id_token_retries_on_400(monkeypatch, tmp_path):
     )
 
     with patch("httpx.Client", return_value=mock):
-        with patch("auth.find_dotenv", return_value=str(env_file)):
+        with patch("skills.common.auth.find_dotenv", return_value=str(env_file)):
             auth = JQuantsAuth(refresh_token="old-refresh")
             token = auth.get_id_token()
 
@@ -216,7 +210,7 @@ def test_fetch_id_token_retries_on_401(monkeypatch, tmp_path):
     )
 
     with patch("httpx.Client", return_value=mock):
-        with patch("auth.find_dotenv", return_value=str(env_file)):
+        with patch("skills.common.auth.find_dotenv", return_value=str(env_file)):
             auth = JQuantsAuth(refresh_token="old-refresh")
             token = auth.get_id_token()
 
@@ -239,7 +233,7 @@ def test_fetch_id_token_no_infinite_loop(monkeypatch, tmp_path):
     )
 
     with patch("httpx.Client", return_value=mock):
-        with patch("auth.find_dotenv", return_value=str(env_file)):
+        with patch("skills.common.auth.find_dotenv", return_value=str(env_file)):
             auth = JQuantsAuth(refresh_token="old-refresh")
             with pytest.raises(JQuantsAuthError, match="認証APIエラー"):
                 auth.get_id_token()
@@ -279,7 +273,7 @@ def test_refresh_missing_credentials(monkeypatch):
     )
 
     with patch("httpx.Client", return_value=mock):
-        with patch("auth.load_dotenv"):  # 実.envからの再読込を防止
+        with patch("skills.common.auth.load_dotenv"):  # 実.envからの再読込を防止
             auth = JQuantsAuth(refresh_token="test-token")
             with pytest.raises(JQuantsAuthError, match="JQUANTS_EMAIL.*JQUANTS_PASSWORD"):
                 auth.get_id_token()
@@ -296,7 +290,7 @@ def test_refresh_missing_email_only(monkeypatch):
     )
 
     with patch("httpx.Client", return_value=mock):
-        with patch("auth.load_dotenv"):  # 実.envからの再読込を防止
+        with patch("skills.common.auth.load_dotenv"):  # 実.envからの再読込を防止
             auth = JQuantsAuth(refresh_token="test-token")
             with pytest.raises(JQuantsAuthError, match="JQUANTS_EMAIL.*JQUANTS_PASSWORD"):
                 auth.get_id_token()
@@ -318,7 +312,7 @@ def test_persist_refresh_token_updates_existing(monkeypatch, tmp_path):
         "EDINET_API_KEY=test-key\n"
     )
 
-    with patch("auth.find_dotenv", return_value=str(env_file)):
+    with patch("skills.common.auth.find_dotenv", return_value=str(env_file)):
         auth = JQuantsAuth(refresh_token="test-token")
         auth._persist_refresh_token("new-token")
 
@@ -336,7 +330,7 @@ def test_persist_refresh_token_appends_if_missing(monkeypatch, tmp_path):
     env_file = tmp_path / ".env"
     env_file.write_text("DATA_PATH=./data\n")
 
-    with patch("auth.find_dotenv", return_value=str(env_file)):
+    with patch("skills.common.auth.find_dotenv", return_value=str(env_file)):
         auth = JQuantsAuth(refresh_token="test-token")
         auth._persist_refresh_token("new-token")
 
@@ -349,7 +343,7 @@ def test_persist_refresh_token_no_env_file(monkeypatch):
     """.envファイルが見つからない場合はスキップ（エラーにしない）"""
     monkeypatch.setenv("JQUANTS_REFRESH_TOKEN", "test-token")
 
-    with patch("auth.find_dotenv", return_value=""):
+    with patch("skills.common.auth.find_dotenv", return_value=""):
         auth = JQuantsAuth(refresh_token="test-token")
         # Should not raise
         auth._persist_refresh_token("new-token")

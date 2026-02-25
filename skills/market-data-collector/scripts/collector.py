@@ -3,21 +3,89 @@
 daily_quotes API と listed/info API からデータを収集する。
 """
 
-import sys
-from pathlib import Path
+import logging
+import random
+import time
 
 import httpx
+from skills.common.auth import JQuantsAuth
 
-# disclosure-collector の JQuantsAuth を再利用
-_repo_root = Path(__file__).resolve().parents[3]
-_auth_dir = str(_repo_root / "skills" / "disclosure-collector" / "scripts")
-if _auth_dir not in sys.path:
-    sys.path.insert(0, _auth_dir)
-
-from auth import JQuantsAuth  # noqa: E402
+logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.jquants.com/v1"
 DEFAULT_TIMEOUT = 30.0
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_BASE_DELAY = 1.0
+DEFAULT_MAX_DELAY = 30.0
+
+
+def _is_retryable(exc: Exception) -> bool:
+    """リトライ可能な例外かどうかを判定する。
+
+    429 (レート制限)、タイムアウト、一時的ネットワーク障害をリトライ対象とする。
+    """
+    if isinstance(exc, httpx.TimeoutException):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code == 429
+    if isinstance(exc, httpx.RequestError):
+        return True
+    return False
+
+
+def _request_with_retry(
+    client: httpx.Client,
+    url: str,
+    *,
+    headers: dict | None = None,
+    params: dict | None = None,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    base_delay: float = DEFAULT_BASE_DELAY,
+    max_delay: float = DEFAULT_MAX_DELAY,
+) -> httpx.Response:
+    """HTTP GETリクエストを exponential backoff with jitter でリトライ実行する。
+
+    Args:
+        client: httpx.Client インスタンス
+        url: リクエスト先URL
+        headers: HTTPヘッダー
+        params: クエリパラメータ
+        max_retries: 最大リトライ回数（デフォルト: 3）
+        base_delay: 基本待機時間（秒、デフォルト: 1.0）
+        max_delay: 最大待機時間（秒、デフォルト: 30.0）
+
+    Returns:
+        成功時の httpx.Response
+
+    Raises:
+        httpx.TimeoutException: リトライ上限後もタイムアウトした場合
+        httpx.HTTPStatusError: リトライ上限後もHTTPエラーが返された場合
+        httpx.RequestError: リトライ上限後もネットワークエラーが発生した場合
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            return response
+        except (
+            httpx.TimeoutException,
+            httpx.HTTPStatusError,
+            httpx.RequestError,
+        ) as exc:
+            if not _is_retryable(exc) or attempt >= max_retries:
+                raise
+            delay = min(base_delay * (2**attempt), max_delay)
+            jitter = random.uniform(0, base_delay * 0.5)
+            total_delay = delay + jitter
+            logger.warning(
+                "リトライ %d/%d (%.1f秒後): %s",
+                attempt + 1,
+                max_retries,
+                total_delay,
+                exc,
+            )
+            time.sleep(total_delay)
+    raise RuntimeError("unreachable")  # pragma: no cover
 
 
 class DailyQuotesError(Exception):
@@ -35,9 +103,19 @@ class ListedInfoError(Exception):
 class DailyQuotesClient:
     """日次株価データを取得するクライアント"""
 
-    def __init__(self, auth: JQuantsAuth, timeout: float = DEFAULT_TIMEOUT):
+    def __init__(
+        self,
+        auth: JQuantsAuth,
+        timeout: float = DEFAULT_TIMEOUT,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        base_delay: float = DEFAULT_BASE_DELAY,
+        max_delay: float = DEFAULT_MAX_DELAY,
+    ):
         self._auth = auth
         self._timeout = timeout
+        self._max_retries = max_retries
+        self._base_delay = base_delay
+        self._max_delay = max_delay
 
     def fetch(self, code: str, from_date: str, to_date: str) -> list[dict]:
         """銘柄コードと期間を指定して日次株価データを取得
@@ -63,8 +141,15 @@ class DailyQuotesClient:
                     headers = {
                         "Authorization": f"Bearer {self._auth.get_id_token()}"
                     }
-                    response = client.get(url, headers=headers, params=params)
-                    response.raise_for_status()
+                    response = _request_with_retry(
+                        client,
+                        url,
+                        headers=headers,
+                        params=params,
+                        max_retries=self._max_retries,
+                        base_delay=self._base_delay,
+                        max_delay=self._max_delay,
+                    )
 
                     try:
                         data = response.json()
@@ -120,9 +205,19 @@ class DailyQuotesClient:
 class ListedInfoClient:
     """上場銘柄情報を取得するクライアント"""
 
-    def __init__(self, auth: JQuantsAuth, timeout: float = DEFAULT_TIMEOUT):
+    def __init__(
+        self,
+        auth: JQuantsAuth,
+        timeout: float = DEFAULT_TIMEOUT,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        base_delay: float = DEFAULT_BASE_DELAY,
+        max_delay: float = DEFAULT_MAX_DELAY,
+    ):
         self._auth = auth
         self._timeout = timeout
+        self._max_retries = max_retries
+        self._base_delay = base_delay
+        self._max_delay = max_delay
 
     def fetch(self, code: str) -> list[dict]:
         """銘柄コードを指定して上場情報を取得
@@ -142,8 +237,15 @@ class ListedInfoClient:
 
         try:
             with httpx.Client(timeout=self._timeout) as client:
-                response = client.get(url, headers=headers, params=params)
-                response.raise_for_status()
+                response = _request_with_retry(
+                    client,
+                    url,
+                    headers=headers,
+                    params=params,
+                    max_retries=self._max_retries,
+                    base_delay=self._base_delay,
+                    max_delay=self._max_delay,
+                )
         except httpx.TimeoutException as e:
             raise ListedInfoError(
                 f"APIリクエストがタイムアウトしました: {e}"

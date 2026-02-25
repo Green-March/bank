@@ -20,6 +20,7 @@ from analyzer import (
     TickerNotFoundError,
     _extract_metrics,
     _load_edinet_csv,
+    _validate_ticker,
     build_comparison_matrix,
     calculate_benchmarks,
     find_peers,
@@ -387,6 +388,61 @@ class TestMissingPeersGracefulDegradation:
             assert len(result["missing_peers"]) == 2
             assert result["missing_peers_count"] == len(result["missing_peers"])
             assert result["benchmark_reliable"] is True
+
+
+class TestValidateTicker:
+    """_validate_ticker: パストラバーサル防止の入力検証."""
+
+    def test_path_traversal_rejected(self) -> None:
+        """パストラバーサル文字列は拒否される."""
+        with pytest.raises(ValueError, match="Invalid ticker"):
+            _validate_ticker("../../../etc/passwd")
+
+    def test_five_digits_rejected(self) -> None:
+        """5桁の数字は拒否される."""
+        with pytest.raises(ValueError, match="Invalid ticker"):
+            _validate_ticker("12345")
+
+    def test_alphabetic_rejected(self) -> None:
+        """アルファベット文字列は拒否される."""
+        with pytest.raises(ValueError, match="Invalid ticker"):
+            _validate_ticker("abcd")
+
+    def test_valid_four_digits_accepted(self) -> None:
+        """正常な4桁数字は許可される."""
+        _validate_ticker("1234")  # should not raise
+
+    def test_valid_ticker_7203(self) -> None:
+        """実在するティッカー形式は許可される."""
+        _validate_ticker("7203")  # should not raise
+
+    def test_empty_string_rejected(self) -> None:
+        """空文字列は拒否される."""
+        with pytest.raises(ValueError, match="Invalid ticker"):
+            _validate_ticker("")
+
+    def test_three_digits_rejected(self) -> None:
+        """3桁は拒否される."""
+        with pytest.raises(ValueError, match="Invalid ticker"):
+            _validate_ticker("123")
+
+    def test_run_analysis_rejects_invalid_ticker(self) -> None:
+        """run_analysis() が不正 ticker を拒否する."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_root = Path(tmpdir)
+            with pytest.raises(ValueError, match="Invalid ticker"):
+                run_analysis(data_root, "../../../etc/passwd")
+
+    def test_peer_ticker_validation(self) -> None:
+        """build_comparison_matrix で不正な peer ticker が検出される."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_root = Path(tmpdir)
+            # 不正な証券コードを持つ peer 行を用意
+            bad_peer = _make_row("E99999", "不正企業", "ABCDE", "輸送用機器")
+            with pytest.raises(ValueError, match="Invalid ticker"):
+                build_comparison_matrix(
+                    data_root, "7203", "トヨタ自動車株式会社", "輸送用機器", [bad_peer],
+                )
 
 
 class TestRunAnalysis:
