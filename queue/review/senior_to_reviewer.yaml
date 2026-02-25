@@ -2,87 +2,76 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "req_20260228_001_plan_v1"
-  request_id: "req_20260228_001"
-  timestamp: "2026-02-28T09:00:00+09:00"
-  objective: "financial-integrator スキル新規作成 — EDINET financials.json + J-Quants jquants_fins_statements.json → integrated_financials.json を自動生成する汎用CLIスキル"
+  plan_id: "plan_req_20260225_001"
+  request_id: "req_20260225_001"
+  timestamp: "2026-02-25T11:05:00+09:00"
+  objective: "disclosure-parser の context_priority() 関数に回帰テストを追加し、連結/非連結判定の過去バグ再発を防止する"
+  priority: high
+  due_date: "2026-02-25"
+
   background: |
-    毎回 Junior がインラインPythonで EDINET + J-Quants データ統合を手動実装している。
-    参考実装 data/2780/logs/T3_integrate_edinet_jquants.py を汎用スキル化し、
-    全銘柄で1コマンド実行可能にする。
-  reference_implementation: "data/2780/logs/T3_integrate_edinet_jquants.py"
-  generalization_points:
-    - "BASE パス → --ticker + --parsed-dir CLI引数"
-    - "FYE_MONTH=3 ハードコード → --fye-month CLI引数"
-    - "ANNUAL_DOC_IDS リスト → period_end.month==fye_month AND 期間長≒12ヶ月 で自動分類"
-    - "ticker/company_name ハードコード → 引数から自動設定"
-    - "J-Quants ファイル欠損時 → EDINET のみで統合（エラーにしない）"
-  tasks:
+    context_priority() は parser.py:264-294 に定義。EDINET有報のXBRLコンテキストIDを
+    スコアリングし、連結/非連結・当期/前期の優先度を判定する関数。
+    Session 3, 9 で連結/非連結の substring match バグが発生・修正された経緯がある。
+    現在 context_priority() に対する直接的なユニットテストは存在しない。
+    Reviewer からも回帰テスト追加が指摘されている。
+
+  target_function:
+    file: "skills/disclosure-parser/scripts/parser.py"
+    function: "context_priority(context_id: str) -> int"
+    lines: "264-294"
+
+  existing_tests:
+    location: "skills/disclosure-parser/tests/"
+    files:
+      - "test_parser.py (8 tests)"
+      - "test_pdf_parser.py (95 tests)"
+    current_context_priority_tests: 0
+    total_pass: "98 passed, 5 skipped"
+
+  task_decomposition:
     - task_id: "T1"
-      title: "financial-integrator スキル実装"
-      assigned_to: "junior1"
+      assignee: "junior1"
       description: |
-        skills/financial-integrator/ ディレクトリに新規スキルを作成する。
-        1. ディレクトリ構成: scripts/{__init__.py, main.py, integrator.py}, tests/, SKILL.md
-        2. integrator.py コアロジック:
-           - determine_fiscal_year(period_end, fye_month): FY算出（参考実装の汎用化）
-           - determine_quarter(period_end, fye_month): 四半期判定（FYE_MONTHパラメータ化）
-           - classify_period(period_end, period_start, fye_month): annual/quarterly 自動分類
-             → period_end.month == fye_month AND 期間長 > 300日 → annual, それ以外 → quarterly
-           - merge_entry(edinet_entry, jquants_entry): EDINET優先・J-Quants補完マージ（参考実装どおり）
-           - integrate(ticker, fye_month, parsed_dir, output_path): メイン統合関数
-           - coverage_summary / coverage_matrix 自動生成
-           - J-Quants 欠損時の graceful handling（Warning出力、EDINETのみで統合）
-        3. main.py CLI:
-           - --ticker (必須)
-           - --fye-month (必須)
-           - --parsed-dir (省略時: data/{ticker}/parsed)
-           - --output (省略時: data/{ticker}/parsed/integrated_financials.json)
-        4. SKILL.md: 既存スキル（disclosure-parser）と同形式で記述
-      output_files:
-        - "skills/financial-integrator/scripts/__init__.py"
-        - "skills/financial-integrator/scripts/main.py"
-        - "skills/financial-integrator/scripts/integrator.py"
-        - "skills/financial-integrator/SKILL.md"
-      acceptance_criteria:
-        - "ANNUAL_DOC_IDS 等の銘柄ハードコードがゼロ"
-        - "FYE_MONTH がCLI引数で可変"
-        - "J-Quants欠損時にエラーなく動作"
-        - "既存スキル（financial-calculator/scripts/main.py）と同一のCLIパターン"
-    - task_id: "T2"
-      title: "pytest テスト + 2銘柄実データ検証"
-      assigned_to: "junior2"
-      depends_on: ["T1"]
-      description: |
-        T1 完了後、テスト作成と実データ検証を行う。
-        1. tests/test_integrator.py ユニットテスト:
-           - determine_fiscal_year: 3月決算(2780), 12月決算(7685) の両パターン
-           - determine_quarter: Q1/Q2/Q3/FY + 非標準月のパターン
-           - merge_entry: edinet-only, jquants-only, both, null値処理
-           - classify_period: annual/quarterly 自動分類の正確性
-        2. tests/test_cli_real_data.py 実データ統合テスト:
-           - 2780 (FYE=3月): CLI実行 → 出力JSONの構造・annual/quarterly件数検証
-           - 7685 (FYE=12月): CLI実行 → 出力JSONの構造・期数検証
-           - J-Quants欠損シミュレーション（tmpdir利用）
-        3. pytest 全件PASS確認
-      output_files:
-        - "skills/financial-integrator/tests/__init__.py"
-        - "skills/financial-integrator/tests/test_integrator.py"
-        - "skills/financial-integrator/tests/test_cli_real_data.py"
-      acceptance_criteria:
-        - "ユニットテスト: 3月決算・12月決算の両方で正しいFY/Q判定"
-        - "実データテスト: 2780 と 7685 で CLI が正常終了し出力JSONが期待構造"
-        - "pytest 全件PASS"
+        skills/disclosure-parser/tests/test_context_priority.py を新規作成し、
+        context_priority() の回帰テストを実装する。以下のカテゴリを網羅すること：
+
+        1. 基本ケース:
+           - "CurrentYearDuration" → score=160 (currentyear +100, current +60)
+           - "CurrentQuarterDuration" → score=50 (currentquarter +50)
+           - "PriorYearDuration" → score=-80 (prior -80)
+
+        2. 連結/非連結判定（過去バグ再発防止）:
+           - "CurrentYearDuration_NonConsolidatedMember" → nonconsolidated で -25（consolidated の +40 は付かない）
+           - "CurrentYearDuration_ConsolidatedMember" → consolidated で +40
+           - Plain context（Member なし）→ 連結加点なし（elif ガード確認）
+
+        3. 境界ケース:
+           - 空文字列 "" → score=0
+           - 大文字小文字混在 "CURRENTYEARDURATION" → 正常スコア（.lower() 正常動作確認）
+           - "PreviousYearDuration" → previous で -80
+           - "CurrentYearDuration_NonConsolidatedMember" が "consolidated" の substring match で
+             誤って +40 されないことを明示的にアサート
+
+        4. 複合ケース:
+           - "PriorYearDuration_NonConsolidatedMember" → prior -80 + nonconsolidated -25 = -105
+           - "CurrentQuarterDuration_ConsolidatedMember" → currentquarter +50 + consolidated +40 = 90
+
+        5. 既存テスト非破壊確認:
+           - pytest skills/disclosure-parser/tests/ を実行し全テスト PASS を確認
+
+      output_path: "skills/disclosure-parser/tests/test_context_priority.py"
+      priority: high
+
   quality_criteria:
-    - "銘柄固有ハードコードがゼロ（grep で ANNUAL_DOC_IDS, 2780, コメ兵 が出ないこと）"
-    - "既存スキルと一貫した CLI パターンとディレクトリ構成"
-    - "2銘柄（FYE=3月 + FYE=12月）での動作確認済み"
-    - "J-Quants 欠損時にも正常動作"
-    - "pytest 全テスト PASS"
-  execution_order:
-    - "T1 → Reviewer承認 → T2 → Reviewer承認 → 完了"
+    - "context_priority() の全分岐パスをカバーすること"
+    - "過去バグの再発防止ケース（nonconsolidated substring match）を明示的に含むこと"
+    - "既存テスト（test_parser.py, test_pdf_parser.py）が壊れないこと"
+    - "pytest 実行で全テスト PASS すること"
+    - "テストケース名が日本語コメントまたは英語で意図を明確にすること"
+
   risk_assessment:
-    - risk: "financials.json の document 構造が銘柄間で異なる可能性"
-      mitigation: "2780 と 7685 の両方の financials.json を参照して共通構造を確認"
-    - risk: "半期報告書の扱い（6ヶ月期間）"
-      mitigation: "期間長 > 300日 で annual 判定。半期は quarterly 扱い（参考実装と同じ動作）"
+    - risk: "既存テストの破壊"
+      mitigation: "新規ファイルで追加。既存ファイルは変更しない"
+    - risk: "import パスの不整合"
+      mitigation: "既存テストの import パターンを踏襲する"

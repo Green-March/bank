@@ -1,37 +1,27 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "req_20260228_001_T2_rev2"
-  task_id: "req_20260228_001_T2"
-  junior_id: "junior2"
-  status: pending
-  timestamp: "2026-02-28T10:30:00+09:00"
+  request_id: "rev_T1_req_20260225_001"
+  task_id: "T1_req_20260225_001"
+  junior_id: "junior1"
+  status: pending_review
+  timestamp: "2026-02-25T11:27:00+09:00"
   payload:
-    title: "financial-integrator pytest テスト + 2銘柄実データ検証（rev2修正済み）"
-    outputs:
-      - "skills/financial-integrator/tests/__init__.py"
-      - "skills/financial-integrator/tests/test_integrator.py"
-      - "skills/financial-integrator/tests/test_cli_real_data.py"
-    revision_summary:
-      previous_verdict: "revise"
-      changes_made:
-        - "determine_fiscal_year に fye=12/9/6 境界ケース10件追加（全月ループ検証含む）"
-        - "fye=12 の特性（全月で fiscal_year == calendar year）を正しく反映"
-        - "2780: annual=7件, quarterly=18件 を固定期待値でアサート"
-        - "7685: annual=6件, quarterly=19件 を固定期待値でアサート"
-        - "両銘柄に source 分布検証テスト追加（edinet/both の存在確認）"
+    objective: "context_priority() 関数の回帰テスト追加"
+    deliverable_file: "skills/disclosure-parser/tests/test_context_priority.py"
+    target_function: "skills/disclosure-parser/scripts/parser.py context_priority() (行264-294)"
     test_results:
-      total: 48
-      passed: 48
-      failed: 0
-      breakdown:
-        unit_tests: 30
-        integration_tests: 14
-        note: "test_integrator.py に conftest.py 外の fixture 4件を含む場合は30件扱い"
+      new_tests: 13
+      categories: "basic=3, consolidation=4, boundary=4, compound=2"
+      total_passed: 111
+      total_skipped: 5
+      existing_tests_unaffected: true
     review_criteria:
-      - "rev1指摘①: fye=12 境界ケース追加による determine_fiscal_year 厳密検証"
-      - "rev1指摘②: 2780/7685 の annual/quarterly 固定件数期待値による回帰耐性"
-      - "pytest 全48件 PASS"
+      - "全分岐パスのカバレッジ: currentyear, current, currentquarter, nonconsolidated, consolidated, prior, previous"
+      - "過去バグ再発防止: nonconsolidated が consolidated の substring match で誤加点されないことの明示テスト"
+      - "境界ケース: 空文字列, 大文字小文字混在, 未知文字列"
+      - "既存テスト非破壊: 111 passed, 5 skipped"
+      - "テストコードの可読性・メンテナンス性"
 review_followup:
   request_id: null
   task_id: null
