@@ -2,87 +2,87 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_req_20260227_001_v2"
-  request_id: "req_20260227_001"
-  ticker: "2780"
-  revision: 2
-  revision_note: "Reviewer指摘2件を反映: (1) T1受入基準を5件必達+旧社名一致条件明記 (2) EDINET API制限時の再試行方針追加"
-  objective: "2780 コメ兵HDの有価証券報告書（年次）をEDINETから追加収集し、パース→統合→メトリクス再計算→レポート再生成。FY2021-FY2023通期データの欠損を解消し、5年分の通期メトリクスを完成させる。"
-
-  current_state:
-    edinet_collected: "四半期報告書12件 + 半期報告書1件（有価証券報告書は0件）"
-    missing_annual: "FY2021, FY2022, FY2023, FY2024, FY2025の有価証券報告書が未収集"
-    jquants_annual: "FY2024, FY2025の通期データはJ-Quantsから取得済み"
-    key_gap: "FY2021-FY2023の通期データが完全欠損（EDINET有報なし＋J-Quants範囲外）"
-    parser_issue: "total_liabilities が全文書で0%（XBRLコンセプト別名未登録）"
-    edinet_code: "E03416（HD体制移行前後で同一EDINETコード）"
-
-  task_decomposition:
-    phase_1_parallel:
-      - task_id: "T1_edinet_annual_collect"
-        assignee: "junior1"
-        description: "EDINETからコメ兵HD (E03416) の有価証券報告書を追加収集。FY2021-FY2025の年次報告書5件をraw/edinet/に保存。既存12文書との重複回避。inventory.md更新。"
-        command: "python3 skills/disclosure-collector/scripts/main.py edinet E03416 --ticker 2780 --start-date 2020-06-01 --end-date 2026-02-27 --report-keyword 有価証券報告書"
-        output: "data/2780/raw/edinet/ に有報ZIPを追加"
-        acceptance_criteria:
-          - "FY2021-FY2025の有価証券報告書5件すべてを収集する（5件必達）"
-          - "各年度の有報doc_idを記録し、期末日(period_end)がFY2021=2021-03-31, FY2022=2022-03-31, FY2023=2023-03-31, FY2024=2024-03-31, FY2025=2025-03-31であることを検証する"
-          - "旧社名一致条件: EDINETコードE03416がHD体制移行前(FY2021以前)と移行後(FY2022以降)で同一であることを確認する。提出者名が「株式会社コメ兵」または「コメ兵ホールディングス株式会社」のいずれかであれば有効とする"
-          - "既存の四半期/半期報告書ZIP 12件と重複しない"
-          - "inventory.md が更新され、収集済み有報5件の一覧（doc_id, form, period_end, filing_date, 提出者名）が追記される"
-          - "manifest.json が更新される"
-        api_retry_policy:
-          description: "EDINET API制限時の再試行方針"
-          strategy: "指数バックオフ（初回2秒、最大60秒、最大5回リトライ）"
-          rate_limit_handling: "HTTP 429 または 503 受信時は指数バックオフで自動再試行"
-          manual_escalation: "5回リトライ後も失敗する場合はエラーログを出力し、Senior に報告（queue/reports/junior1_report.yaml に status: blocked, result に失敗doc_idとHTTPステータスを記録）。Senior が手動再開を判断する"
-          partial_success: "一部年度の有報のみ取得できた場合は取得済み分を保存し、未取得分をreportに明記して Senior に報告"
-        priority: "high"
-
-      - task_id: "T2_parser_fix_liabilities"
-        assignee: "junior2"
-        description: "disclosure-parser の CONCEPT_ALIASES に total_liabilities の XBRL別名を追加。Liabilities概念名をマッピングし、全文書でtotal_liabilitiesが取得可能になるよう改修。テスト実行で回帰なし確認。"
-        target_file: "skills/disclosure-parser/scripts/parser.py"
-        acceptance_criteria:
-          - "CONCEPT_ALIASESにliabilities→total_liabilitiesのマッピングが追加される"
-          - "pytest skills/disclosure-parser/ が全件パス"
-          - "既存のパース結果に回帰影響がない"
-        priority: "medium"
-
-    phase_2_sequential:
-      - task_id: "T3_reparse_integrate_metrics_report"
-        assignee: "junior3"
-        depends_on: ["T1_edinet_annual_collect", "T2_parser_fix_liabilities"]
-        description: "有報追加収集+パーサー改善完了後、以下を順次実行: (1) 全文書再パース→financials.json更新 (2) EDINET+J-Quants統合→integrated_financials.json更新 (3) メトリクス再計算→metrics.json更新（5年通期メトリクス完成） (4) レポート再生成→2780_report.md/html更新"
-        sub_steps:
-          - "python3 skills/disclosure-parser/scripts/main.py --ticker 2780 で全文書再パース"
-          - "統合スクリプトでintegrated_financials.json再生成（FY2021-FY2023通期データ追加）"
-          - "python3 skills/financial-calculator/scripts/main.py --ticker 2780 でメトリクス再計算"
-          - "python3 skills/financial-reporter/scripts/main.py --ticker 2780 --format md html でレポート再生成"
-        acceptance_criteria:
-          - "financials.json に有報データが追加され、FY2021-FY2025の通期エントリが存在する"
-          - "integrated_financials.jsonのcoverage_summaryでFY2021-FY2023のannualがnullでなくなる"
-          - "metrics.json に5年分の通期メトリクス（FY2021-FY2025）が含まれる"
-          - "total_liabilitiesフィールドが有効値を持つ"
-          - "2780_report.md/htmlの通期推移表がFY2021-FY2025の5年分を表示する"
-          - "利用データソース（EDINET有報/四半期報/J-Quants）が明記される"
-          - "前提（HD体制移行、制度変更）とリスクが明示される"
-        priority: "high"
-
+  plan_id: "req_20260228_001_plan_v1"
+  request_id: "req_20260228_001"
+  timestamp: "2026-02-28T09:00:00+09:00"
+  objective: "financial-integrator スキル新規作成 — EDINET financials.json + J-Quants jquants_fins_statements.json → integrated_financials.json を自動生成する汎用CLIスキル"
+  background: |
+    毎回 Junior がインラインPythonで EDINET + J-Quants データ統合を手動実装している。
+    参考実装 data/2780/logs/T3_integrate_edinet_jquants.py を汎用スキル化し、
+    全銘柄で1コマンド実行可能にする。
+  reference_implementation: "data/2780/logs/T3_integrate_edinet_jquants.py"
+  generalization_points:
+    - "BASE パス → --ticker + --parsed-dir CLI引数"
+    - "FYE_MONTH=3 ハードコード → --fye-month CLI引数"
+    - "ANNUAL_DOC_IDS リスト → period_end.month==fye_month AND 期間長≒12ヶ月 で自動分類"
+    - "ticker/company_name ハードコード → 引数から自動設定"
+    - "J-Quants ファイル欠損時 → EDINET のみで統合（エラーにしない）"
+  tasks:
+    - task_id: "T1"
+      title: "financial-integrator スキル実装"
+      assigned_to: "junior1"
+      description: |
+        skills/financial-integrator/ ディレクトリに新規スキルを作成する。
+        1. ディレクトリ構成: scripts/{__init__.py, main.py, integrator.py}, tests/, SKILL.md
+        2. integrator.py コアロジック:
+           - determine_fiscal_year(period_end, fye_month): FY算出（参考実装の汎用化）
+           - determine_quarter(period_end, fye_month): 四半期判定（FYE_MONTHパラメータ化）
+           - classify_period(period_end, period_start, fye_month): annual/quarterly 自動分類
+             → period_end.month == fye_month AND 期間長 > 300日 → annual, それ以外 → quarterly
+           - merge_entry(edinet_entry, jquants_entry): EDINET優先・J-Quants補完マージ（参考実装どおり）
+           - integrate(ticker, fye_month, parsed_dir, output_path): メイン統合関数
+           - coverage_summary / coverage_matrix 自動生成
+           - J-Quants 欠損時の graceful handling（Warning出力、EDINETのみで統合）
+        3. main.py CLI:
+           - --ticker (必須)
+           - --fye-month (必須)
+           - --parsed-dir (省略時: data/{ticker}/parsed)
+           - --output (省略時: data/{ticker}/parsed/integrated_financials.json)
+        4. SKILL.md: 既存スキル（disclosure-parser）と同形式で記述
+      output_files:
+        - "skills/financial-integrator/scripts/__init__.py"
+        - "skills/financial-integrator/scripts/main.py"
+        - "skills/financial-integrator/scripts/integrator.py"
+        - "skills/financial-integrator/SKILL.md"
+      acceptance_criteria:
+        - "ANNUAL_DOC_IDS 等の銘柄ハードコードがゼロ"
+        - "FYE_MONTH がCLI引数で可変"
+        - "J-Quants欠損時にエラーなく動作"
+        - "既存スキル（financial-calculator/scripts/main.py）と同一のCLIパターン"
+    - task_id: "T2"
+      title: "pytest テスト + 2銘柄実データ検証"
+      assigned_to: "junior2"
+      depends_on: ["T1"]
+      description: |
+        T1 完了後、テスト作成と実データ検証を行う。
+        1. tests/test_integrator.py ユニットテスト:
+           - determine_fiscal_year: 3月決算(2780), 12月決算(7685) の両パターン
+           - determine_quarter: Q1/Q2/Q3/FY + 非標準月のパターン
+           - merge_entry: edinet-only, jquants-only, both, null値処理
+           - classify_period: annual/quarterly 自動分類の正確性
+        2. tests/test_cli_real_data.py 実データ統合テスト:
+           - 2780 (FYE=3月): CLI実行 → 出力JSONの構造・annual/quarterly件数検証
+           - 7685 (FYE=12月): CLI実行 → 出力JSONの構造・期数検証
+           - J-Quants欠損シミュレーション（tmpdir利用）
+        3. pytest 全件PASS確認
+      output_files:
+        - "skills/financial-integrator/tests/__init__.py"
+        - "skills/financial-integrator/tests/test_integrator.py"
+        - "skills/financial-integrator/tests/test_cli_real_data.py"
+      acceptance_criteria:
+        - "ユニットテスト: 3月決算・12月決算の両方で正しいFY/Q判定"
+        - "実データテスト: 2780 と 7685 で CLI が正常終了し出力JSONが期待構造"
+        - "pytest 全件PASS"
   quality_criteria:
-    - "FY2021-FY2025の通期ROE/ROA/利益率/成長率が計算可能"
-    - "total_liabilitiesがパース可能になり、D/Eレシオ等の追加指標も算出可能"
-    - "レポートに利用データソース（EDINET/J-Quants）と前提・リスクが明記"
-    - "既存の四半期データに回帰影響なし"
-    - "pytest 全件パス"
-
-  risks:
-    - "HD体制移行前(FY2021)の有報はEDINET上で旧法人名「株式会社コメ兵」で登録されている可能性がある。EDINETコードE03416が同一であれば問題なし。T1受入基準に旧社名一致条件を含む。"
-    - "FY2021の有報は移行期のため連結範囲が異なる可能性がある。レポートにその旨注記が必要。"
-    - "EDINET API制限時は指数バックオフで自動再試行し、5回失敗後はSeniorに報告して手動再開判断。"
-
-  timeline:
-    phase_1: "T1 (Junior1) と T2 (Junior2) を並行実行"
-    phase_2: "Phase 1完了後、T3 (Junior3) を実行"
-    total_tasks: 3
-    total_phases: 2
+    - "銘柄固有ハードコードがゼロ（grep で ANNUAL_DOC_IDS, 2780, コメ兵 が出ないこと）"
+    - "既存スキルと一貫した CLI パターンとディレクトリ構成"
+    - "2銘柄（FYE=3月 + FYE=12月）での動作確認済み"
+    - "J-Quants 欠損時にも正常動作"
+    - "pytest 全テスト PASS"
+  execution_order:
+    - "T1 → Reviewer承認 → T2 → Reviewer承認 → 完了"
+  risk_assessment:
+    - risk: "financials.json の document 構造が銘柄間で異なる可能性"
+      mitigation: "2780 と 7685 の両方の financials.json を参照して共通構造を確認"
+    - risk: "半期報告書の扱い（6ヶ月期間）"
+      mitigation: "期間長 > 300日 で annual 判定。半期は quarterly 扱い（参考実装と同じ動作）"

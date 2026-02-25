@@ -1,42 +1,37 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_T3_002"
-  task_id: "T3_reparse_integrate_metrics_report"
-  junior_id: "junior3"
+  request_id: "req_20260228_001_T2_rev2"
+  task_id: "req_20260228_001_T2"
+  junior_id: "junior2"
   status: pending
-  timestamp: "2026-02-27T10:57:00+09:00"
+  timestamp: "2026-02-28T10:30:00+09:00"
   payload:
-    summary: "レビュー指摘2点を反映した修正版。(1) total_liabilities有効件数を再計算しjq再現コマンド付きで検証ログに記録（financials=36/54, integrated annual=7/7, quarterly=12/18） (2) 統合スクリプトをdata/2780/logs/T3_integrate_edinet_jquants.pyとして保存し再現可能な形に整備。"
-    revision_from: "rev_T3_001"
-    changes_made:
-      - "total_liabilities有効件数の再計算・jq再現コマンド付き検証をvalidationに追記"
-      - "data/2780/logs/T3_total_liabilities_validation.md を新規作成（検証ログ）"
-      - "data/2780/logs/T3_integrate_edinet_jquants.py を新規保存（統合スクリプト全文）"
-      - "re_execution_commandsをインラインからスクリプトパスに更新"
+    title: "financial-integrator pytest テスト + 2銘柄実データ検証（rev2修正済み）"
     outputs:
-      - "data/2780/parsed/financials.json (18文書)"
-      - "data/2780/parsed/integrated_financials.json (annual 7件, quarterly 18件)"
-      - "data/2780/parsed/metrics.json (通期7年, 四半期18期間)"
-      - "data/2780/reports/2780_report.md"
-      - "data/2780/reports/2780_report.html"
-      - "data/2780/logs/T3_total_liabilities_validation.md"
-      - "data/2780/logs/T3_integrate_edinet_jquants.py"
-    validation:
-      - "financials.json: document_count=18"
-      - "total_liabilities: financials=36/54期間, integrated annual=7/7, quarterly=12/18 (jq再現コマンド付き)"
-      - "integrated_financials.json: FY2021-FY2023 annual=edinet (not null)"
-      - "metrics.json: FY2021-FY2025 通期メトリクス5年分あり"
-      - "report.md/html: 5年通期推移表+データソース+前提リスク明記"
-      - "quarterly_series: 18 entries preserved (回帰なし)"
-    acceptance_criteria:
-      - "financials.json に18文書分のエントリが存在する"
-      - "integrated_financials.json で FY2021-FY2023 annual が null でない"
-      - "metrics.json に5年分通期メトリクス（FY2021-FY2025）が含まれる"
-      - "total_liabilities フィールドが有効値を持つ"
-      - "2780_report.md/html の通期推移表が5年分表示"
-      - "利用データソース・前提・リスクが明記"
-      - "既存四半期データに回帰影響なし"
+      - "skills/financial-integrator/tests/__init__.py"
+      - "skills/financial-integrator/tests/test_integrator.py"
+      - "skills/financial-integrator/tests/test_cli_real_data.py"
+    revision_summary:
+      previous_verdict: "revise"
+      changes_made:
+        - "determine_fiscal_year に fye=12/9/6 境界ケース10件追加（全月ループ検証含む）"
+        - "fye=12 の特性（全月で fiscal_year == calendar year）を正しく反映"
+        - "2780: annual=7件, quarterly=18件 を固定期待値でアサート"
+        - "7685: annual=6件, quarterly=19件 を固定期待値でアサート"
+        - "両銘柄に source 分布検証テスト追加（edinet/both の存在確認）"
+    test_results:
+      total: 48
+      passed: 48
+      failed: 0
+      breakdown:
+        unit_tests: 30
+        integration_tests: 14
+        note: "test_integrator.py に conftest.py 外の fixture 4件を含む場合は30件扱い"
+    review_criteria:
+      - "rev1指摘①: fye=12 境界ケース追加による determine_fiscal_year 厳密検証"
+      - "rev1指摘②: 2780/7685 の annual/quarterly 固定件数期待値による回帰耐性"
+      - "pytest 全48件 PASS"
 review_followup:
   request_id: null
   task_id: null
