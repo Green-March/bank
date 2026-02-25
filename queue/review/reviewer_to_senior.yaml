@@ -1,8 +1,8 @@
 plan_review_response:
-  request_id: 'plan_20260225_s22_batch3'
+  request_id: 'plan_req_017_018_rev5'
   verdict: 'ok'
   comments:
-    - '3タスクは担当者分離され、依存関係の競合がなく並列実行前提が明確。'
-    - '依存順はresolve→collect→parse→integrate→calculate→inventory→reportでDAG的整合性が取れている。'
-    - '各タスクに完了条件とテスト基準があり、再現性のある検証が想定できる。'
+    - '依存関係分解が明確で、T1→T2 / T3→T4 の並列・直列制御は妥当です。'
+    - 'output_vars の JSON パース型保証、stderr 文字列化、exit-code フォールバックが整合しており実装リスクが低いです。'
+    - 'smoke test が validate だけでなくモック run を追加し、--vars 単体での全ステップ解決を確認できる設計です。'
   suggested_changes: []

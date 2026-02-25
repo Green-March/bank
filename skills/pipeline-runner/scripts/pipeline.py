@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -30,6 +31,7 @@ class PipelineStep:
     output_dir: str
     depends_on: list[str] = field(default_factory=list)
     gates: str | None = None
+    output_vars: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -96,6 +98,7 @@ class PipelineConfig:
                     output_dir=s["output_dir"],
                     depends_on=s.get("depends_on", []),
                     gates=s.get("gates"),
+                    output_vars=s.get("output_vars") or {},
                 )
             )
 
@@ -116,6 +119,46 @@ class PipelineConfig:
                 placeholder = "{" + key + "}"
                 step.command = step.command.replace(placeholder, val)
                 step.output_dir = step.output_dir.replace(placeholder, val)
+
+    def _resolve_step(self, step: PipelineStep, vars_dict: dict[str, str]) -> None:
+        """Resolve placeholders in a single step's command and output_dir."""
+        prev_output = ""
+        if step.depends_on:
+            dep_id = step.depends_on[0]
+            dep_step = self._step_map.get(dep_id)
+            if dep_step:
+                prev_output = dep_step.output_dir
+
+        all_vars = {**vars_dict, "prev_output": prev_output}
+        for key, val in all_vars.items():
+            placeholder = "{" + key + "}"
+            step.command = step.command.replace(placeholder, val)
+            step.output_dir = step.output_dir.replace(placeholder, val)
+
+    def validate_vars(self, vars_dict: dict[str, str]) -> None:
+        """Validate that all placeholders can be resolved at execution time."""
+        placeholder_re = re.compile(r"\{(\w+)\}")
+        steps = self.execution_order()
+        available_output_vars: set[str] = set()
+
+        for step in steps:
+            available = set(vars_dict.keys())
+            available.add("prev_output")
+            available.update(available_output_vars)
+
+            placeholders = set(placeholder_re.findall(step.command))
+            placeholders.update(placeholder_re.findall(step.output_dir))
+
+            for name in placeholders:
+                if name not in available:
+                    raise PipelineError(
+                        f"変数 '{name}' が未定義です。"
+                        f"--vars {name}=VALUE で指定するか、"
+                        f"output_vars を持つ先行ステップを追加してください"
+                    )
+
+            for key in step.output_vars:
+                available_output_vars.add(key)
 
     def validate_dag(self) -> list[str]:
         """Validate DAG structure. Returns list of errors (empty if valid)."""
@@ -196,8 +239,9 @@ class PipelineRunner:
         if errors:
             raise PipelineError(f"DAG validation failed: {'; '.join(errors)}")
 
-        config.resolve_vars(vars_dict)
+        config.validate_vars(vars_dict)
         steps = config.execution_order()
+        runtime_vars = dict(vars_dict)
 
         pipeline_log: dict[str, Any] = {
             "pipeline_name": config.name,
@@ -209,7 +253,8 @@ class PipelineRunner:
         }
 
         for step in steps:
-            step_log = self._run_step(step)
+            config._resolve_step(step, runtime_vars)
+            step_log, stdout = self._run_step(step)
             pipeline_log["steps"].append(step_log.to_dict())
 
             if step_log.status == "failed":
@@ -217,6 +262,10 @@ class PipelineRunner:
                 pipeline_log["completed_at"] = datetime.now(JST).isoformat()
                 self._write_log(pipeline_log, log_path)
                 return pipeline_log
+
+            # Process output_vars
+            if step.output_vars and step_log.status == "completed":
+                self._process_output_vars(step, stdout, runtime_vars, vars_dict)
 
             # Quality gate
             if step.gates and step_log.status == "completed":
@@ -236,9 +285,10 @@ class PipelineRunner:
         self._write_log(pipeline_log, log_path)
         return pipeline_log
 
-    def _run_step(self, step: PipelineStep) -> StepLog:
+    def _run_step(self, step: PipelineStep) -> tuple[StepLog, str]:
         log = StepLog(id=step.id, skill=step.skill)
         log.started_at = datetime.now(JST).isoformat()
+        stdout = ""
 
         try:
             result = subprocess.run(
@@ -254,9 +304,14 @@ class PipelineRunner:
             completed = datetime.fromisoformat(log.completed_at)
             log.duration_sec = round((completed - started).total_seconds(), 2)
 
+            if result.stderr:
+                sys.stderr.write(result.stderr)
+
+            stdout = result.stdout
+
             if result.returncode != 0:
                 log.status = "failed"
-                log.error = result.stderr.strip() or f"exit code {result.returncode}"
+                log.error = result.stderr if result.stderr else f"Step failed with exit code {result.returncode}"
             else:
                 log.status = "completed"
         except subprocess.TimeoutExpired:
@@ -268,7 +323,36 @@ class PipelineRunner:
             log.status = "failed"
             log.error = str(e)
 
-        return log
+        return log, stdout
+
+    def _process_output_vars(
+        self,
+        step: PipelineStep,
+        stdout: str,
+        runtime_vars: dict[str, str],
+        user_vars: dict[str, str],
+    ) -> None:
+        """Parse stdout JSON and extract output_vars into runtime_vars."""
+        try:
+            data = json.loads(stdout)
+        except (json.JSONDecodeError, ValueError):
+            raise PipelineError(
+                f"Step '{step.id}' output_vars: stdout is not valid JSON: {stdout[:200]}"
+            )
+
+        if not isinstance(data, dict):
+            raise PipelineError(
+                f"Step '{step.id}' output_vars expects JSON object (dict), "
+                f"got {type(data).__name__}"
+            )
+
+        for var_name, json_key in step.output_vars.items():
+            if json_key not in data:
+                raise PipelineError(
+                    f"Step '{step.id}' output_vars key '{json_key}' not found in stdout JSON"
+                )
+            if var_name not in user_vars:
+                runtime_vars[var_name] = str(data[json_key])
 
     def _run_gate(self, step: PipelineStep) -> dict | None:
         if not step.gates:

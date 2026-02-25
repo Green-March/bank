@@ -1,42 +1,31 @@
 queue:
-  - request_id: "req_20260225_014"
-    objective: "example_pipeline.yaml を現行4ステップから7ステップ構成に拡張する（resolve→collect→parse→integrate→calculate→inventory→report）。pipeline-runner が正しく7ステップを実行できることをテストで確認する"
+  - request_id: "req_20260225_017"
+    objective: "fye_month 引数供給保証の運用設計 — pipeline-runner の7ステップ実行時に fye_month が必須化されたが、上流での引数供給保証が未設計。ticker-resolver の fye_month 自動取得をデフォルト値として組み込むか、パイプライン変数のバリデーションガードを実装する"
     ticker: null
     universe: null
-    analysis_type: "pipeline_enhancement"
+    analysis_type: "system_improvement"
     timeframe: null
     output_format: ["yaml"]
     priority: "high"
     due_date: "2026-02-25"
     constraints:
-      - "既存の pipeline-runner との整合性を維持する"
-      - "各ステップが対応するスキルのエントリポイントと一致すること"
-      - "テストが全件PASSすること"
-
-  - request_id: "req_20260225_015"
-    objective: "financial-reporter の main() が sys.exit() を呼び出しておらず常に終了コード0になる問題を修正する。sys.exit(main()) パターンを適用し、エラー時に非ゼロ終了コードを返すようにする"
+      - "ticker-resolver が返す fye_month をパイプライン変数として自動供給する仕組みを設計"
+      - "fye_month 未指定時のバリデーションエラーメッセージを明確にする"
+      - "既存の7ステップ example_pipeline.yaml との整合性を維持"
+      - "ユニットテストを追加して回帰を防止"
+  - request_id: "req_20260225_018"
+    objective: "market-data-collector スキル新規作成 — J-Quants 株価API（daily_quotes）+ 上場銘柄情報API（listed_info）からデータを取得し、PER/PBR/時価総額/EV 算出に必要な株価・発行済株式数データを収集するCLIスキルを開発"
     ticker: null
     universe: null
-    analysis_type: "bug_fix"
+    analysis_type: "skill_development"
     timeframe: null
-    output_format: null
-    priority: "high"
+    output_format: ["json"]
+    priority: "medium"
     due_date: "2026-02-25"
     constraints:
-      - "既存テストが全件PASSすること"
-      - "正常終了時は0、エラー時は非ゼロを返すこと"
-
-  - request_id: "req_20260225_016"
-    objective: "comparable-analyzer で peer の metrics.json が不在の場合にクラッシュする問題を修正する。欠損peerをスキップし、結果に missing_peers フィールドを記録する graceful degradation を実装する"
-    ticker: null
-    universe: null
-    analysis_type: "bug_fix"
-    timeframe: null
-    output_format: null
-    priority: "high"
-    due_date: "2026-02-25"
-    constraints:
-      - "欠損peerがあってもクラッシュせずスキップすること"
-      - "missing_peers フィールドに欠損peer情報を記録すること"
-      - "全peerが欠損の場合も適切にハンドリングすること"
-      - "既存テストが全件PASSすること"
+      - "J-Quants API v2 の daily_quotes と listed_info エンドポイントを使用"
+      - "既存の skills/disclosure-collector/scripts/auth.py のトークン自動更新を再利用"
+      - "出力: data/{ticker}/raw/jquants/market_data.json (株価時系列) + listed_info.json (銘柄情報)"
+      - "CLI: python3 skills/market-data-collector/scripts/main.py --ticker XXXX --from YYYY-MM-DD --to YYYY-MM-DD"
+      - "SKILL.md, main.py, collector.py, テスト一式を含む"
+      - "エラーハンドリング: API制限、銘柄未存在、期間不正に対応"

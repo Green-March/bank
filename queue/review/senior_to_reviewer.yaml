@@ -2,101 +2,119 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_20260225_s22_batch3"
-  timestamp: "2026-02-25T17:00:00+09:00"
-  objective: "3件のタスク（req_014〜016）を並列で3名のJuniorに割り当て、品質を担保しつつ完了する"
-  
+  plan_id: plan_req_017_018_rev5
+  timestamp: "2026-02-25T17:55:00"
+  revision_note: |
+    Reviewer rev4 指摘2点に対応:
+    1. T1: subprocess.run(text=True) に統一。result.stdout/stderr は str 型。
+       .decode() 呼び出しを全廃し、bytes/str 混在を完全排除。
+    2. T2: smoke test に subprocess モックによる最小実行テストを追加。
+       validate だけでなく、モック step 実行で output_vars フロー全体を検証。
+
+  overview: |
+    req_20260225_017 (高): pipeline-runner output_vars 実装。
+    req_20260225_018 (中): market-data-collector 新規作成。
+
   tasks:
-    - task_id: "req_20260225_014"
-      title: "example_pipeline.yaml 7ステップ化"
-      assignee: junior1
-      analysis_type: pipeline_enhancement
-      priority: high
+    - task_id: T1
+      request_id: req_20260225_017
+      junior: junior1
+      title: "pipeline-runner output_vars 機能実装 + バリデーション + テスト"
       description: |
-        現行4ステップ（collect→parse→calculate→report）を7ステップに拡張:
-        resolve → collect → parse → integrate → calculate → inventory → report
-        
-        具体的な作業:
-        1. skills/pipeline-runner/references/example_pipeline.yaml を編集
-        2. 新ステップ追加:
-           - resolve: ticker-resolver (main.py resolve {ticker}) → depends_on: なし、output: data/{ticker}/resolved/
-           - integrate: financial-integrator (main.py --ticker {ticker} ...) → depends_on: parse、output: data/{ticker}/integrated/
-           - inventory: inventory-builder (main.py --ticker {ticker} ...) → depends_on: calculate、output: data/{ticker}/inventory/
-        3. 既存ステップの depends_on を更新:
-           - collect: depends_on: [resolve]
-           - calculate: depends_on: [integrate] (parse→integrate に変更)
-           - report: depends_on: [inventory] (calculate→inventory に変更)
-        4. 各ステップの command が対応スキルのエントリポイントと一致することを確認
-        5. テスト実行: pytest skills/pipeline-runner/tests/ で全件PASS確認
-      output_path: "skills/pipeline-runner/references/example_pipeline.yaml"
-      quality_criteria:
-        - "7ステップが正しい依存関係で定義されている"
-        - "各ステップの command が対応スキルの main.py と一致"
-        - "pytest 全件PASS"
-        - "pipeline-runner の validate サブコマンドで DAG 検証PASS"
+        pipeline-runner に output_vars 機能を実装する。
+        1. skills/pipeline-runner/scripts/pipeline.py の修正:
+           a. PipelineStep に output_vars: dict[str, str] フィールド追加
+           b. subprocess.run() の呼び出し方式（★rev5統一）:
+              - subprocess.run(cmd, shell=True, text=True, capture_output=True)
+              - text=True により result.stdout, result.stderr は str 型
+              - .decode() は一切使わない（bytes/str 混在を完全排除）
+           c. stderr の処理:
+              - キャプチャした result.stderr を即時 sys.stderr.write(result.stderr) で親に転送
+              - StepLog.error = result.stderr if result.stderr else f"Step failed with exit code {result.returncode}"
+              - str 型で統一、encode/decode 不要
+           d. output_vars 処理:
+              - json.loads(result.stdout) で解析（str → dict）
+              - パース失敗: PipelineError（stdout[:200] 含む）
+              - 型チェック: isinstance(data, dict) でなければ PipelineError
+              - キー欠損: PipelineError
+              - 正常時: str(value) で vars_dict に追加（--vars 既存キーは上書きしない）
+           e. 段階的 resolve_vars()
+        2. バリデーション:
+           a. 全ステップの {placeholder} を正規表現で収集
+           b. --vars + output_vars(DAG先行) + prev_output で解決可能性検証
+           c. 解決不能時: 明確なエラーメッセージ
+        3. ユニットテスト (skills/pipeline-runner/tests/test_output_vars.py):
+           a. output_vars ステップ間変数伝搬
+           b. --vars オーバーライド優先度
+           c. 未解決 placeholder バリデーションエラー
+           d. JSON パース失敗
+           e. JSON 型チェック（list/int/str → PipelineError）
+           f. JSONキー欠損
+           g. stderr 転送 + StepLog.error 格納確認（str 型）
+           h. stderr 空時 exit-code フォールバック
+           i. 既存テスト回帰なし
+      depends_on: []
 
-    - task_id: "req_20260225_015"
-      title: "financial-reporter 終了コード修正"
-      assignee: junior2
-      analysis_type: bug_fix
-      priority: high
+    - task_id: T2
+      request_id: req_20260225_017
+      junior: junior2
+      title: "example_pipeline.yaml + SKILL.md + smoke test（validate + モック実行）"
       description: |
-        financial-reporter の main.py エントリポイントを修正:
-        
-        具体的な作業:
-        1. skills/financial-reporter/scripts/main.py を編集
-        2. 行195付近: `raise SystemExit(main())` → `sys.exit(main())` に変更
-        3. `import sys` が既にインポート済みか確認（なければ追加）
-        4. 他スキル（disclosure-parser, financial-calculator）と同じパターンに統一
-        5. テスト実行: pytest skills/financial-reporter/tests/ で全件PASS確認
-        6. 手動確認: python3 skills/financial-reporter/scripts/main.py --help が正常動作すること
-      output_path: "skills/financial-reporter/scripts/main.py"
-      quality_criteria:
-        - "sys.exit(main()) パターンに変更されている"
-        - "正常終了時は終了コード0"
-        - "エラー時（metrics.json不在等）は非ゼロ終了コード"
-        - "pytest 全件PASS"
-        - "他スキルと統一されたパターン"
+        T1 の output_vars を使い、パイプライン定義・ドキュメント・統合テストを更新。
+        1. example_pipeline.yaml 更新:
+           step 1 (resolve) に output_vars: {fye_month: fye_month, edinet_code: edinet_code, company_name: company_name}
+        2. SKILL.md 更新:
+           output_vars 機能説明、エラー仕様、--vars 優先度、バリデーション
+        3. Smoke test (skills/pipeline-runner/tests/test_smoke_pipeline.py)（★rev5強化）:
+           a. test_validate_example_pipeline:
+              example_pipeline.yaml を読み込み、--vars ticker=TEST のみで
+              validate（placeholder 解決可能性チェック）が通ることを確認
+           b. test_mock_run_example_pipeline（★rev5追加）:
+              subprocess.run を unittest.mock.patch でモック化して最小実行テスト:
+              - step 1 (resolve) のモック stdout: '{"fye_month": 3, "edinet_code": "E99999", "company_name": "テスト株式会社"}'
+              - step 2-7 のモック stdout: '{}'（空 JSON）
+              - 全モック step の returncode: 0
+              - PipelineRunner.run() を実行し、全7ステップが成功することを検証
+              - step 4, 7 のコマンド文字列に fye_month=3 が展開されていることを確認
+              - subprocess モックにより実 API 呼び出しなし
+        4. YAML 構文チェック + pytest 全 PASS
+      depends_on: [T1]
 
-    - task_id: "req_20260225_016"
-      title: "comparable-analyzer peer欠損時 graceful degradation"
-      assignee: junior3
-      analysis_type: bug_fix
-      priority: high
+    - task_id: T3
+      request_id: req_20260225_018
+      junior: junior3
+      title: "market-data-collector スキル実装"
       description: |
-        comparable-analyzer で peer の metrics.json が不在の場合の graceful degradation を強化:
-        
-        現状分析:
-        - _load_metrics() は既に None を返す（クラッシュはしない）
-        - warnings に記録はされるが、missing_peers 専用フィールドがない
-        
-        具体的な作業:
-        1. skills/comparable-analyzer/scripts/analyzer.py を編集
-        2. run_analysis() の output 辞書（行281-290付近）に missing_peers フィールドを追加:
-           - 型: list[dict] — 各要素: {"ticker": str, "company_name": str, "reason": str}
-           - metrics が全て None の peer を missing_peers として記録
-        3. missing_peers_count フィールドも追加（int）
-        4. 全peer欠損時の挙動を明示的にハンドリング:
-           - benchmark_reliable フラグを追加（missing_peers_count < total_peers の場合 true）
-           - 全peer欠損時は benchmark_reliable: false を明示
-        5. テスト追加（skills/comparable-analyzer/tests/test_analyzer.py）:
-           - test_all_peers_missing_metrics: 全peer欠損シナリオ
-           - test_partial_peer_missing_with_field: 部分欠損で missing_peers フィールド確認
-           - test_missing_peers_count: カウント正確性
-        6. 既存テスト実行: pytest skills/comparable-analyzer/tests/ で全件PASS確認
-      output_path: "skills/comparable-analyzer/scripts/analyzer.py"
-      quality_criteria:
-        - "欠損peerがあってもクラッシュしない"
-        - "missing_peers フィールドに欠損peer情報が記録される"
-        - "missing_peers_count が正確"
-        - "全peer欠損時も適切にハンドリング（benchmark_reliable: false）"
-        - "新規テスト + 既存テスト全件PASS"
+        J-Quants daily_quotes + listed_info CLIスキル新規作成。
+        1. skills/market-data-collector/ (SKILL.md, scripts/__init__.py, main.py, collector.py)
+        2. collector.py:
+           JQuantsAuth: Path(__file__).resolve().parents[3] → sys.path 追加 → from auth import
+           DailyQuotesClient: GET /v1/prices/daily_quotes, pagination_key 対応
+           ListedInfoClient: GET /v1/listed/info
+        3. main.py: --ticker, --from-date(1年前), --to-date(今日), --output-dir
+           出力: market_data.json + listed_info.json, 終了コード 0/1
+        4. SKILL.md
+      depends_on: []
+
+    - task_id: T4
+      request_id: req_20260225_018
+      junior: junior1
+      title: "market-data-collector テスト一式"
+      description: |
+        T3 のテスト作成。
+        tests/__init__.py, test_collector.py, test_main.py
+        DailyQuotes(正常,ページネーション,APIエラー,タイムアウト,空), ListedInfo(正常,未存在,APIエラー)
+        CLI引数パース, デフォルト値, 不正引数。全テスト pytest PASS。
+      depends_on: [T3]
 
   parallelization:
-    strategy: "3タスクは独立しており、junior1/2/3 に1件ずつ並列割り当て"
-    dependencies: "タスク間の依存関係なし"
-    
-  risk_assessment:
-    - "req_014: pipeline-runner のテストが example_pipeline.yaml の具体的なステップ数をハードコードしている場合、テスト修正も必要"
-    - "req_015: 変更は1行のみで低リスク。ただしテストで終了コードを明示的に検証していることを確認"
-    - "req_016: 既存の出力スキーマに新フィールド追加のため後方互換性あり。下流スキルへの影響なし"
+    phase_1: "T1 (junior1) + T3 (junior3) — 並行実行"
+    phase_2: "T2 (junior2, T1承認後) + T4 (junior1, T3承認後) — 並行実行"
+
+  quality_criteria:
+    - "全テスト pytest PASS、既存テスト回帰なし"
+    - "subprocess.run(text=True) 統一、bytes/str 混在なし"
+    - "StepLog.error が None にならない（str 型保証 + exit-code フォールバック）"
+    - "smoke test: validate + モック実行の両方 PASS"
+    - "example_pipeline.yaml validate 通過"
+    - "market-data-collector J-Quants API 正常通信 + ページネーション対応"

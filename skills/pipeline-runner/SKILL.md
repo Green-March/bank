@@ -79,7 +79,47 @@ pipeline:
 | `{ticker}` | Ticker code from `--vars` |
 | `{edinet_code}` | EDINET code from `--vars` |
 | `{prev_output}` | output_dir of the first dependency step |
-| Any `{key}` | Expanded from `--vars key=value` |
+| Any `{key}` | Expanded from `--vars key=value` or `output_vars` |
+
+### output_vars — ステップ間変数伝搬
+
+ステップの stdout JSON から値を抽出し、後続ステップのプレースホルダーに自動供給する。
+
+```yaml
+steps:
+  - id: resolve
+    skill: ticker-resolver
+    command: "python3 skills/ticker-resolver/scripts/main.py resolve {ticker}"
+    output_dir: "data/{ticker}/resolved"
+    output_vars:
+      fye_month: fye_month
+      edinet_code: edinet_code
+      company_name: company_name
+  - id: integrate
+    skill: financial-integrator
+    command: "... --fye-month {fye_month} ..."
+    depends_on: [resolve]
+```
+
+`output_vars` のキーはランタイム変数名、値は stdout JSON のキー名。
+上記の例では resolve ステップが `{"fye_month": 3, "edinet_code": "E12345", ...}` を stdout に出力すると、
+後続ステップの `{fye_month}` が `3` に、`{edinet_code}` が `E12345` に自動展開される。
+
+**優先度ルール**: `--vars` で指定された値は output_vars より常に優先される。
+例: `--vars fye_month=6` を指定すると、resolve の output_vars で得た fye_month は無視される。
+
+**エラー仕様**:
+
+| 状況 | 挙動 |
+|---|---|
+| stdout が有効な JSON でない | `PipelineError`: "stdout is not valid JSON" |
+| JSON が dict 以外 (list, int, str) | `PipelineError`: "expects JSON object (dict), got {type}" |
+| 指定したキーが JSON に存在しない | `PipelineError`: "key '{key}' not found in stdout JSON" |
+| stderr 出力がある場合 | stderr は sys.stderr に転送される（output_vars 処理には影響しない） |
+
+**バリデーション** (`validate_vars`):
+パイプライン実行前に、全ステップのプレースホルダーが `--vars` または先行ステップの `output_vars` で
+解決可能かを静的にチェックする。未解決の変数があれば実行前に `PipelineError` を発生させる。
 
 ### Quality Gate Integration
 

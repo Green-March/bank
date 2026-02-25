@@ -7,6 +7,10 @@ pipeline:
       command: "python3 skills/ticker-resolver/scripts/main.py resolve {ticker}"
       output_dir: "data/{ticker}/resolved"
       gates: null
+      output_vars:
+        fye_month: fye_month
+        edinet_code: edinet_code
+        company_name: company_name
     - id: collect
       skill: disclosure-collector
       command: "python3 skills/disclosure-collector/scripts/main.py edinet {edinet_code} --ticker {ticker}"
