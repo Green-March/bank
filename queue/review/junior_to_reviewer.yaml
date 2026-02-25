@@ -1,27 +1,30 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_T1_req_20260225_001"
-  task_id: "T1_req_20260225_001"
-  junior_id: "junior1"
+  request_id: "rev_T3_tests_001"
+  task_id: "T3_tests"
+  junior_id: "junior3"
   status: pending_review
-  timestamp: "2026-02-25T11:27:00+09:00"
+  timestamp: "2026-02-25T14:00:00+09:00"
   payload:
-    objective: "context_priority() 関数の回帰テスト追加"
-    deliverable_file: "skills/disclosure-parser/tests/test_context_priority.py"
-    target_function: "skills/disclosure-parser/scripts/parser.py context_priority() (行264-294)"
-    test_results:
-      new_tests: 13
-      categories: "basic=3, consolidation=4, boundary=4, compound=2"
-      total_passed: 111
-      total_skipped: 5
-      existing_tests_unaffected: true
+    description: "inventory-builder pytest テスト 25件 — 単体/JSON検証/統合/CLI テスト全PASS"
+    outputs:
+      - "skills/inventory-builder/tests/test_builder.py"
+    validation_results:
+      - "total_tests=25, passed=25, failed=0"
+      - "execution_time=0.53s"
+    test_breakdown:
+      unit_tests: "ClassifyPeriod(8), CoverageMatrix(1), AnalyzeGaps(2), QualitySummary(2), GenerateInventoryMd(1)"
+      json_validation: "MissingJsonKeys(4), EmptyInputs(2)"
+      integration: "2780実データ(1), 7685実データ+J-Quants(1), J-Quantsオプショナル(1)"
+      cli: "help(1), execution(1)"
+    caveats:
+      - "統合テストはdata/2780, data/7685の実データに依存（存在しない場合はskip）"
     review_criteria:
-      - "全分岐パスのカバレッジ: currentyear, current, currentquarter, nonconsolidated, consolidated, prior, previous"
-      - "過去バグ再発防止: nonconsolidated が consolidated の substring match で誤加点されないことの明示テスト"
-      - "境界ケース: 空文字列, 大文字小文字混在, 未知文字列"
-      - "既存テスト非破壊: 111 passed, 5 skipped"
-      - "テストコードの可読性・メンテナンス性"
+      - "テストカバレッジの網羅性（単体/JSON検証/統合/CLI）"
+      - "JSON欠損キーのバリデーションテスト（計画レビュー時のReviewer指摘対応）"
+      - "統合テストの実データ検証の妥当性"
+      - "エッジケース（空入力、null値）のカバレッジ"
 review_followup:
   request_id: null
   task_id: null

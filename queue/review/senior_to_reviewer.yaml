@@ -2,76 +2,92 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_req_20260225_001"
-  request_id: "req_20260225_001"
-  timestamp: "2026-02-25T11:05:00+09:00"
-  objective: "disclosure-parser の context_priority() 関数に回帰テストを追加し、連結/非連結判定の過去バグ再発を防止する"
+  plan_id: "plan_inv_builder_001"
+  request_id: "req_20260225_002"
+  timestamp: "2026-02-25T12:00:00+09:00"
+  objective: "inventory-builder スキル新規作成 — data/{ticker}/raw/edinet/manifest.json + parsed/financials.json + raw/jquants/ から inventory.md を自動生成するCLIスキルを開発する"
   priority: high
-  due_date: "2026-02-25"
 
   background: |
-    context_priority() は parser.py:264-294 に定義。EDINET有報のXBRLコンテキストIDを
-    スコアリングし、連結/非連結・当期/前期の優先度を判定する関数。
-    Session 3, 9 で連結/非連結の substring match バグが発生・修正された経緯がある。
-    現在 context_priority() に対する直接的なユニットテストは存在しない。
-    Reviewer からも回帰テスト追加が指摘されている。
+    現在 data/2780/inventory.md と data/7685/inventory.md は手動作成されている。
+    manifest.json（収集済みZIP一覧）、financials.json（パース済み財務データ）、
+    J-Quants決算短信データを入力として、inventory.md を自動生成するスキルを開発する。
+    inventory.md はデータパイプラインの品質管理に不可欠で、
+    年度×四半期カバレッジマトリクス、欠損分析、データ品質サマリを含む。
 
-  target_function:
-    file: "skills/disclosure-parser/scripts/parser.py"
-    function: "context_priority(context_id: str) -> int"
-    lines: "264-294"
-
-  existing_tests:
-    location: "skills/disclosure-parser/tests/"
-    files:
-      - "test_parser.py (8 tests)"
-      - "test_pdf_parser.py (95 tests)"
-    current_context_priority_tests: 0
-    total_pass: "98 passed, 5 skipped"
+  deliverables:
+    - "skills/inventory-builder/SKILL.md"
+    - "skills/inventory-builder/scripts/__init__.py"
+    - "skills/inventory-builder/scripts/main.py"
+    - "skills/inventory-builder/scripts/builder.py"
+    - "skills/inventory-builder/tests/__init__.py"
+    - "skills/inventory-builder/tests/test_builder.py"
 
   task_decomposition:
-    - task_id: "T1"
-      assignee: "junior1"
+    - task_id: "T1_builder"
+      assignee: junior1
       description: |
-        skills/disclosure-parser/tests/test_context_priority.py を新規作成し、
-        context_priority() の回帰テストを実装する。以下のカテゴリを網羅すること：
+        builder.py コアロジック実装。以下の機能を含む:
+        1. manifest.json 読み込み・解析（results[].doc_id, period_end, status）
+        2. financials.json 読み込み・解析（documents[].periods[].{period_end, fiscal_year, bs, pl, cf}）
+        3. J-Quants statements JSON 読み込み（最新ファイル自動選択、存在しない場合はスキップ）
+        4. classify_period(period_end, fye_month) — 文書を有報/H1/Q1/Q2/Q3に分類
+        5. build_coverage_matrix(documents, fye_month) — 年度×四半期カバレッジマトリクス構築
+        6. analyze_gaps(matrix, fye_month) — 欠損を許容(△)/要対応(✗)に自動分類
+        7. calculate_quality_summary(financials) — メトリクスカバレッジ計算
+        8. generate_inventory_md() — セクション(a)〜(i)のMarkdown生成
+        参考実装: data/2780/inventory.md, data/7685/inventory.md
+        入力データ構造: data/2780/raw/edinet/manifest.json, data/2780/parsed/financials.json
+      output_path: "skills/inventory-builder/scripts/builder.py"
+      dependencies: []
+      parallel: true
 
-        1. 基本ケース:
-           - "CurrentYearDuration" → score=160 (currentyear +100, current +60)
-           - "CurrentQuarterDuration" → score=50 (currentquarter +50)
-           - "PriorYearDuration" → score=-80 (prior -80)
+    - task_id: "T2_cli_docs"
+      assignee: junior2
+      description: |
+        main.py CLI + SKILL.md + __init__.py 作成。
+        1. main.py: argparse CLI（--ticker, --fye-month 必須、--data-root, --output-path オプション）
+           - build_parser() + main() パターン（financial-calculator/scripts/main.py を参照）
+           - from .builder import build_inventory をインポート
+           - build_inventory(ticker, fye_month, data_root, output_path) を呼び出し
+           - 戻り値0=成功、1=エラー
+        2. SKILL.md: 既存スキル（skills/financial-calculator/SKILL.md等）のパターンに従う
+           - 概要、CLI使用法、入出力、セクション説明
+        3. scripts/__init__.py, tests/__init__.py: 空ファイル
+        インターフェース定義:
+          build_inventory(ticker: str, fye_month: int, data_root: Path, output_path: Path | None = None) -> Path
+      output_path: "skills/inventory-builder/scripts/main.py, skills/inventory-builder/SKILL.md"
+      dependencies: []
+      parallel: true
 
-        2. 連結/非連結判定（過去バグ再発防止）:
-           - "CurrentYearDuration_NonConsolidatedMember" → nonconsolidated で -25（consolidated の +40 は付かない）
-           - "CurrentYearDuration_ConsolidatedMember" → consolidated で +40
-           - Plain context（Member なし）→ 連結加点なし（elif ガード確認）
+    - task_id: "T3_tests"
+      assignee: junior3
+      description: |
+        pytest テスト作成（全テストPASS必須）。
+        1. test_builder.py:
+           - test_classify_period: fye_month=3（3月期）とfye_month=12（12月期）の分類テスト
+           - test_build_coverage_matrix: data/2780 データを使った統合テスト
+           - test_analyze_gaps: 許容/要対応の分類ロジックテスト
+           - test_calculate_quality_summary: メトリクスカバレッジ計算テスト
+           - test_generate_inventory_md: 出力Markdownの構造検証（セクション(a)〜(i)の存在確認）
+           - test_integration_2780: data/2780 を入力として完全な inventory.md を生成し、既存 data/2780/inventory.md と主要セクション構造を比較
+           - test_integration_7685: data/7685 で同様のテスト（fye_month=12、J-Quants有り）
+           - test_jquants_optional: J-Quantsデータ無しでもエラーなく動作することを確認
+        2. テスト実行: pytest skills/inventory-builder/tests/ -v で全件PASS
+      output_path: "skills/inventory-builder/tests/test_builder.py"
+      dependencies: ["T1_builder", "T2_cli_docs"]
+      parallel: false
 
-        3. 境界ケース:
-           - 空文字列 "" → score=0
-           - 大文字小文字混在 "CURRENTYEARDURATION" → 正常スコア（.lower() 正常動作確認）
-           - "PreviousYearDuration" → previous で -80
-           - "CurrentYearDuration_NonConsolidatedMember" が "consolidated" の substring match で
-             誤って +40 されないことを明示的にアサート
-
-        4. 複合ケース:
-           - "PriorYearDuration_NonConsolidatedMember" → prior -80 + nonconsolidated -25 = -105
-           - "CurrentQuarterDuration_ConsolidatedMember" → currentquarter +50 + consolidated +40 = 90
-
-        5. 既存テスト非破壊確認:
-           - pytest skills/disclosure-parser/tests/ を実行し全テスト PASS を確認
-
-      output_path: "skills/disclosure-parser/tests/test_context_priority.py"
-      priority: high
+  execution_plan: |
+    Phase 1（並列）: T1_builder（Junior1）と T2_cli_docs（Junior2）を同時に割り当て
+    Phase 2（逐次）: T1 + T2 完了後、T3_tests（Junior3）を割り当て
+    Phase 3: 全テストPASS確認後、タスク完了
 
   quality_criteria:
-    - "context_priority() の全分岐パスをカバーすること"
-    - "過去バグの再発防止ケース（nonconsolidated substring match）を明示的に含むこと"
-    - "既存テスト（test_parser.py, test_pdf_parser.py）が壊れないこと"
-    - "pytest 実行で全テスト PASS すること"
-    - "テストケース名が日本語コメントまたは英語で意図を明確にすること"
-
-  risk_assessment:
-    - risk: "既存テストの破壊"
-      mitigation: "新規ファイルで追加。既存ファイルは変更しない"
-    - risk: "import パスの不整合"
-      mitigation: "既存テストの import パターンを踏襲する"
+    - "CLI: python3 skills/inventory-builder/scripts/main.py --ticker 2780 --fye-month 3 が正常終了し inventory.md を生成"
+    - "CLI: python3 skills/inventory-builder/scripts/main.py --ticker 7685 --fye-month 12 が正常終了"
+    - "生成された inventory.md が参考実装（data/2780/inventory.md）と同等のセクション構造を持つ"
+    - "pytest skills/inventory-builder/tests/ -v が全件PASS"
+    - "J-Quantsデータが存在しない場合もエラーなく動作（graceful degradation）"
+    - "年度×四半期カバレッジマトリクスが正確に構築される"
+    - "欠損分類（許容△/要対応✗）が妥当"
