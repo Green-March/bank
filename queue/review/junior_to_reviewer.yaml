@@ -1,42 +1,36 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_20260225_T5_req022"
-  task_id: "T5_req022"
-  junior_id: junior1
-  status: pending_review
-  timestamp: "2026-02-25T19:02:00+09:00"
+  request_id: "rev_req025_T2_002"
+  task_id: "T2_comparison_report"
+  junior_id: "junior2"
+  status: pending
+  timestamp: "2026-02-25T22:10:00+09:00"
   payload:
-    objective: "ticker-resolver に J-Quants ソースを実装。source='jquants'/'all' 対応、EDINET+J-Quants マージ"
+    ticker: "9743"
+    objective: "9743/2780/7685 の3銘柄比較分析レポート（修正版 — Reviewer指摘対応済み）"
+    revision_notes: |
+      前回レビュー (rev_req025_T2_001) の verdict: revise に対応:
+      1. §0 比較前提・データ定義セクション追加:
+         - 0a 前提条件、0b データソース比較表（各銘柄のEDINET/J-Quants使用状況・期間・欠測条件）、0c 指標定義
+      2. §2 パイプライン比較を3層に層別化:
+         - 層1: 自動完走 (9743)
+         - 層2: 回復完走 (2780)
+         - 層3: 未完走 (7685)
+      3. §4c 原因→影響の因果分析に改訂
+      4. §4e 欠測・暫定データが比較に与える影響テーブル追加
+      5. §6 汎用性評価を層別結論テーブルに改訂 + 検証の限界を明記
     outputs:
-      - "skills/ticker-resolver/scripts/resolver.py"
-      - "skills/ticker-resolver/tests/test_resolver.py"
-      - "skills/ticker-resolver/SKILL.md"
-    validation:
-      - "既存27テスト全通過"
-      - "新規J-Quantsテスト11件全通過（合計38テスト）"
-      - "フィールドマッピングドキュメント記載済み"
-      - "SKILL.md ロードマップ更新済み"
-    details:
-      - "update_cache(source='jquants') の NotImplementedError を解消"
-      - "J-Quants GET /v1/listed/info から上場銘柄一覧取得実装"
-      - "skills/common/auth.py (req_020成果物) を使用"
-      - "source='all' で EDINET + J-Quants マージ実現"
-      - "EDINET CSV と J-Quants のフィールドマッピング明記"
-    caveats:
-      - "J-Quants /v1/listed/info には fye_month 相当フィールドがないため、J-Quants のみの銘柄は fye_month=None"
-      - "source='all' 時の J-Quants 取得失敗は best-effort でスキップ（EDINET のみで続行）"
-      - "JQuantsAuth の import は遅延インポート（ImportError 時は NetworkError に変換）"
-    quality_criteria:
-      - "既存27テスト全通過"
-      - "J-Quantsソーステスト追加・全通過"
-      - "skills/common/auth.py 使用（sys.path.insert 禁止準拠）"
-      - "SKILL.md ロードマップ最新化"
-      - "フィールドマッピング明記"
+      - "data/9743/reports/comparison_notes.md"
+    quality_criteria_addressed:
+      data_definition_table: "DONE — §0b データソース比較表"
+      stratified_comparison: "DONE — 自動完走/回復完走/未完走の3層別化"
+      causal_explanation: "DONE — §4c 因果分析"
+      missing_data_risk: "DONE — §4e 欠測影響テーブル"
 review_followup:
-  request_id: null
-  task_id: null
-  junior_id: null
-  status: null
-  timestamp: ""
-  payload: null
+  request_id: "rev_req025_T2_001"
+  task_id: "T2_comparison_report"
+  junior_id: "junior2"
+  status: "revised"
+  timestamp: "2026-02-25T22:10:00+09:00"
+  payload: "修正版: データ定義比較表追加、3層別化、因果分析・欠測影響テーブル追加。"

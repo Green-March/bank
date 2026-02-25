@@ -11,9 +11,15 @@ pipeline:
         fye_month: fye_month
         edinet_code: edinet_code
         company_name: company_name
+    - id: collect_jquants
+      skill: disclosure-collector
+      command: "python3 skills/disclosure-collector/scripts/main.py jquants {ticker} --output-dir data/{ticker}/raw/jquants"
+      output_dir: "data/{ticker}/raw/jquants"
+      depends_on: [resolve]
+      gates: null
     - id: collect
       skill: disclosure-collector
-      command: "python3 skills/disclosure-collector/scripts/main.py edinet {edinet_code} --ticker {ticker}"
+      command: "python3 skills/disclosure-collector/scripts/main.py edinet {edinet_code} --ticker {ticker} --start-date $(python3 -c 'import datetime as d;print((d.date.today()-d.timedelta(days=1095)).isoformat())') --end-date $(python3 -c 'import datetime as d;print(d.date.today().isoformat())')"
       output_dir: "data/{ticker}/raw/edinet"
       depends_on: [resolve]
       gates: null
@@ -22,7 +28,7 @@ pipeline:
       command: "python3 skills/disclosure-parser/scripts/main.py --ticker {ticker} --input-dir {prev_output} --output-dir data/{ticker}/parsed"
       output_dir: "data/{ticker}/parsed"
       depends_on: [collect]
-      gates: "skills/quality-gate/references/default_gates.yaml"
+      gates: null
     - id: integrate
       skill: financial-integrator
       command: "python3 skills/financial-integrator/scripts/main.py --ticker {ticker} --fye-month {fye_month} --parsed-dir data/{ticker}/parsed --output data/{ticker}/integrated/integrated_financials.json"

@@ -2,120 +2,61 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_20260225_session24"
-  timestamp: "2026-02-25T18:00:00+09:00"
-  objective: "6件のスキル改善・セキュリティ修正タスクを2ウェーブで並列実行"
-  source_requests:
-    - req_20260225_019
-    - req_20260225_020
-    - req_20260225_021
-    - req_20260225_022
-    - req_20260225_023
-    - req_20260225_024
-
-  dependency_analysis:
-    - from: req_022
-      to: req_020
-      reason: "req_022 (ticker-resolver J-Quants) は req_020 (共有認証モジュール skills/common/auth.py) に依存。req_020 完了後に req_022 を開始する"
-    - note: "req_019, req_021, req_023, req_024 は全て独立、並列実行可能"
-
+  plan_id: "plan_req025_9743_full_pipeline"
+  request_id: "req_20260225_025"
+  timestamp: "2026-02-25T19:00:00+09:00"
+  objective: "9743 丹青社のフルパイプライン実行 — pipeline-runner の example_pipeline.yaml (7ステップ) を --vars ticker=9743 のみで一括実行し、汎用性を検証する"
+  background: |
+    pipeline-runner は過去に 2780, 7685 で実行済み。今回は 9743（丹青社）を対象に、
+    resolve → collect → parse → integrate → calculate → inventory → report の
+    7ステップパイプラインを実行し、新しい銘柄でも --vars ticker=XXXX のみで
+    全パイプラインが自動完走することを検証する。
+    fye_month は resolve ステップの output_vars から自動供給されることも確認ポイント。
   task_decomposition:
-    wave_1:
-      description: "高優先度タスク＋独立タスクを3Junior並列実行"
-      tasks:
-        - task_id: "T1_req019"
-          request_id: req_20260225_019
-          assigned_to: junior2
-          title: "market-data-collector リトライ機能追加"
-          description: >
-            skills/market-data-collector/scripts/collector.py の DailyQuotesClient, ListedInfoClient に
-            exponential backoff with jitter（最大3回リトライ）を実装。429/一時障害時に自動リトライ。
-            既存25テストを壊さず、リトライ用テストを追加。
-          priority: high
-          estimated_complexity: medium
-
-        - task_id: "T2_req020"
-          request_id: req_20260225_020
-          assigned_to: junior1
-          title: "J-Quants 認証モジュール共有化"
-          description: >
-            disclosure-collector/scripts/auth.py の機能を skills/common/auth.py に移動。
-            disclosure-collector, market-data-collector が skills/common/auth.py を参照するよう修正。
-            sys.path.insert() ハックを全排除。既存テスト維持。
-          priority: high
-          estimated_complexity: high
-          blocks: ["T5_req022"]
-
-        - task_id: "T3_req021"
-          request_id: req_20260225_021
-          assigned_to: junior3
-          title: "financial-integrator カスタム例外クラス追加"
-          description: >
-            IntegrationError, MissingEdinetFileError, InvalidFinancialsFormatError を定義。
-            ticker-resolver の例外設計を参考。main.py で except IntegrationError による統一ハンドリング。
-            既存48テスト維持、例外テスト追加。
-          priority: medium
-          estimated_complexity: medium
-
-    wave_2:
-      description: "Wave1完了後、残り3タスクを並列実行。req_022はreq_020完了が前提"
-      tasks:
-        - task_id: "T4_req023"
-          request_id: req_20260225_023
-          assigned_to: junior2
-          title: "pipeline-runner テストカバレッジ拡大"
-          description: >
-            DAG複雑シナリオ（ダイヤモンド型依存、中間ステップ失敗時の後続スキップ、
-            複数未定義変数のvalidate_vars、ゲート失敗時のパイプライン停止）をテスト追加。
-            本体コード変更なし、既存22テスト維持。
-          priority: medium
-          estimated_complexity: medium
-
-        - task_id: "T5_req022"
-          request_id: req_20260225_022
-          assigned_to: junior1
-          title: "ticker-resolver J-Quants ソース実装"
-          description: >
-            update_cache(source='jquants') の NotImplementedError を解消。
-            J-Quants GET /v1/listed/info から上場銘柄一覧取得しキャッシュ。
-            source='all' で EDINET + J-Quants マージ。
-            skills/common/auth.py (req_020成果物) を使用。SKILL.md 更新。
-            既存27テスト維持、J-Quantsソーステスト追加。
-          priority: medium
-          estimated_complexity: high
-          blocked_by: ["T2_req020"]
-
-        - task_id: "T6_req024"
-          request_id: req_20260225_024
-          assigned_to: junior3
-          title: "comparable-analyzer パストラバーサル検証"
-          description: >
-            analyzer.py の run_analysis() 入口に _validate_ticker() 追加（re.fullmatch(r'\d{4}', ticker)）。
-            main.py の引数パース直後にも検証追加。peer ticker の _load_metrics() 呼び出し前にも検証。
-            既存テスト維持、不正入力テスト追加。
-          priority: medium
-          estimated_complexity: low
-
-  junior_distribution:
-    junior1: ["T2_req020 (Wave1)", "T5_req022 (Wave2)"]
-    junior2: ["T1_req019 (Wave1)", "T4_req023 (Wave2)"]
-    junior3: ["T3_req021 (Wave1)", "T6_req024 (Wave2)"]
-    rationale: >
-      各Junior均等2タスク。依存チェーン(req_020→req_022)はJunior1に集約し、
-      共有認証モジュール作成→利用のコンテキスト効率を最大化。
-      高優先度タスク(req_019, req_020)をWave1に配置。
-
+    - task_id: "T1_pipeline_execution"
+      assignee: "junior1"
+      description: |
+        9743 丹青社のフルパイプライン実行と検証:
+        1. pipeline-runner で example_pipeline.yaml を実行
+           コマンド: python3 skills/pipeline-runner/scripts/main.py run \
+             --pipeline skills/pipeline-runner/references/example_pipeline.yaml \
+             --vars ticker=9743 \
+             --log data/9743/logs/pipeline_run.json
+        2. 検証項目:
+           - --vars ticker=9743 のみで全7ステップが完走するか
+           - resolve ステップの output_vars (fye_month, edinet_code, company_name) が後続ステップに正しく伝搬されるか
+           - 各ステップの成果物が data/9743/ 配下に正しく生成されるか
+        3. 成果物ドキュメント作成:
+           - 利用データソース一覧（EDINET, J-Quants 等）
+           - 前提条件とリスクの明示
+           - パイプライン実行ログの確認と要約
+      output_path: "data/9743/"
+      priority: "high"
+    - task_id: "T2_comparison_report"
+      assignee: "junior2"
+      depends_on: ["T1_pipeline_execution"]
+      description: |
+        9743 の実行結果と過去2銘柄 (2780, 7685) の比較分析:
+        1. data/9743/reports/ の最終レポートを確認
+        2. 過去のパイプライン実行結果 (data/2780/, data/7685/) と比較
+        3. 記録事項:
+           - パイプライン動作の違い（エラー、スキップ、データ不足等）
+           - 財務指標の特徴的な差異
+           - pipeline-runner 汎用性に関する新たな知見
+        4. 比較レポートを data/9743/reports/comparison_notes.md に出力
+      output_path: "data/9743/reports/comparison_notes.md"
+      priority: "medium"
   quality_criteria:
-    - "全既存テストが通ること（pytest 各スキルディレクトリ）"
-    - "新規テストが追加され全パスすること"
-    - "sys.path.insert() ハックが完全排除されていること（req_020）"
-    - "セキュリティ検証が適切に実装されていること（req_024）"
-    - "コード品質: black, ruff チェック通過"
-
+    - "パイプライン全7ステップが status: completed で完走すること"
+    - "output_vars (fye_month, edinet_code, company_name) が正しく伝搬されていること"
+    - "--vars ticker=9743 のみで実行可能（追加の手動変数指定不要）であること"
+    - "data/9743/ 配下に成果物（resolved, raw, parsed, integrated, reports）が生成されること"
+    - "利用データソース・前提・リスクが明記されていること"
+    - "過去2銘柄との比較分析が記録されていること"
   risk_assessment:
-    - risk: "req_020 の共有化がインポートパス変更により広範囲に影響"
-      mitigation: "変更対象スキル（disclosure-collector, market-data-collector）のテスト全通過を確認"
-    - risk: "req_022 が req_020 成果物に依存するため、Wave2 開始が遅延する可能性"
-      mitigation: "req_020 を高優先度としWave1で最優先処理。Junior1に集約しコンテキスト維持"
-    - risk: "パストラバーサル検証の正規表現が厳しすぎて正当な入力を拒否"
-      mitigation: "4桁数字のfullmatchで日本株ティッカーコード形式を正確に制限"
+    - risk: "9743 が EDINET に登録されていない、またはキャッシュに存在しない可能性"
+      mitigation: "resolve ステップで失敗した場合、ticker-resolver のキャッシュ更新 (update --force) を実施"
+    - risk: "EDINET API や J-Quants API のレート制限・一時障害"
+      mitigation: "market-data-collector のリトライ機能を活用。それでも失敗する場合はログに記録し報告"
+    - risk: "丹青社の開示書類フォーマットが既存パーサーに非対応"
+      mitigation: "parse ステップの quality gate で検出。失敗時はログに記録し、対応策を提案"

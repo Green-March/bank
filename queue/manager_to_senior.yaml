@@ -1,90 +1,17 @@
 queue:
-  - request_id: "req_20260225_019"
-    objective: "market-data-collector にリトライ機能を追加する。429/一時障害時に exponential backoff with jitter（最大3回リトライ）を実装。Reviewer指摘事項（req_018 T3 risk_disclosure）の対応"
-    ticker: null
+  - request_id: "req_20260225_025"
+    objective: "9743 丹青社のフルパイプライン実行 — ticker-resolve → disclosure-collect → disclosure-parse → financial-integrate → financial-calculate → comparable-analyze → financial-report の7ステップを pipeline-runner で一括実行し、汎用性を検証する"
+    ticker: "9743"
     universe: null
-    analysis_type: "skill_enhancement"
-    timeframe: null
-    output_format: ["py", "test"]
+    analysis_type: "full_pipeline"
+    timeframe: "available"
+    output_format: ["md", "html"]
     priority: "high"
     due_date: "2026-02-25"
     constraints:
-      - "skills/market-data-collector/scripts/collector.py の DailyQuotesClient, ListedInfoClient が対象"
-      - "既存25テストを壊さないこと"
-      - "リトライ用テストを追加すること"
-
-  - request_id: "req_20260225_020"
-    objective: "J-Quants 認証モジュールを skills/common/auth.py に共有化する。現在 disclosure-collector の auth.py を sys.path.insert() で再利用している脆弱な構造を解消。market-data-collector, ticker-resolver 等の J-Quants 系スキルで統一的に利用可能にする"
-    ticker: null
-    universe: null
-    analysis_type: "refactoring"
-    timeframe: null
-    output_format: ["py", "test"]
-    priority: "high"
-    due_date: "2026-02-25"
-    constraints:
-      - "disclosure-collector/scripts/auth.py の機能を skills/common/auth.py に移動"
-      - "既存の disclosure-collector, market-data-collector が skills/common/auth.py を参照するように修正"
-      - "sys.path.insert() ハックを全て排除"
-      - "既存テストを壊さないこと"
-
-  - request_id: "req_20260225_021"
-    objective: "financial-integrator にカスタム例外クラスを追加する。IntegrationError, MissingEdinetFileError, InvalidFinancialsFormatError を定義し、標準例外・warnings.warn() のみの現状を改善"
-    ticker: null
-    universe: null
-    analysis_type: "skill_enhancement"
-    timeframe: null
-    output_format: ["py", "test"]
-    priority: "medium"
-    due_date: "2026-02-25"
-    constraints:
-      - "ticker-resolver の例外設計（TickerNotFoundError 等）を参考にする"
-      - "main.py で except IntegrationError でキャッチして統一ハンドリング"
-      - "既存48テストを壊さないこと"
-      - "例外クラスのテストを追加すること"
-
-  - request_id: "req_20260225_022"
-    objective: "ticker-resolver に J-Quants ソースを実装する。update_cache(source='jquants') の NotImplementedError を解消し、J-Quants GET /v1/listed/info から上場銘柄一覧を取得してキャッシュ。source='all' で EDINET + J-Quants マージを実現"
-    ticker: null
-    universe: null
-    analysis_type: "skill_enhancement"
-    timeframe: null
-    output_format: ["py", "test"]
-    priority: "medium"
-    due_date: "2026-02-25"
-    constraints:
-      - "req_020 の共有認証モジュール（skills/common/auth.py）を使用すること"
-      - "SKILL.md のロードマップを現状に合わせて更新すること"
-      - "EDINET CSV と J-Quants のフィールドマッピング（fye_month 形式差異等）を明記"
-      - "既存27テストを壊さないこと"
-      - "J-Quants ソースのテストを追加すること"
-
-  - request_id: "req_20260225_023"
-    objective: "pipeline-runner のテストカバレッジを拡大する。DAG複雑シナリオ（ダイヤモンド型依存、中間ステップ失敗時の後続スキップ、複数未定義変数の validate_vars、ゲート失敗時のパイプライン停止）をカバー"
-    ticker: null
-    universe: null
-    analysis_type: "testing"
-    timeframe: null
-    output_format: ["test"]
-    priority: "medium"
-    due_date: "2026-02-25"
-    constraints:
-      - "本体コード変更なし、純粋なテスト追加のみ"
-      - "既存22テストを壊さないこと"
-      - "financial-reporter は既に70テストで十分。pipeline-runner のみ対象"
-
-  - request_id: "req_20260225_024"
-    objective: "comparable-analyzer に ticker パストラバーサル検証を追加する。Reviewer指摘事項（req_008 rev1）。--ticker ../../../etc/passwd のような入力で data_root 外アクセスを防止"
-    ticker: null
-    universe: null
-    analysis_type: "security_fix"
-    timeframe: null
-    output_format: ["py", "test"]
-    priority: "medium"
-    due_date: "2026-02-25"
-    constraints:
-      - "analyzer.py の run_analysis() 入口に _validate_ticker() を追加（re.fullmatch(r'\\d{4}', ticker)）"
-      - "main.py の引数パース直後にも検証追加"
-      - "peer ticker についても _load_metrics() 呼び出し前に検証"
-      - "既存テストを壊さないこと"
-      - "不正入力のテストケースを追加すること"
+      - "pipeline-runner の example_pipeline.yaml (7ステップ) を使用すること"
+      - "--vars ticker=9743 のみで全パイプライン実行可能であることを検証"
+      - "fye_month は ticker-resolver の output_vars で自動供給されることを確認"
+      - "利用データソースを明記する"
+      - "前提とリスクを明示する"
+      - "過去2銘柄 (2780, 7685) との違い・新たな知見があれば記録する"
