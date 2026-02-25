@@ -1,69 +1,42 @@
 queue:
-  - request_id: "req_20260225_009"
-    objective: "quality-gate の period_index キー不整合修正。validators.py が financials.get('period_index', []) を参照しているが、実際のキーは documents[].periods。null_rate と key_coverage ゲートが空リストに対して評価され品質保証が形骸化している。validate_value_range() も最初の period のみから concept_section を構築しているため Q1/Q3 で CF がスキップされる。キー名修正 + 全 period 走査 + テスト追加"
+  - request_id: "req_20260225_014"
+    objective: "example_pipeline.yaml を現行4ステップから7ステップ構成に拡張する（resolve→collect→parse→integrate→calculate→inventory→report）。pipeline-runner が正しく7ステップを実行できることをテストで確認する"
     ticker: null
     universe: null
-    analysis_type: "skill_fix"
+    analysis_type: "pipeline_enhancement"
     timeframe: null
-    output_format: ["py", "test"]
+    output_format: ["yaml"]
     priority: "high"
     due_date: "2026-02-25"
     constraints:
-      - "validators.py のキー参照を documents[].periods に修正"
-      - "validate_value_range() を全 period 走査に変更"
-      - "修正後 pytest 全件 PASS を確認"
+      - "既存の pipeline-runner との整合性を維持する"
+      - "各ステップが対応するスキルのエントリポイントと一致すること"
+      - "テストが全件PASSすること"
 
-  - request_id: "req_20260225_010"
-    objective: "senior.md ゴースト参照3件修正。(1) scripts/send_clear_reinit.sh → 正しくは templates/senior_clear_junior.sh に修正 (2) queue/review/junior_plan_to_reviewer.yaml / reviewer_to_junior_plan.yaml の実在しない孤立サブフローの記述を削除 (3) send-keys 3ステップ法（sleep 2 + capture-pane）を CLAUDE.md の2ステップ法（sleep 1）と整合させる"
+  - request_id: "req_20260225_015"
+    objective: "financial-reporter の main() が sys.exit() を呼び出しておらず常に終了コード0になる問題を修正する。sys.exit(main()) パターンを適用し、エラー時に非ゼロ終了コードを返すようにする"
     ticker: null
     universe: null
-    analysis_type: "workflow_fix"
+    analysis_type: "bug_fix"
     timeframe: null
-    output_format: ["md"]
-    priority: "medium"
+    output_format: null
+    priority: "high"
     due_date: "2026-02-25"
     constraints:
-      - "senior.md の実在しないパス参照をすべて修正"
-      - "CLAUDE.md の send-keys ルールとの整合性を確認"
-      - "孤立サブフローの記述を削除"
+      - "既存テストが全件PASSすること"
+      - "正常終了時は0、エラー時は非ゼロを返すこと"
 
-  - request_id: "req_20260225_011"
-    objective: "senior_clear_junior.sh 堅牢化。(1) 非アトミック書き込み（cat > heredoc）を mktemp+mv に変更 (2) Junior番号を正規表現で抽出している箇所を明示的引数に変更。senior_reset_report.sh の実装パターン（mktemp+mv + trap cleanup + 引数バリデーション）を参考にする"
+  - request_id: "req_20260225_016"
+    objective: "comparable-analyzer で peer の metrics.json が不在の場合にクラッシュする問題を修正する。欠損peerをスキップし、結果に missing_peers フィールドを記録する graceful degradation を実装する"
     ticker: null
     universe: null
-    analysis_type: "workflow_fix"
+    analysis_type: "bug_fix"
     timeframe: null
-    output_format: ["sh"]
-    priority: "medium"
+    output_format: null
+    priority: "high"
     due_date: "2026-02-25"
     constraints:
-      - "mktemp+mv によるアトミック書き込みに変更"
-      - "Junior番号は明示的引数で受け取る"
-      - "senior_reset_report.sh のパターンに合わせる"
-
-  - request_id: "req_20260225_012"
-    objective: "CLAUDE.md Dashboard セクション補完 + 行番号修正。(1) Dashboard sections リストに '## In Progress' セクションが欠落しているので追加 (2) go.sh レポートリセットの行番号参照「行154-163」を実際の行番号に修正"
-    ticker: null
-    universe: null
-    analysis_type: "doc_fix"
-    timeframe: null
-    output_format: ["md"]
-    priority: "low"
-    due_date: "2026-02-25"
-    constraints:
-      - "go.sh の実際の行番号を確認して記載を修正"
-      - "Dashboard sections に In Progress を追加"
-
-  - request_id: "req_20260225_013"
-    objective: "inventory-builder エントリポイント不整合修正。エントリポイントは builder.py だが SKILL.md と生成される inventory.md 内の再現コマンドが scripts/main.py を参照している。(1) SKILL.md の CLI 使用例を builder.py に修正するか、または (2) main.py をエントリポイントとして新規作成して builder.py をモジュールとしてインポートする方式にする。他スキル（financial-integrator, comparable-analyzer 等）と同様に main.py + モジュール構成が推奨"
-    ticker: null
-    universe: null
-    analysis_type: "skill_fix"
-    timeframe: null
-    output_format: ["py", "md"]
-    priority: "low"
-    due_date: "2026-02-25"
-    constraints:
-      - "他スキルとの構成統一を優先（main.py + モジュール構成推奨）"
-      - "SKILL.md と生成 inventory.md 内のコマンドを実際のエントリポイントと整合"
-      - "修正後 pytest 全件 PASS を確認"
+      - "欠損peerがあってもクラッシュせずスキップすること"
+      - "missing_peers フィールドに欠損peer情報を記録すること"
+      - "全peerが欠損の場合も適切にハンドリングすること"
+      - "既存テストが全件PASSすること"

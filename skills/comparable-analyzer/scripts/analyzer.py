@@ -278,6 +278,24 @@ def run_analysis(
 
     all_warnings = peer_warnings + matrix_warnings
 
+    # missing peer 判定: 全指標が None の peer
+    missing_peers: list[dict[str, str]] = []
+    for peer in peer_entries:
+        metrics = peer.get("metrics", {})
+        if all(v is None for v in metrics.values()):
+            missing_peers.append({
+                "ticker": peer["ticker"],
+                "company_name": peer["company_name"],
+                "reason": "metrics.json not found or all metrics null",
+            })
+
+    missing_peers_count = len(missing_peers)
+    total_peer_count = len(peer_entries)
+    benchmark_reliable = missing_peers_count < total_peer_count if total_peer_count > 0 else False
+
+    if missing_peers_count == total_peer_count and total_peer_count > 0:
+        all_warnings.append("全peerのmetricsが欠損しています。ベンチマーク比較の信頼性が低下しています")
+
     output: dict[str, Any] = {
         "schema_version": "comparable-analyzer-v1",
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00"),
@@ -285,8 +303,11 @@ def run_analysis(
         "peers": peer_entries,
         "benchmarks": benchmarks,
         "warnings": all_warnings,
-        "peer_count": len(peer_entries),
+        "peer_count": total_peer_count,
         "max_peers_requested": max_peers,
+        "missing_peers": missing_peers,
+        "missing_peers_count": missing_peers_count,
+        "benchmark_reliable": benchmark_reliable,
     }
 
     # 出力ディレクトリ作成と書き込み

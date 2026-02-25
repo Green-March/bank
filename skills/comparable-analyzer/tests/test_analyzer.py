@@ -287,6 +287,108 @@ class TestMissingCache:
                 run_analysis(data_root, "7203")
 
 
+class TestMissingPeersGracefulDegradation:
+    """missing_peers フィールドと benchmark_reliable の検証."""
+
+    def test_all_peers_missing_metrics(self) -> None:
+        """全peer欠損シナリオ → missing_peers_count == total, benchmark_reliable == false."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_root = Path(tmpdir)
+            cache_dir = data_root / ".ticker_cache"
+            _write_csv(cache_dir)
+
+            # 対象企業のみ metrics あり、peer は全て metrics なし
+            _write_metrics(data_root, "7203", {
+                "roe_percent": 12.5,
+                "roa_percent": 5.0,
+                "operating_margin_percent": 8.0,
+                "revenue_growth_yoy_percent": 3.0,
+            })
+
+            result = run_analysis(data_root, "7203", max_peers=10)
+
+            assert result["missing_peers_count"] == result["peer_count"]
+            assert result["benchmark_reliable"] is False
+            assert any("全peer" in w for w in result["warnings"])
+            # クラッシュせずに結果を返す
+            assert result["schema_version"] == "comparable-analyzer-v1"
+            assert "benchmarks" in result
+
+    def test_partial_peer_missing_with_field(self) -> None:
+        """部分欠損で missing_peers フィールド確認."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_root = Path(tmpdir)
+            cache_dir = data_root / ".ticker_cache"
+            _write_csv(cache_dir)
+
+            _write_metrics(data_root, "7203", {
+                "roe_percent": 12.5,
+                "roa_percent": 5.0,
+                "operating_margin_percent": 8.0,
+                "revenue_growth_yoy_percent": 3.0,
+            })
+            # ホンダのみ metrics あり
+            _write_metrics(data_root, "7267", {
+                "roe_percent": 10.0,
+                "roa_percent": 4.5,
+                "operating_margin_percent": 6.5,
+                "revenue_growth_yoy_percent": 2.0,
+            })
+
+            result = run_analysis(data_root, "7203", max_peers=10)
+
+            # 4 peers, うち 3 が missing (日産, マツダ, スズキ)
+            assert result["peer_count"] == 4
+            assert result["missing_peers_count"] == 3
+            assert result["benchmark_reliable"] is True
+            # missing_peers に欠損 peer の情報が含まれる
+            missing_tickers = {p["ticker"] for p in result["missing_peers"]}
+            assert "7201" in missing_tickers  # 日産
+            assert "7261" in missing_tickers  # マツダ
+            assert "7269" in missing_tickers  # スズキ
+            assert "7267" not in missing_tickers  # ホンダは metrics あり
+            # 各エントリに必須フィールドがある
+            for mp in result["missing_peers"]:
+                assert "ticker" in mp
+                assert "company_name" in mp
+                assert "reason" in mp
+
+    def test_missing_peers_count(self) -> None:
+        """missing_peers_count のカウント正確性."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_root = Path(tmpdir)
+            cache_dir = data_root / ".ticker_cache"
+            _write_csv(cache_dir)
+
+            _write_metrics(data_root, "7203", {
+                "roe_percent": 12.5,
+                "roa_percent": 5.0,
+                "operating_margin_percent": 8.0,
+                "revenue_growth_yoy_percent": 3.0,
+            })
+            # ホンダとマツダに metrics を配置
+            _write_metrics(data_root, "7267", {
+                "roe_percent": 10.0,
+                "roa_percent": 4.5,
+                "operating_margin_percent": 6.5,
+                "revenue_growth_yoy_percent": 2.0,
+            })
+            _write_metrics(data_root, "7261", {
+                "roe_percent": 8.0,
+                "roa_percent": 3.5,
+                "operating_margin_percent": 5.5,
+                "revenue_growth_yoy_percent": 1.5,
+            })
+
+            result = run_analysis(data_root, "7203", max_peers=10)
+
+            # 4 peers, 2 missing (日産7201, スズキ7269)
+            assert result["missing_peers_count"] == 2
+            assert len(result["missing_peers"]) == 2
+            assert result["missing_peers_count"] == len(result["missing_peers"])
+            assert result["benchmark_reliable"] is True
+
+
 class TestRunAnalysis:
     """統合テスト: run_analysis の全体フロー."""
 

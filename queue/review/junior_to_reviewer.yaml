@@ -1,30 +1,30 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_T4_001"
-  task_id: "T4_req012"
-  junior_id: "junior2"
+  request_id: "rev_20260225_014"
+  task_id: "req_20260225_014"
+  junior_id: junior1
   status: pending_review
-  timestamp: "2026-02-25T16:48:00+09:00"
+  timestamp: "2026-02-25T17:22:00+09:00"
   payload:
-    description: |
-      CLAUDE.md 補完 + T3 インターフェース変更の反映:
-      1. CLAUDE.md: Dashboard sections に "In Progress" 追加（Action Required と Intake の間）
-      2. CLAUDE.md: go.sh 行番号参照を「行154-163」→「行165-176」に修正
-      3. instructions/senior.md: senior_clear_junior.sh 呼び出し例2箇所に第3引数 <junior_number> 追加
-      4. CLAUDE.md の senior_clear_junior.sh 参照は引数なし記述のため変更不要と判断
+    title: "example_pipeline.yaml 7ステップ化"
+    description: "現行4ステップ(collect→parse→calculate→report)を7ステップ(resolve→collect→parse→integrate→calculate→inventory→report)に拡張"
     outputs:
-      - "CLAUDE.md"
-      - "instructions/senior.md"
+      - "skills/pipeline-runner/references/example_pipeline.yaml"
     validation_results:
-      - "Dashboard sections に In Progress 追加済み"
-      - "go.sh 行番号: 行165-176 に修正済み"
-      - "senior.md: senior_clear_junior.sh 呼び出し例2箇所に第3引数追加済み"
-    review_criteria:
-      - "Dashboard sections リストに In Progress が含まれているか"
-      - "go.sh 行番号が実際の行165-176と整合しているか"
-      - "senior.md の senior_clear_junior.sh コマンド例が新インターフェースになっているか"
-      - "CLAUDE.md の引数なし参照の維持判断が妥当か"
+      - "pytest 10/10 passed"
+      - "validate subcommand: Pipeline 'disclosure_analysis' is valid (7 steps)"
+      - "新規ステップ3件: resolve, integrate, inventory"
+      - "既存ステップ depends_on 更新3件: collect→[resolve], calculate→[integrate], report→[inventory]"
+      - "各スキルのCLI引数を実エントリポイントと照合済み"
+    caveats:
+      - "タスク記述のコマンド引数と実際のCLI引数にずれがあったため実エントリポイントに合わせた (financial-integrator: --input-dir→--parsed-dir, --output-dir→--output / inventory-builder: --input-dir→--data-root, --output-dir→--output-path)"
+      - "integrate/inventory ステップは --fye-month {fye_month} を必須引数として追加 (パイプライン実行時に fye_month 変数の指定が必要)"
+    quality_criteria:
+      - "7ステップが正しい依存関係で定義されている"
+      - "各ステップの command が対応スキルの main.py と一致"
+      - "pytest 全件PASS"
+      - "pipeline-runner の validate サブコマンドで DAG 検証PASS"
 review_followup:
   request_id: null
   task_id: null

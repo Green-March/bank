@@ -1,11 +1,17 @@
 pipeline:
   name: "disclosure_analysis"
-  description: "収集→パース→指標計算→レポート生成"
+  description: "銘柄解決→収集→パース→統合→指標計算→棚卸→レポート生成"
   steps:
+    - id: resolve
+      skill: ticker-resolver
+      command: "python3 skills/ticker-resolver/scripts/main.py resolve {ticker}"
+      output_dir: "data/{ticker}/resolved"
+      gates: null
     - id: collect
       skill: disclosure-collector
       command: "python3 skills/disclosure-collector/scripts/main.py edinet {edinet_code} --ticker {ticker}"
       output_dir: "data/{ticker}/raw/edinet"
+      depends_on: [resolve]
       gates: null
     - id: parse
       skill: disclosure-parser
@@ -13,15 +19,27 @@ pipeline:
       output_dir: "data/{ticker}/parsed"
       depends_on: [collect]
       gates: "skills/quality-gate/references/default_gates.yaml"
+    - id: integrate
+      skill: financial-integrator
+      command: "python3 skills/financial-integrator/scripts/main.py --ticker {ticker} --fye-month {fye_month} --parsed-dir data/{ticker}/parsed --output data/{ticker}/integrated/integrated_financials.json"
+      output_dir: "data/{ticker}/integrated"
+      depends_on: [parse]
+      gates: null
     - id: calculate
       skill: financial-calculator
       command: "python3 skills/financial-calculator/scripts/main.py calculate --ticker {ticker} --parsed-dir data/{ticker}/parsed --output data/{ticker}/parsed/metrics.json"
       output_dir: "data/{ticker}/parsed"
-      depends_on: [parse]
+      depends_on: [integrate]
+      gates: null
+    - id: inventory
+      skill: inventory-builder
+      command: "python3 skills/inventory-builder/scripts/main.py --ticker {ticker} --fye-month {fye_month}"
+      output_dir: "data/{ticker}"
+      depends_on: [calculate]
       gates: null
     - id: report
       skill: financial-reporter
       command: "python3 skills/financial-reporter/scripts/main.py --ticker {ticker} --metrics data/{ticker}/parsed/metrics.json --output-md data/{ticker}/reports/{ticker}_report.md --output-html data/{ticker}/reports/{ticker}_report.html"
       output_dir: "data/{ticker}/reports"
-      depends_on: [calculate]
+      depends_on: [inventory]
       gates: null
