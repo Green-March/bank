@@ -348,6 +348,121 @@ class DisclosureParserTests(unittest.TestCase):
             self.assertIn("total_assets", period._calculated_fields)
             self.assertIn("total_liabilities", period._calculated_fields)
 
+    def test_build_period_index_propagates_calculated_fields(self) -> None:
+        """build_period_index() が calculated_fields を出力に伝播する"""
+        xbrl = """<?xml version="1.0" encoding="UTF-8"?>
+<xbrl
+  xmlns="http://www.xbrl.org/2003/instance"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+  xmlns:jppfs_cor="http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2023-03-31/jppfs_cor">
+  <context id="CurrentYearInstant">
+    <entity><identifier scheme="http://disclosure.edinet-fsa.go.jp">E99999</identifier></entity>
+    <period><instant>2024-03-31</instant></period>
+  </context>
+  <context id="CurrentYearDuration">
+    <entity><identifier scheme="http://disclosure.edinet-fsa.go.jp">E99999</identifier></entity>
+    <period><startDate>2023-04-01</startDate><endDate>2024-03-31</endDate></period>
+  </context>
+  <unit id="JPY"><measure>iso4217:JPY</measure></unit>
+  <jppfs_cor:TotalAssets contextRef="CurrentYearInstant" unitRef="JPY">5000</jppfs_cor:TotalAssets>
+  <jppfs_cor:NetAssets contextRef="CurrentYearInstant" unitRef="JPY">3000</jppfs_cor:NetAssets>
+  <jppfs_cor:NetCashProvidedByUsedInOperatingActivities contextRef="CurrentYearDuration" unitRef="JPY">200</jppfs_cor:NetCashProvidedByUsedInOperatingActivities>
+  <jppfs_cor:NetCashProvidedByUsedInInvestingActivities contextRef="CurrentYearDuration" unitRef="JPY">-50</jppfs_cor:NetCashProvidedByUsedInInvestingActivities>
+</xbrl>"""
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = Path(tmp) / "S100CALC.zip"
+            _create_sample_zip(zip_path, xbrl_body=xbrl)
+            docs = [disclosure_parser.parse_edinet_zip(zip_path, ticker="9999")]
+            index = disclosure_parser.build_period_index(docs)
+            self.assertEqual(len(index), 1)
+            entry = index[0]
+            self.assertIn("calculated_fields", entry)
+            calc = entry["calculated_fields"]
+            self.assertIn("free_cash_flow", calc)
+            self.assertIn("total_liabilities", calc)
+            self.assertEqual(calc, sorted(calc))
+
+    def test_build_period_index_merges_calculated_fields_union(self) -> None:
+        """複数ドキュメントの calculated_fields が和集合としてマージされる"""
+        # Doc1: total_liabilities fallback のみ (CF データなし)
+        xbrl1 = """<?xml version="1.0" encoding="UTF-8"?>
+<xbrl
+  xmlns="http://www.xbrl.org/2003/instance"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+  xmlns:jppfs_cor="http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2023-03-31/jppfs_cor">
+  <context id="CurrentYearInstant">
+    <entity><identifier scheme="http://disclosure.edinet-fsa.go.jp">E99999</identifier></entity>
+    <period><instant>2024-03-31</instant></period>
+  </context>
+  <unit id="JPY"><measure>iso4217:JPY</measure></unit>
+  <jppfs_cor:TotalAssets contextRef="CurrentYearInstant" unitRef="JPY">5000</jppfs_cor:TotalAssets>
+  <jppfs_cor:NetAssets contextRef="CurrentYearInstant" unitRef="JPY">3000</jppfs_cor:NetAssets>
+</xbrl>"""
+        # Doc2: free_cash_flow fallback のみ (BS データなし → total_liabilities fallback は不発)
+        xbrl2 = """<?xml version="1.0" encoding="UTF-8"?>
+<xbrl
+  xmlns="http://www.xbrl.org/2003/instance"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+  xmlns:jppfs_cor="http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2023-03-31/jppfs_cor">
+  <context id="CurrentYearInstant">
+    <entity><identifier scheme="http://disclosure.edinet-fsa.go.jp">E99999</identifier></entity>
+    <period><instant>2024-03-31</instant></period>
+  </context>
+  <context id="CurrentYearDuration">
+    <entity><identifier scheme="http://disclosure.edinet-fsa.go.jp">E99999</identifier></entity>
+    <period><startDate>2023-04-01</startDate><endDate>2024-03-31</endDate></period>
+  </context>
+  <unit id="JPY"><measure>iso4217:JPY</measure></unit>
+  <jppfs_cor:NetCashProvidedByUsedInOperatingActivities contextRef="CurrentYearDuration" unitRef="JPY">200</jppfs_cor:NetCashProvidedByUsedInOperatingActivities>
+  <jppfs_cor:NetCashProvidedByUsedInInvestingActivities contextRef="CurrentYearDuration" unitRef="JPY">-50</jppfs_cor:NetCashProvidedByUsedInInvestingActivities>
+</xbrl>"""
+        with tempfile.TemporaryDirectory() as tmp:
+            zip1 = Path(tmp) / "S100DOC1.zip"
+            zip2 = Path(tmp) / "S100DOC2.zip"
+            _create_sample_zip(zip1, xbrl_body=xbrl1)
+            _create_sample_zip(zip2, xbrl_body=xbrl2)
+            doc1 = disclosure_parser.parse_edinet_zip(zip1, ticker="9999")
+            doc2 = disclosure_parser.parse_edinet_zip(zip2, ticker="9999")
+            index = disclosure_parser.build_period_index([doc1, doc2])
+            self.assertEqual(len(index), 1)
+            entry = index[0]
+            self.assertIn("calculated_fields", entry)
+            calc = entry["calculated_fields"]
+            # 和集合: doc1 の total_liabilities + doc2 の free_cash_flow
+            self.assertIn("total_liabilities", calc)
+            self.assertIn("free_cash_flow", calc)
+
+    def test_build_period_index_omits_empty_calculated_fields(self) -> None:
+        """calculated_fields が空のときは出力に含まれない"""
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = Path(tmp) / "S100FULL.zip"
+            _create_sample_zip(zip_path, xbrl_body=SAMPLE_XBRL)
+            docs = [disclosure_parser.parse_edinet_zip(zip_path, ticker="2780")]
+            # SAMPLE_XBRL は free_cash_flow のみ calculated
+            # ただし free_cash_flow は calculated なので、このテストは
+            # 全フィールドが直接提供されるケースが必要
+            # → total_liabilities が直接提供、CF も直接提供のケースを使う
+            # SAMPLE_XBRL は operating_cf + investing_cf があるので free_cash_flow は calculated
+            # 代わりに直接 PeriodFinancial を作ってテストする
+            period = disclosure_parser.PeriodFinancial(
+                period_end="2024-03-31",
+                period_start="2023-04-01",
+                period_type="duration",
+                fiscal_year=2024,
+            )
+            period.bs["total_assets"] = 1000
+            # finalize せずに _calculated_fields は空のまま
+            doc = disclosure_parser.ParsedDocument(
+                document_id="S100EMPTY",
+                source_zip="dummy.zip",
+                company_name="Test Corp",
+                ticker="9999",
+                periods=[period],
+            )
+            index = disclosure_parser.build_period_index([doc])
+            self.assertEqual(len(index), 1)
+            self.assertNotIn("calculated_fields", index[0])
+
     def test_cli_rejects_mismatched_code_and_ticker(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             main_py = SCRIPT_DIR / "main.py"

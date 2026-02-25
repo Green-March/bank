@@ -108,6 +108,7 @@ quality_check_required: true
 ```
 これは go.sh の reset 処理（行154-163）と同一テンプレート。
 リセットを怠ると前回タスクのレポートが残留し、成果物レビューフローが破綻する。
+Senior はタスク割り当て前に `./templates/senior_reset_report.sh {N}` を実行してリセットする。
 
 ### Send-keys rules (mandatory)
 

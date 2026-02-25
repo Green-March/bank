@@ -1,16 +1,60 @@
 queue:
-  - request_id: "req_20260225_004"
-    objective: "disclosure-parser の total_liabilities フォールバック計算を実装する。XBRLタクソノミに Liabilities 概念がない銘柄でも total_assets - net_assets で負債合計を自動算出できるようにする。"
+  - request_id: "req_20260225_005"
+    objective: "period_index calculated_fields 伝播修正 — disclosure-parser の build_period_index() が calculated_fields メタデータを落としている問題を修正する。Session 18 の Reviewer 指摘事項。修正量は約10行と軽微"
     ticker: null
     universe: null
-    analysis_type: "skill_enhancement"
+    analysis_type: "skill_fix"
     timeframe: null
     output_format: null
     priority: "high"
     due_date: "2026-02-25"
     constraints:
-      - "既存の disclosure-parser のコード構造・テストを壊さない"
-      - "total_assets と net_assets が両方存在する場合のみフォールバック発動"
-      - "フォールバックで算出した値には source: 'calculated' 等のメタ情報を付与する"
-      - "既存テスト全PASSを維持した上で、フォールバック用の回帰テストを追加する"
-      - "2780, 7685 の実データで動作検証する"
+      - "disclosure-parser の build_period_index() を修正し calculated_fields を period_index に伝播させる"
+      - "既存テスト121件が全PASS維持であること"
+      - "回帰テストを追加すること"
+
+  - request_id: "req_20260225_006"
+    objective: "レポートリセット自動化ガード — Senior のタスク割り当て前に queue/reports/junior{N}_report.yaml をリセットする義務を、スクリプトで強制する仕組みを作成する。リセット忘れによる成果物レビューフロー破綻を防止"
+    ticker: null
+    universe: null
+    analysis_type: "workflow_fix"
+    timeframe: null
+    output_format: null
+    priority: "medium"
+    due_date: "2026-02-25"
+    constraints:
+      - "templates/ 配下にリセットスクリプトを作成する"
+      - "go.sh の reset 処理（行154-163）と同一テンプレートでリセットすること"
+      - "Senior がタスク割り当て時にこのスクリプトを呼ぶだけで済む設計にする"
+      - "CLAUDE.md のワークフロー記載と整合させる"
+
+  - request_id: "req_20260225_007"
+    objective: "inventory-builder manifest 型異常入力テスト追加 — Reviewer 指摘の残件。manifest.json の型異常（null、空配列、不正な型）に対する防御テストを追加する"
+    ticker: null
+    universe: null
+    analysis_type: "test_addition"
+    timeframe: null
+    output_format: null
+    priority: "medium"
+    due_date: "2026-02-25"
+    constraints:
+      - "manifest.json が null, 空配列, 不正な型, キー欠損などの異常入力をテスト"
+      - "既存テストが全PASS維持であること"
+      - "エラー時の適切なエラーメッセージまたはフォールバック動作を確認"
+
+  - request_id: "req_20260225_008"
+    objective: "comparable-analyzer スキル新規作成 — 業種コードから比較企業群を自動選定し、財務指標ベンチマーク比較を行うスキルを開発する。単独分析から相対分析への拡張"
+    ticker: null
+    universe: null
+    analysis_type: "new_skill"
+    timeframe: null
+    output_format: null
+    priority: "medium"
+    due_date: "2026-02-25"
+    constraints:
+      - "J-Quants の上場銘柄一覧APIまたはEDINET提出者一覧CSVから業種コードを取得"
+      - "同一業種の企業群を自動選定（最大10社程度）"
+      - "financial-calculator の指標（ROE/ROA/margin/growth）で比較マトリクスを生成"
+      - "CLI: python3 skills/comparable-analyzer/scripts/main.py --ticker XXXX"
+      - "SKILL.md, scripts/main.py, scripts/analyzer.py, tests/ を作成"
+      - "既存スキル（ticker-resolver, financial-calculator）との連携を活用"

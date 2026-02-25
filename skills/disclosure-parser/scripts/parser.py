@@ -547,6 +547,7 @@ def parse_edinet_directory(input_dir: Path, ticker: str) -> list[ParsedDocument]
 def build_period_index(documents: list[ParsedDocument]) -> list[dict[str, object]]:
     """Merge period-level metrics across documents for easier fiscal comparison."""
     merged: dict[str, dict[str, object]] = {}
+    calc_fields: dict[str, set[str]] = {}
 
     for document in documents:
         for period in document.periods:
@@ -561,6 +562,7 @@ def build_period_index(documents: list[ParsedDocument]) -> list[dict[str, object
                     "cf": {key: None for key in CF_KEYS},
                     "source_document_ids": [],
                 }
+                calc_fields[period.period_end] = set()
 
             entry = merged[period.period_end]
             entry_bs = cast(dict[str, int | float | None], entry["bs"])
@@ -572,10 +574,19 @@ def build_period_index(documents: list[ParsedDocument]) -> list[dict[str, object
             _merge_statement(entry_pl, period.pl)
             _merge_statement(entry_cf, period.cf)
 
+            if period._calculated_fields:
+                calc_fields[period.period_end] |= period._calculated_fields
+
             if document.document_id not in source_document_ids:
                 source_document_ids.append(document.document_id)
 
-    return [merged[key] for key in sorted(merged.keys())]
+    result: list[dict[str, object]] = []
+    for key in sorted(merged.keys()):
+        entry = merged[key]
+        if calc_fields[key]:
+            entry["calculated_fields"] = sorted(calc_fields[key])
+        result.append(entry)
+    return result
 
 
 def _merge_statement(

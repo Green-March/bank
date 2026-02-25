@@ -21,6 +21,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 from builder import (  # noqa: E402
     InventoryBuildError,
+    _load_all_manifests,
     analyze_gaps,
     build_coverage_matrix,
     build_inventory,
@@ -509,6 +510,108 @@ class TestEmptyInputs:
         for metric_info in result["metrics"].values():
             assert metric_info["count"] == 0
             assert metric_info["ratio"] == 0.0
+
+
+# ============================================================
+# 2b. manifest.json 型異常入力の防御テスト
+# ============================================================
+
+
+class TestManifestTypeAnomalies:
+    """manifest.json が異常な型を含む場合の防御テスト。"""
+
+    def _make_edinet_dir(self, tmp_path, raw_content: str) -> Path:
+        """manifest.json に生の文字列を書き込む。"""
+        edinet_dir = tmp_path / "raw" / "edinet"
+        edinet_dir.mkdir(parents=True)
+        (edinet_dir / "manifest.json").write_text(raw_content, encoding="utf-8")
+        return edinet_dir
+
+    # 1. manifest 内容が JSON null
+    def test_manifest_content_is_null(self, tmp_path):
+        """json.loads("null") は None を返す → dict チェックでスキップされること。"""
+        edinet_dir = self._make_edinet_dir(tmp_path, "null")
+        results, meta = _load_all_manifests(edinet_dir)
+        assert results == []
+        assert meta.get("manifest_sources") == []
+
+    # 2. manifest 内容が dict でない (文字列, 配列, 整数, bool)
+    @pytest.mark.parametrize(
+        "raw,label",
+        [
+            ('"hello"', "string"),
+            ("[1, 2, 3]", "array"),
+            ("42", "integer"),
+            ("true", "boolean"),
+        ],
+    )
+    def test_manifest_content_is_not_dict(self, tmp_path, raw, label):
+        """manifest.json が dict でない場合 → スキップされること。"""
+        edinet_dir = self._make_edinet_dir(tmp_path, raw)
+        results, meta = _load_all_manifests(edinet_dir)
+        assert results == [], f"type={label}: 結果が空であるべき"
+
+    # 3. results キーが null
+    def test_manifest_results_is_null(self, tmp_path):
+        """results が null → list チェックでスキップされること。"""
+        edinet_dir = self._make_edinet_dir(
+            tmp_path,
+            json.dumps({"results": None, "fetched_at": "2026-01-01"}),
+        )
+        results, meta = _load_all_manifests(edinet_dir)
+        assert results == []
+
+    # 4. results が配列でない (文字列, 整数, dict)
+    @pytest.mark.parametrize(
+        "bad_results,label",
+        [
+            ("not a list", "string"),
+            (999, "integer"),
+            ({"nested": "dict"}, "dict"),
+        ],
+    )
+    def test_manifest_results_is_not_array(self, tmp_path, bad_results, label):
+        """results が list でない場合 → スキップされること。"""
+        edinet_dir = self._make_edinet_dir(
+            tmp_path,
+            json.dumps({"results": bad_results, "fetched_at": "2026-01-01"}),
+        )
+        results, meta = _load_all_manifests(edinet_dir)
+        assert results == [], f"type={label}: 結果が空であるべき"
+
+    # 5. results[i] が dict でない (文字列, 整数, null)
+    @pytest.mark.parametrize(
+        "bad_item,label",
+        [
+            ("string_item", "string"),
+            (12345, "integer"),
+            (None, "null"),
+        ],
+    )
+    def test_manifest_results_item_is_not_dict(self, tmp_path, bad_item, label):
+        """results 内の要素が dict でない場合 → その要素だけスキップされること。"""
+        valid_item = {"doc_id": "D001", "period_end": "2023-03-31"}
+        edinet_dir = self._make_edinet_dir(
+            tmp_path,
+            json.dumps({
+                "results": [bad_item, valid_item],
+                "fetched_at": "2026-01-01",
+            }),
+        )
+        results, meta = _load_all_manifests(edinet_dir)
+        # 不正な要素はスキップされ、有効な要素のみ残る
+        assert len(results) == 1, f"type={label}: 有効な1件のみ残るべき"
+        assert results[0]["doc_id"] == "D001"
+
+    # 6. manifest 全体が配列 [{...}]
+    def test_manifest_is_array_not_dict(self, tmp_path):
+        """manifest が配列の場合 → dict チェックでスキップされること。"""
+        edinet_dir = self._make_edinet_dir(
+            tmp_path,
+            json.dumps([{"doc_id": "D001", "period_end": "2023-03-31"}]),
+        )
+        results, meta = _load_all_manifests(edinet_dir)
+        assert results == []
 
 
 # ============================================================

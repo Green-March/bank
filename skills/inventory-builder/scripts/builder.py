@@ -142,6 +142,9 @@ def _load_all_manifests(edinet_dir: Path) -> tuple[list[dict], dict]:
         except (OSError, json.JSONDecodeError) as exc:
             print(f"manifest 読込スキップ ({p.name}): {exc}", file=sys.stderr)
             continue
+        if not isinstance(data, dict):
+            print(f"manifest スキップ ({p.name}): 内容が dict でない (type={type(data).__name__})", file=sys.stderr)
+            continue
         fname = p.name
         fetched = data.get("fetched_at", "")
         manifest_sources.append({"file": fname, "fetched_at": fetched})
@@ -149,7 +152,13 @@ def _load_all_manifests(edinet_dir: Path) -> tuple[list[dict], dict]:
             meta["edinet_code"] = data.get("edinet_code")
         if not meta.get("generated_at"):
             meta["generated_at"] = data.get("generated_at")
-        for r in data.get("results", []):
+        results = data.get("results", [])
+        if not isinstance(results, list):
+            print(f"manifest スキップ ({p.name}): results が list でない (type={type(results).__name__})", file=sys.stderr)
+            continue
+        for r in results:
+            if not isinstance(r, dict):
+                continue
             doc_id = r.get("doc_id")
             if not doc_id:
                 continue
