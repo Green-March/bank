@@ -1,30 +1,33 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_T3_tests_001"
-  task_id: "T3_tests"
+  request_id: "rev_T4_001"
+  task_id: "T4_tests"
   junior_id: "junior3"
-  status: pending_review
-  timestamp: "2026-02-25T14:00:00+09:00"
+  status: pending
+  timestamp: "2026-02-25T14:33:00+09:00"
   payload:
-    description: "inventory-builder pytest テスト 25件 — 単体/JSON検証/統合/CLI テスト全PASS"
+    summary: "ticker-resolver スキルの pytest テスト27件を作成し、全件 PASSED を確認"
     outputs:
-      - "skills/inventory-builder/tests/test_builder.py"
-    validation_results:
-      - "total_tests=25, passed=25, failed=0"
-      - "execution_time=0.53s"
-    test_breakdown:
-      unit_tests: "ClassifyPeriod(8), CoverageMatrix(1), AnalyzeGaps(2), QualitySummary(2), GenerateInventoryMd(1)"
-      json_validation: "MissingJsonKeys(4), EmptyInputs(2)"
-      integration: "2780実データ(1), 7685実データ+J-Quants(1), J-Quantsオプショナル(1)"
-      cli: "help(1), execution(1)"
+      - "skills/ticker-resolver/tests/test_resolver.py"
+      - "skills/ticker-resolver/tests/test_main.py"
+    validation:
+      - "test_count=27 (要件20件以上を充足)"
+      - "test_resolver.py=14件 (正常系7, 異常系3, エッジケース4)"
+      - "test_main.py=13件 (resolve4, update3, list3, misc2, + subprocess統合テスト)"
+      - "all_tests_passed=true"
+      - "resolver.py_not_modified=true"
+      - "main.py_not_modified=true"
     caveats:
-      - "統合テストはdata/2780, data/7685の実データに依存（存在しない場合はskip）"
+      - "dual-import パターンのため update サブコマンドは runpy.run_path 経由でテスト"
+      - "list/resolve は subprocess.run で統合テスト"
     review_criteria:
-      - "テストカバレッジの網羅性（単体/JSON検証/統合/CLI）"
-      - "JSON欠損キーのバリデーションテスト（計画レビュー時のReviewer指摘対応）"
-      - "統合テストの実データ検証の妥当性"
-      - "エッジケース（空入力、null値）のカバレッジ"
+      - "テスト件数が20件以上を満たしているか"
+      - "正常系・異常系・エッジケースが網羅されているか"
+      - "モック化が適切か（HTTP, ファイルI/O）"
+      - "全テストが PASSED しているか"
+      - "resolver.py, main.py を編集していないか"
+      - "既存テストパターン（monkeypatch, tempfile, unittest.mock）に準拠しているか"
 review_followup:
   request_id: null
   task_id: null

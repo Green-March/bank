@@ -2,92 +2,123 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_inv_builder_001"
-  request_id: "req_20260225_002"
-  timestamp: "2026-02-25T12:00:00+09:00"
-  objective: "inventory-builder スキル新規作成 — data/{ticker}/raw/edinet/manifest.json + parsed/financials.json + raw/jquants/ から inventory.md を自動生成するCLIスキルを開発する"
+  plan_id: "plan_req_20260225_003"
+  request_id: "req_20260225_003"
+  timestamp: "2026-02-25T12:30:00+09:00"
+  objective: "ticker-resolver スキル新規作成。ticker(4桁) → edinet_code, company_name, fye_month を自動解決するCLIツール。EDINET提出者一覧CSVをローカルキャッシュし、3銘柄目以降のパイプライン効率を大幅に向上させる。"
+  analysis_type: skill_development
   priority: high
 
-  background: |
-    現在 data/2780/inventory.md と data/7685/inventory.md は手動作成されている。
-    manifest.json（収集済みZIP一覧）、financials.json（パース済み財務データ）、
-    J-Quants決算短信データを入力として、inventory.md を自動生成するスキルを開発する。
-    inventory.md はデータパイプラインの品質管理に不可欠で、
-    年度×四半期カバレッジマトリクス、欠損分析、データ品質サマリを含む。
-
-  deliverables:
-    - "skills/inventory-builder/SKILL.md"
-    - "skills/inventory-builder/scripts/__init__.py"
-    - "skills/inventory-builder/scripts/main.py"
-    - "skills/inventory-builder/scripts/builder.py"
-    - "skills/inventory-builder/tests/__init__.py"
-    - "skills/inventory-builder/tests/test_builder.py"
+  plan_summary: |
+    EDINET提出者一覧CSVをAPI経由で取得・ローカルキャッシュし、
+    ticker(証券コード4桁)からedinet_code, company_name, fye_monthを
+    自動解決するCLIスキルを新規作成する。
+    既存スキル(disclosure-collector等)のCLI規約(argparse, サブコマンド型)に準拠。
 
   task_decomposition:
-    - task_id: "T1_builder"
-      assignee: junior1
+    - task_id: "T1_skill_scaffold"
       description: |
-        builder.py コアロジック実装。以下の機能を含む:
-        1. manifest.json 読み込み・解析（results[].doc_id, period_end, status）
-        2. financials.json 読み込み・解析（documents[].periods[].{period_end, fiscal_year, bs, pl, cf}）
-        3. J-Quants statements JSON 読み込み（最新ファイル自動選択、存在しない場合はスキップ）
-        4. classify_period(period_end, fye_month) — 文書を有報/H1/Q1/Q2/Q3に分類
-        5. build_coverage_matrix(documents, fye_month) — 年度×四半期カバレッジマトリクス構築
-        6. analyze_gaps(matrix, fye_month) — 欠損を許容(△)/要対応(✗)に自動分類
-        7. calculate_quality_summary(financials) — メトリクスカバレッジ計算
-        8. generate_inventory_md() — セクション(a)〜(i)のMarkdown生成
-        参考実装: data/2780/inventory.md, data/7685/inventory.md
-        入力データ構造: data/2780/raw/edinet/manifest.json, data/2780/parsed/financials.json
-      output_path: "skills/inventory-builder/scripts/builder.py"
-      dependencies: []
-      parallel: true
+        スキルのディレクトリ構造とSKILL.mdを作成する。
+        - skills/ticker-resolver/SKILL.md
+        - skills/ticker-resolver/scripts/__init__.py
+        - skills/ticker-resolver/scripts/main.py (argparseスケルトン)
+        - skills/ticker-resolver/scripts/resolver.py (空クラススケルトン)
+        - skills/ticker-resolver/tests/__init__.py
+        構造は既存スキル(disclosure-collector, inventory-builder)の規約に準拠。
+        SKILL.mdには Description, Usage, CLI Options, Output, Environment Variables, Status セクションを記載。
+      assigned_to: junior1
+      priority: high
+      output_path: "skills/ticker-resolver/"
+      estimated_effort: small
 
-    - task_id: "T2_cli_docs"
-      assignee: junior2
+    - task_id: "T2_resolver_core"
       description: |
-        main.py CLI + SKILL.md + __init__.py 作成。
-        1. main.py: argparse CLI（--ticker, --fye-month 必須、--data-root, --output-path オプション）
-           - build_parser() + main() パターン（financial-calculator/scripts/main.py を参照）
-           - from .builder import build_inventory をインポート
-           - build_inventory(ticker, fye_month, data_root, output_path) を呼び出し
-           - 戻り値0=成功、1=エラー
-        2. SKILL.md: 既存スキル（skills/financial-calculator/SKILL.md等）のパターンに従う
-           - 概要、CLI使用法、入出力、セクション説明
-        3. scripts/__init__.py, tests/__init__.py: 空ファイル
-        インターフェース定義:
-          build_inventory(ticker: str, fye_month: int, data_root: Path, output_path: Path | None = None) -> Path
-      output_path: "skills/inventory-builder/scripts/main.py, skills/inventory-builder/SKILL.md"
-      dependencies: []
-      parallel: true
+        resolver.py にコアロジックを実装する。
+        1. TickerResolver クラス:
+           - __init__(cache_dir): キャッシュディレクトリ設定(デフォルト: data/.ticker_cache/)
+           - update_cache(): EDINET API (https://api.edinet-fsa.go.jp/api/v2/edinetcode/list) から
+             EdinetcodeDlInfo.csv を取得し、ローカルにキャッシュ(Shift-JIS→UTF-8変換)
+           - resolve(ticker: str) -> dict: ticker(4桁) → {edinet_code, company_name, sec_code, fye_month} を返す
+             証券コード(secCode)は5桁(末尾0付き)でCSVに格納されている → 4桁tickerに末尾0を付与して検索
+           - list_all() -> list[dict]: キャッシュ済み全銘柄を返す
+           - _load_cache(): CSV読み込み・パース(上場企業のみフィルタ)
+        2. キャッシュ有効期限: 30日(設定可能)
+        3. エラーハンドリング: TickerNotFoundError, CacheExpiredError, NetworkError
+        4. 依存: requests, csv (標準ライブラリ)
+      assigned_to: junior2
+      priority: high
+      depends_on: ["T1_skill_scaffold"]
+      output_path: "skills/ticker-resolver/scripts/resolver.py"
+      estimated_effort: medium
 
-    - task_id: "T3_tests"
-      assignee: junior3
+    - task_id: "T3_cli_main"
       description: |
-        pytest テスト作成（全テストPASS必須）。
-        1. test_builder.py:
-           - test_classify_period: fye_month=3（3月期）とfye_month=12（12月期）の分類テスト
-           - test_build_coverage_matrix: data/2780 データを使った統合テスト
-           - test_analyze_gaps: 許容/要対応の分類ロジックテスト
-           - test_calculate_quality_summary: メトリクスカバレッジ計算テスト
-           - test_generate_inventory_md: 出力Markdownの構造検証（セクション(a)〜(i)の存在確認）
-           - test_integration_2780: data/2780 を入力として完全な inventory.md を生成し、既存 data/2780/inventory.md と主要セクション構造を比較
-           - test_integration_7685: data/7685 で同様のテスト（fye_month=12、J-Quants有り）
-           - test_jquants_optional: J-Quantsデータ無しでもエラーなく動作することを確認
-        2. テスト実行: pytest skills/inventory-builder/tests/ -v で全件PASS
-      output_path: "skills/inventory-builder/tests/test_builder.py"
-      dependencies: ["T1_builder", "T2_cli_docs"]
-      parallel: false
+        main.py にCLIインターフェースを実装する。
+        サブコマンド3つ:
+        1. resolve <ticker>: ticker→情報解決。結果をJSON形式で標準出力
+           - --format json|text (デフォルト: json)
+        2. update: キャッシュ更新(EDINET APIからCSV再取得)
+           - --force: 有効期限内でも強制更新
+        3. list: キャッシュ済み全銘柄一覧表示
+           - --format json|text (デフォルト: text)
+        既存スキルのCLI規約に準拠:
+        - argparse + add_subparsers
+        - main() → int 返り値
+        - if __name__ == "__main__": sys.exit(main())
+        - _repo_root(), _data_root() パスヘルパー
+        - dotenv 読み込み
+      assigned_to: junior1
+      priority: high
+      depends_on: ["T1_skill_scaffold", "T2_resolver_core"]
+      output_path: "skills/ticker-resolver/scripts/main.py"
+      estimated_effort: medium
 
-  execution_plan: |
-    Phase 1（並列）: T1_builder（Junior1）と T2_cli_docs（Junior2）を同時に割り当て
-    Phase 2（逐次）: T1 + T2 完了後、T3_tests（Junior3）を割り当て
-    Phase 3: 全テストPASS確認後、タスク完了
+    - task_id: "T4_tests"
+      description: |
+        pytest テストを20件以上作成する。
+        skills/ticker-resolver/tests/test_resolver.py:
+        - TickerResolver クラスのユニットテスト(10件以上)
+          - resolve(): 正常系(トヨタ7203等), 異常系(存在しないticker), エッジケース(3桁, 5桁入力)
+          - update_cache(): モックHTTPレスポンスでCSV取得テスト
+          - list_all(): 正常系テスト
+          - _load_cache(): CSV パース/Shift-JIS変換テスト
+          - キャッシュ有効期限テスト
+          - TickerNotFoundError テスト
+        skills/ticker-resolver/tests/test_main.py:
+        - CLI統合テスト(10件以上)
+          - resolve サブコマンド: 正常/異常/--format オプション
+          - update サブコマンド: 正常/--force
+          - list サブコマンド: 正常/--format オプション
+          - 引数なし実行時のヘルプ表示
+          - 不正サブコマンドのエラー
+        unittest.mock でHTTPリクエスト・ファイルI/Oをモック化
+      assigned_to: junior3
+      priority: high
+      depends_on: ["T2_resolver_core", "T3_cli_main"]
+      output_path: "skills/ticker-resolver/tests/"
+      estimated_effort: medium
+
+  junior_assignment:
+    junior1: ["T1_skill_scaffold", "T3_cli_main"]
+    junior2: ["T2_resolver_core"]
+    junior3: ["T4_tests"]
+
+  execution_order:
+    phase1_parallel: ["T1_skill_scaffold"]
+    phase2_parallel: ["T2_resolver_core"]
+    phase3_parallel: ["T3_cli_main"]
+    phase4_parallel: ["T4_tests"]
 
   quality_criteria:
-    - "CLI: python3 skills/inventory-builder/scripts/main.py --ticker 2780 --fye-month 3 が正常終了し inventory.md を生成"
-    - "CLI: python3 skills/inventory-builder/scripts/main.py --ticker 7685 --fye-month 12 が正常終了"
-    - "生成された inventory.md が参考実装（data/2780/inventory.md）と同等のセクション構造を持つ"
-    - "pytest skills/inventory-builder/tests/ -v が全件PASS"
-    - "J-Quantsデータが存在しない場合もエラーなく動作（graceful degradation）"
-    - "年度×四半期カバレッジマトリクスが正確に構築される"
-    - "欠損分類（許容△/要対応✗）が妥当"
+    - "既存スキルのCLI規約(argparse, パスヘルパー, dotenv)に完全準拠"
+    - "pytest テスト20件以上、全件パス"
+    - "EDINET CSV のShift-JIS→UTF-8変換が正しく動作"
+    - "証券コード4桁→5桁(末尾0)のマッピングが正確"
+    - "キャッシュ有効期限管理が機能"
+    - "エラーハンドリング(TickerNotFoundError等)が適切"
+    - "SKILL.md が既存スキルのフォーマットに準拠"
+
+  risks:
+    - "EDINET API のエンドポイント仕様変更の可能性 → モックテストで対応"
+    - "CSV のエンコーディング(Shift-JIS)によるパース問題 → 変換処理を慎重に実装"
+    - "上場/非上場区分の判定基準 → CSVのフィールド仕様を確認"
