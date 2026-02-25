@@ -2,123 +2,70 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_req_20260225_003"
-  request_id: "req_20260225_003"
-  timestamp: "2026-02-25T12:30:00+09:00"
-  objective: "ticker-resolver スキル新規作成。ticker(4桁) → edinet_code, company_name, fye_month を自動解決するCLIツール。EDINET提出者一覧CSVをローカルキャッシュし、3銘柄目以降のパイプライン効率を大幅に向上させる。"
-  analysis_type: skill_development
-  priority: high
+  plan_id: "plan_req_20260225_004"
+  request_id: "req_20260225_004"
+  timestamp: "2026-02-25T14:00:00+09:00"
 
-  plan_summary: |
-    EDINET提出者一覧CSVをAPI経由で取得・ローカルキャッシュし、
-    ticker(証券コード4桁)からedinet_code, company_name, fye_monthを
-    自動解決するCLIスキルを新規作成する。
-    既存スキル(disclosure-collector等)のCLI規約(argparse, サブコマンド型)に準拠。
+  objective: "disclosure-parser の total_liabilities フォールバック計算を実装する。XBRLタクソノミに Liabilities 概念がない銘柄でも total_assets - net_assets で負債合計を自動算出できるようにする。"
+
+  background: |
+    現在の parser.py の finalize() には total_assets のフォールバック（current_assets + noncurrent_assets）は実装済みだが、
+    total_liabilities のフォールバックが存在しない。
+    一部の EDINET 有報（特に IFRS 非対応企業）では TotalLiabilities 概念が XBRL タクソノミに含まれず、
+    total_liabilities が null のまま出力される。
+    total_assets と net_assets が存在する場合、total_liabilities = total_assets - net_assets で算出可能。
 
   task_decomposition:
-    - task_id: "T1_skill_scaffold"
+    - task_id: "T004-1"
+      title: "total_liabilities フォールバック実装 + メタデータ + 回帰テスト"
+      assignee: junior1
       description: |
-        スキルのディレクトリ構造とSKILL.mdを作成する。
-        - skills/ticker-resolver/SKILL.md
-        - skills/ticker-resolver/scripts/__init__.py
-        - skills/ticker-resolver/scripts/main.py (argparseスケルトン)
-        - skills/ticker-resolver/scripts/resolver.py (空クラススケルトン)
-        - skills/ticker-resolver/tests/__init__.py
-        構造は既存スキル(disclosure-collector, inventory-builder)の規約に準拠。
-        SKILL.mdには Description, Usage, CLI Options, Output, Environment Variables, Status セクションを記載。
-      assigned_to: junior1
+        1. PeriodFinancial クラスに _calculated_fields: set[str] を追加
+        2. finalize() に total_liabilities フォールバックロジックを追加:
+           - 条件: total_liabilities is None AND total_assets is not None AND net_assets is not None
+           - 計算: total_liabilities = total_assets - net_assets
+           - _calculated_fields に "total_liabilities" を追加
+        3. 既存の total_assets フォールバック（current_assets + noncurrent_assets）にも
+           同様の _calculated_fields トラッキングを追加
+        4. to_dict() を更新し、_calculated_fields が空でない場合 "calculated_fields" キーを出力に含める
+        5. test_parser.py に回帰テストを追加:
+           a. total_liabilities が null で total_assets + net_assets がある場合 → フォールバック発動テスト
+           b. total_liabilities が既に存在する場合 → フォールバック不発動テスト
+           c. total_assets のみで net_assets がない場合 → フォールバック不発動テスト
+           d. calculated_fields メタデータが正しく出力されるテスト
+        6. 既存テスト全 PASS を確認（pytest skills/disclosure-parser/tests/ -v）
+      output_path: "skills/disclosure-parser/scripts/parser.py, skills/disclosure-parser/tests/test_parser.py"
       priority: high
-      output_path: "skills/ticker-resolver/"
-      estimated_effort: small
+      estimated_files_changed: 2
 
-    - task_id: "T2_resolver_core"
+    - task_id: "T004-2"
+      title: "2780, 7685 実データでのフォールバック動作検証"
+      assignee: junior2
+      depends_on: "T004-1"
       description: |
-        resolver.py にコアロジックを実装する。
-        1. TickerResolver クラス:
-           - __init__(cache_dir): キャッシュディレクトリ設定(デフォルト: data/.ticker_cache/)
-           - update_cache(): EDINET API (https://api.edinet-fsa.go.jp/api/v2/edinetcode/list) から
-             EdinetcodeDlInfo.csv を取得し、ローカルにキャッシュ(Shift-JIS→UTF-8変換)
-           - resolve(ticker: str) -> dict: ticker(4桁) → {edinet_code, company_name, sec_code, fye_month} を返す
-             証券コード(secCode)は5桁(末尾0付き)でCSVに格納されている → 4桁tickerに末尾0を付与して検索
-           - list_all() -> list[dict]: キャッシュ済み全銘柄を返す
-           - _load_cache(): CSV読み込み・パース(上場企業のみフィルタ)
-        2. キャッシュ有効期限: 30日(設定可能)
-        3. エラーハンドリング: TickerNotFoundError, CacheExpiredError, NetworkError
-        4. 依存: requests, csv (標準ライブラリ)
-      assigned_to: junior2
+        1. T004-1 の実装完了後、2780 の実データで parser を実行:
+           python3 skills/disclosure-parser/scripts/main.py --ticker 2780 --output-dir /tmp/verify_2780
+        2. 7685 の実データで parser を実行:
+           python3 skills/disclosure-parser/scripts/main.py --ticker 7685 --output-dir /tmp/verify_7685
+        3. 出力 JSON の financials.json を確認:
+           - total_liabilities が null でなくなっている期間があるか
+           - calculated_fields に "total_liabilities" が記録されているか
+           - total_assets - net_assets の計算が正しいか（手計算と照合）
+        4. 検証結果をレポートに記載
+      output_path: "/tmp/verify_2780, /tmp/verify_7685"
       priority: high
-      depends_on: ["T1_skill_scaffold"]
-      output_path: "skills/ticker-resolver/scripts/resolver.py"
-      estimated_effort: medium
-
-    - task_id: "T3_cli_main"
-      description: |
-        main.py にCLIインターフェースを実装する。
-        サブコマンド3つ:
-        1. resolve <ticker>: ticker→情報解決。結果をJSON形式で標準出力
-           - --format json|text (デフォルト: json)
-        2. update: キャッシュ更新(EDINET APIからCSV再取得)
-           - --force: 有効期限内でも強制更新
-        3. list: キャッシュ済み全銘柄一覧表示
-           - --format json|text (デフォルト: text)
-        既存スキルのCLI規約に準拠:
-        - argparse + add_subparsers
-        - main() → int 返り値
-        - if __name__ == "__main__": sys.exit(main())
-        - _repo_root(), _data_root() パスヘルパー
-        - dotenv 読み込み
-      assigned_to: junior1
-      priority: high
-      depends_on: ["T1_skill_scaffold", "T2_resolver_core"]
-      output_path: "skills/ticker-resolver/scripts/main.py"
-      estimated_effort: medium
-
-    - task_id: "T4_tests"
-      description: |
-        pytest テストを20件以上作成する。
-        skills/ticker-resolver/tests/test_resolver.py:
-        - TickerResolver クラスのユニットテスト(10件以上)
-          - resolve(): 正常系(トヨタ7203等), 異常系(存在しないticker), エッジケース(3桁, 5桁入力)
-          - update_cache(): モックHTTPレスポンスでCSV取得テスト
-          - list_all(): 正常系テスト
-          - _load_cache(): CSV パース/Shift-JIS変換テスト
-          - キャッシュ有効期限テスト
-          - TickerNotFoundError テスト
-        skills/ticker-resolver/tests/test_main.py:
-        - CLI統合テスト(10件以上)
-          - resolve サブコマンド: 正常/異常/--format オプション
-          - update サブコマンド: 正常/--force
-          - list サブコマンド: 正常/--format オプション
-          - 引数なし実行時のヘルプ表示
-          - 不正サブコマンドのエラー
-        unittest.mock でHTTPリクエスト・ファイルI/Oをモック化
-      assigned_to: junior3
-      priority: high
-      depends_on: ["T2_resolver_core", "T3_cli_main"]
-      output_path: "skills/ticker-resolver/tests/"
-      estimated_effort: medium
-
-  junior_assignment:
-    junior1: ["T1_skill_scaffold", "T3_cli_main"]
-    junior2: ["T2_resolver_core"]
-    junior3: ["T4_tests"]
-
-  execution_order:
-    phase1_parallel: ["T1_skill_scaffold"]
-    phase2_parallel: ["T2_resolver_core"]
-    phase3_parallel: ["T3_cli_main"]
-    phase4_parallel: ["T4_tests"]
+      estimated_files_changed: 0
 
   quality_criteria:
-    - "既存スキルのCLI規約(argparse, パスヘルパー, dotenv)に完全準拠"
-    - "pytest テスト20件以上、全件パス"
-    - "EDINET CSV のShift-JIS→UTF-8変換が正しく動作"
-    - "証券コード4桁→5桁(末尾0)のマッピングが正確"
-    - "キャッシュ有効期限管理が機能"
-    - "エラーハンドリング(TickerNotFoundError等)が適切"
-    - "SKILL.md が既存スキルのフォーマットに準拠"
+    - "既存テスト 7 件（test_parser.py）+ context_priority テスト 13 件（test_context_priority.py）全 PASS"
+    - "フォールバック回帰テスト 4 件以上追加、全 PASS"
+    - "フォールバック発動時に calculated_fields メタデータが出力される"
+    - "total_liabilities が XBRL に存在する場合はフォールバック不発動"
+    - "total_assets または net_assets のいずれかが欠損している場合はフォールバック不発動"
+    - "2780, 7685 の実データで正常動作を確認"
 
-  risks:
-    - "EDINET API のエンドポイント仕様変更の可能性 → モックテストで対応"
-    - "CSV のエンコーディング(Shift-JIS)によるパース問題 → 変換処理を慎重に実装"
-    - "上場/非上場区分の判定基準 → CSVのフィールド仕様を確認"
+  risk_assessment:
+    - risk: "既存テスト破壊"
+      mitigation: "to_dict() の calculated_fields は空の場合省略するため、既存テストの期待値に影響しない"
+    - risk: "total_assets 自体がフォールバック計算値の場合の精度"
+      mitigation: "finalize() 内で total_assets フォールバックを先に実行し、その後 total_liabilities フォールバックを実行する順序で対応"

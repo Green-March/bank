@@ -139,6 +139,7 @@ class PeriodFinancial:
     source_context_ids: list[str] = field(default_factory=list)
     period_end_original: str | None = None
     _scores: dict[str, int] = field(default_factory=dict)
+    _calculated_fields: set[str] = field(default_factory=set)
 
     def set_metric(
         self,
@@ -165,11 +166,21 @@ class PeriodFinancial:
             noncurrent = self.bs.get("noncurrent_assets")
             if current is not None and noncurrent is not None:
                 self.bs["total_assets"] = current + noncurrent
+                self._calculated_fields.add("total_assets")
+
+        # BS fallback — total_liabilities = total_assets - net_assets
+        if self.bs.get("total_liabilities") is None:
+            total_assets = self.bs.get("total_assets")
+            net_assets = self.bs.get("net_assets")
+            if total_assets is not None and net_assets is not None:
+                self.bs["total_liabilities"] = total_assets - net_assets
+                self._calculated_fields.add("total_liabilities")
 
         operating_cf = self.cf["operating_cf"]
         investing_cf = self.cf["investing_cf"]
         if operating_cf is not None and investing_cf is not None:
             self.cf["free_cash_flow"] = operating_cf + investing_cf
+            self._calculated_fields.add("free_cash_flow")
 
     def to_dict(self) -> dict[str, object]:
         result: dict[str, object] = {
@@ -184,6 +195,8 @@ class PeriodFinancial:
         }
         if self.period_end_original is not None:
             result["period_end_original"] = self.period_end_original
+        if self._calculated_fields:
+            result["calculated_fields"] = sorted(self._calculated_fields)
         return result
 
 

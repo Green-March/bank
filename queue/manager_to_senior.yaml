@@ -1,1 +1,16 @@
-queue: []
+queue:
+  - request_id: "req_20260225_004"
+    objective: "disclosure-parser の total_liabilities フォールバック計算を実装する。XBRLタクソノミに Liabilities 概念がない銘柄でも total_assets - net_assets で負債合計を自動算出できるようにする。"
+    ticker: null
+    universe: null
+    analysis_type: "skill_enhancement"
+    timeframe: null
+    output_format: null
+    priority: "high"
+    due_date: "2026-02-25"
+    constraints:
+      - "既存の disclosure-parser のコード構造・テストを壊さない"
+      - "total_assets と net_assets が両方存在する場合のみフォールバック発動"
+      - "フォールバックで算出した値には source: 'calculated' 等のメタ情報を付与する"
+      - "既存テスト全PASSを維持した上で、フォールバック用の回帰テストを追加する"
+      - "2780, 7685 の実データで動作検証する"

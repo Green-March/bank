@@ -1,33 +1,28 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_T4_001"
-  task_id: "T4_tests"
-  junior_id: "junior3"
-  status: pending
-  timestamp: "2026-02-25T14:33:00+09:00"
+  request_id: "REV-T004-2-001"
+  task_id: "T004-2"
+  junior_id: junior2
+  status: pending_review
+  timestamp: "2026-02-25T15:15:00+09:00"
   payload:
-    summary: "ticker-resolver スキルの pytest テスト27件を作成し、全件 PASSED を確認"
+    summary: "2780/7685 実データでの total_liabilities フォールバック動作検証"
+    parent_request: "req_20260225_004"
+    findings:
+      - "2780: 18文書54期間パース、フォールバック発動0件（TL既存のため）"
+      - "7685: 20文書55期間パース、フォールバック発動0件（TL既存のため）"
+      - "TA-NA vs 実TL: ±1000円の丸め差異のみ（千円単位表記に起因、異常なし）"
+      - "period_index に calculated_fields は伝播しない（既知の設計制限）"
+      - "total_assets フォールバック（current+noncurrent）は全件一致確認済み"
     outputs:
-      - "skills/ticker-resolver/tests/test_resolver.py"
-      - "skills/ticker-resolver/tests/test_main.py"
-    validation:
-      - "test_count=27 (要件20件以上を充足)"
-      - "test_resolver.py=14件 (正常系7, 異常系3, エッジケース4)"
-      - "test_main.py=13件 (resolve4, update3, list3, misc2, + subprocess統合テスト)"
-      - "all_tests_passed=true"
-      - "resolver.py_not_modified=true"
-      - "main.py_not_modified=true"
-    caveats:
-      - "dual-import パターンのため update サブコマンドは runpy.run_path 経由でテスト"
-      - "list/resolve は subprocess.run で統合テスト"
-    review_criteria:
-      - "テスト件数が20件以上を満たしているか"
-      - "正常系・異常系・エッジケースが網羅されているか"
-      - "モック化が適切か（HTTP, ファイルI/O）"
-      - "全テストが PASSED しているか"
-      - "resolver.py, main.py を編集していないか"
-      - "既存テストパターン（monkeypatch, tempfile, unittest.mock）に準拠しているか"
+      - "/tmp/verify_2780/financials.json"
+      - "/tmp/verify_7685/financials.json"
+    review_focus:
+      - "検証手順の妥当性（手計算照合、差異分析）"
+      - "フォールバック非発動が正しい挙動であることの確認"
+      - "丸め差異の分析と結論の妥当性"
+      - "period_index の設計制限への対応方針"
 review_followup:
   request_id: null
   task_id: null

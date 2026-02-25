@@ -1,16 +1,16 @@
 review_response:
   request_type: deliverable_review_response
   review_type: deliverable
-  request_id: 'rev_T4_001'
-  task_id: 'T4_tests'
-  junior_id: 'junior3'
+  request_id: 'REV-T004-2-001'
+  task_id: 'T004-2'
+  junior_id: 'junior2'
   verdict: 'ok'
   comments:
-    data_integrity: '27件のテストでresolve/update/listおよびCSV読み込み経路を網羅し、再現可能な検証ログとして一貫したファイルI/O分離を確認。'
-    source_traceability: '各ケースはモックHTTP/キャッシュファイルを明示し、subprocess経由でも呼び出し条件（env、引数、出力）を追跡可能。'
-    analytical_validity: '正常系・異常系・エッジケース・CLI入力検証が分離され、実行結果の期待値が要件に対応している。'
-    clarity: '更新/解決/一覧の正常・異常フローとフォーマット差分がテスト名とassertで明確。'
-    risk_disclosure: '現時点で残存リスクは低く、未実装範囲(jquants)は仕様で明示され、追加分岐はT3以降。'
+    data_integrity: '2780は54期中36期、7685は55期中40期で総資産と純資産が両方あり、TLは既存値のためフォールバック0件。'
+    source_traceability: '検証結果は /tmp/verify_2780/financials.json と /tmp/verify_7685/financials.json を再集計して検証。'
+    analytical_validity: 'TL-(total_assets-net_assets)は2780/7685とも最大±1000円で、手動差分の主張と整合する。'
+    clarity: '依頼項目（件数、発火有無、差異、制約）を1ページで追跡しやすく要約している。'
+    risk_disclosure: 'period_indexにはcalculated_fields未反映の既知制限を明記しており、集約閲覧時の解釈注意は適切。'
   suggested_changes: []
   status: 'completed'
-  timestamp: '2026-02-25 13:07:17'
+  timestamp: '2026-02-25 13:56:03'

@@ -232,6 +232,122 @@ class DisclosureParserTests(unittest.TestCase):
             self.assertTrue((output_dir / "S100TEST.json").exists())
             self.assertTrue((output_dir / "financials.json").exists())
 
+    def test_total_liabilities_fallback_fires_when_null(self) -> None:
+        """total_liabilities が null で total_assets + net_assets がある → フォールバック発動"""
+        xbrl = """<?xml version="1.0" encoding="UTF-8"?>
+<xbrl
+  xmlns="http://www.xbrl.org/2003/instance"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+  xmlns:jppfs_cor="http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2023-03-31/jppfs_cor">
+  <context id="CurrentYearInstant">
+    <entity><identifier scheme="http://disclosure.edinet-fsa.go.jp">E99999</identifier></entity>
+    <period><instant>2024-03-31</instant></period>
+  </context>
+  <unit id="JPY"><measure>iso4217:JPY</measure></unit>
+  <jppfs_cor:TotalAssets contextRef="CurrentYearInstant" unitRef="JPY">5000</jppfs_cor:TotalAssets>
+  <jppfs_cor:NetAssets contextRef="CurrentYearInstant" unitRef="JPY">3000</jppfs_cor:NetAssets>
+</xbrl>"""
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = Path(tmp) / "S100FALLBACK.zip"
+            _create_sample_zip(zip_path, xbrl_body=xbrl)
+            parsed = disclosure_parser.parse_edinet_zip(zip_path, ticker="9999")
+            period = parsed.periods[0]
+            self.assertEqual(period.bs["total_liabilities"], 2000)
+            self.assertIn("total_liabilities", period._calculated_fields)
+
+    def test_total_liabilities_no_fallback_when_present(self) -> None:
+        """total_liabilities が既に XBRL に存在 → フォールバック不発動"""
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = Path(tmp) / "S100PRESENT.zip"
+            _create_sample_zip(zip_path, xbrl_body=SAMPLE_XBRL)
+            parsed = disclosure_parser.parse_edinet_zip(zip_path, ticker="2780")
+            period = parsed.periods[0]
+            self.assertEqual(period.bs["total_liabilities"], 400)
+            self.assertNotIn("total_liabilities", period._calculated_fields)
+
+    def test_total_liabilities_no_fallback_when_net_assets_missing(self) -> None:
+        """total_assets のみで net_assets がない → フォールバック不発動"""
+        xbrl = """<?xml version="1.0" encoding="UTF-8"?>
+<xbrl
+  xmlns="http://www.xbrl.org/2003/instance"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+  xmlns:jppfs_cor="http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2023-03-31/jppfs_cor">
+  <context id="CurrentYearInstant">
+    <entity><identifier scheme="http://disclosure.edinet-fsa.go.jp">E99999</identifier></entity>
+    <period><instant>2024-03-31</instant></period>
+  </context>
+  <unit id="JPY"><measure>iso4217:JPY</measure></unit>
+  <jppfs_cor:TotalAssets contextRef="CurrentYearInstant" unitRef="JPY">5000</jppfs_cor:TotalAssets>
+</xbrl>"""
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = Path(tmp) / "S100NONET.zip"
+            _create_sample_zip(zip_path, xbrl_body=xbrl)
+            parsed = disclosure_parser.parse_edinet_zip(zip_path, ticker="9999")
+            period = parsed.periods[0]
+            self.assertIsNone(period.bs["total_liabilities"])
+            self.assertNotIn("total_liabilities", period._calculated_fields)
+
+    def test_calculated_fields_in_to_dict(self) -> None:
+        """calculated_fields メタデータが to_dict() 出力に含まれる"""
+        xbrl = """<?xml version="1.0" encoding="UTF-8"?>
+<xbrl
+  xmlns="http://www.xbrl.org/2003/instance"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+  xmlns:jppfs_cor="http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2023-03-31/jppfs_cor">
+  <context id="CurrentYearInstant">
+    <entity><identifier scheme="http://disclosure.edinet-fsa.go.jp">E99999</identifier></entity>
+    <period><instant>2024-03-31</instant></period>
+  </context>
+  <context id="CurrentYearDuration">
+    <entity><identifier scheme="http://disclosure.edinet-fsa.go.jp">E99999</identifier></entity>
+    <period><startDate>2023-04-01</startDate><endDate>2024-03-31</endDate></period>
+  </context>
+  <unit id="JPY"><measure>iso4217:JPY</measure></unit>
+  <jppfs_cor:TotalAssets contextRef="CurrentYearInstant" unitRef="JPY">5000</jppfs_cor:TotalAssets>
+  <jppfs_cor:NetAssets contextRef="CurrentYearInstant" unitRef="JPY">3000</jppfs_cor:NetAssets>
+  <jppfs_cor:NetCashProvidedByUsedInOperatingActivities contextRef="CurrentYearDuration" unitRef="JPY">200</jppfs_cor:NetCashProvidedByUsedInOperatingActivities>
+  <jppfs_cor:NetCashProvidedByUsedInInvestingActivities contextRef="CurrentYearDuration" unitRef="JPY">-50</jppfs_cor:NetCashProvidedByUsedInInvestingActivities>
+</xbrl>"""
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = Path(tmp) / "S100CALCFIELD.zip"
+            _create_sample_zip(zip_path, xbrl_body=xbrl)
+            parsed = disclosure_parser.parse_edinet_zip(zip_path, ticker="9999")
+            period = parsed.periods[0]
+            d = period.to_dict()
+            self.assertIn("calculated_fields", d)
+            calc = d["calculated_fields"]
+            self.assertIn("free_cash_flow", calc)
+            self.assertIn("total_liabilities", calc)
+            self.assertEqual(calc, sorted(calc))
+
+    def test_total_liabilities_fallback_chains_with_total_assets_fallback(self) -> None:
+        """total_assets 自体がフォールバック計算の場合でも total_liabilities フォールバックが連鎖する"""
+        xbrl = """<?xml version="1.0" encoding="UTF-8"?>
+<xbrl
+  xmlns="http://www.xbrl.org/2003/instance"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+  xmlns:jppfs_cor="http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2023-03-31/jppfs_cor">
+  <context id="CurrentYearInstant">
+    <entity><identifier scheme="http://disclosure.edinet-fsa.go.jp">E99999</identifier></entity>
+    <period><instant>2024-03-31</instant></period>
+  </context>
+  <unit id="JPY"><measure>iso4217:JPY</measure></unit>
+  <jppfs_cor:CurrentAssets contextRef="CurrentYearInstant" unitRef="JPY">3000</jppfs_cor:CurrentAssets>
+  <jppfs_cor:NonCurrentAssets contextRef="CurrentYearInstant" unitRef="JPY">2000</jppfs_cor:NonCurrentAssets>
+  <jppfs_cor:NetAssets contextRef="CurrentYearInstant" unitRef="JPY">3500</jppfs_cor:NetAssets>
+</xbrl>"""
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = Path(tmp) / "S100CHAIN.zip"
+            _create_sample_zip(zip_path, xbrl_body=xbrl)
+            parsed = disclosure_parser.parse_edinet_zip(zip_path, ticker="9999")
+            period = parsed.periods[0]
+            # total_assets = 3000 + 2000 = 5000 (fallback)
+            self.assertEqual(period.bs["total_assets"], 5000)
+            # total_liabilities = 5000 - 3500 = 1500 (chained fallback)
+            self.assertEqual(period.bs["total_liabilities"], 1500)
+            self.assertIn("total_assets", period._calculated_fields)
+            self.assertIn("total_liabilities", period._calculated_fields)
+
     def test_cli_rejects_mismatched_code_and_ticker(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             main_py = SCRIPT_DIR / "main.py"

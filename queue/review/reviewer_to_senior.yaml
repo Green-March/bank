@@ -1,8 +1,9 @@
 plan_review_response:
-  request_id: 'req_20260225_003'
+  request_id: 'req_20260225_004'
   verdict: 'ok'
   comments:
-    - '依存関係と実装順が論理的で再現性のある開発フローです。'
-    - '公式EDINET APIとキャッシュ更新仕様が明示され、データ源の妥当性が担保されています。'
-    - 'テスト件数要件と実行要件が明示され、リスク対策が過不足なく配置されています。'
-  suggested_changes: []
+    - '依存関係は T004-1→T004-2 の順で妥当で、実装と実データ検証が明確に分離されている。'
+    - '計算条件・テスト観点は実運用要件と整合し、フォールバック後の後方互換性も担保しやすい。'
+    - 'financials.json 確認は document.periods 側だけでなく period_index 側もあわせると再現性が高まる。'
+  suggested_changes:
+    - 'T004-2で period_index に calculated_fields が反映されない点を検証観点に明示し、必要なら設計を再確認してください。'
