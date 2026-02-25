@@ -59,6 +59,29 @@ SAMPLE_XBRL = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
+SAMPLE_XBRL_WITH_BARE_LIABILITIES = """<?xml version="1.0" encoding="UTF-8"?>
+<xbrl
+  xmlns="http://www.xbrl.org/2003/instance"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+  xmlns:jppfs_cor="http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2023-03-31/jppfs_cor">
+  <context id="CurrentYearInstant_ConsolidatedMember">
+    <entity>
+      <identifier scheme="http://disclosure.edinet-fsa.go.jp">E03416</identifier>
+    </entity>
+    <period>
+      <instant>2024-03-31</instant>
+    </period>
+  </context>
+  <unit id="JPY">
+    <measure>iso4217:JPY</measure>
+  </unit>
+  <jppfs_cor:TotalAssets contextRef="CurrentYearInstant_ConsolidatedMember" unitRef="JPY">1000</jppfs_cor:TotalAssets>
+  <jppfs_cor:Liabilities contextRef="CurrentYearInstant_ConsolidatedMember" unitRef="JPY">350</jppfs_cor:Liabilities>
+  <jppfs_cor:NetAssets contextRef="CurrentYearInstant_ConsolidatedMember" unitRef="JPY">650</jppfs_cor:NetAssets>
+</xbrl>
+"""
+
+
 SAMPLE_XBRL_WITH_NONCURRENT_ONLY = """<?xml version="1.0" encoding="UTF-8"?>
 <xbrl
   xmlns="http://www.xbrl.org/2003/instance"
@@ -153,6 +176,19 @@ class DisclosureParserTests(unittest.TestCase):
             self.assertEqual(period.bs["total_liabilities"], 500)
             self.assertIsNone(period.bs["current_assets"])
             self.assertIsNone(period.bs["current_liabilities"])
+
+    def test_bare_liabilities_maps_to_total_liabilities(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = Path(tmp) / "S100BARE.zip"
+            _create_sample_zip(zip_path, xbrl_body=SAMPLE_XBRL_WITH_BARE_LIABILITIES)
+
+            parsed = disclosure_parser.parse_edinet_zip(zip_path, ticker="2780")
+            self.assertEqual(len(parsed.periods), 1)
+            period = parsed.periods[0]
+
+            self.assertEqual(period.bs["total_liabilities"], 350)
+            self.assertEqual(period.bs["total_assets"], 1000)
+            self.assertEqual(period.bs["net_assets"], 650)
 
     def test_invalid_zip_raises_parser_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

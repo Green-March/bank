@@ -2,137 +2,87 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_20260226_001_r2"
-  request_id: "req_20260226_001"
-  revision: 2
-  timestamp: "2026-02-26T09:15:00+09:00"
-  revision_notes: "Reviewer指摘5件+修正要求2件を反映。期間方針明記、ゲート条件追加、連結/非連結監査追加、J-Quants例外フロー定義、整合レポート必須化。"
-
-  objective: "2780 コメ兵ホールディングスのフルパイプライン実行。7685で確立したパイプライン（収集→解析→統合→メトリクス→レポート）を適用し、汎用性を検証する。"
+  plan_id: "plan_req_20260227_001_v2"
+  request_id: "req_20260227_001"
   ticker: "2780"
-  output_format: ["md", "html"]
+  revision: 2
+  revision_note: "Reviewer指摘2件を反映: (1) T1受入基準を5件必達+旧社名一致条件明記 (2) EDINET API制限時の再試行方針追加"
+  objective: "2780 コメ兵HDの有価証券報告書（年次）をEDINETから追加収集し、パース→統合→メトリクス再計算→レポート再生成。FY2021-FY2023通期データの欠損を解消し、5年分の通期メトリクスを完成させる。"
 
-  # === 期間方針（Reviewer指摘#5対応）===
-  timeframe_policy:
-    scope: "5年（FY2021〜FY2025）を主要分析期間とする"
-    rationale: "req_20260226_001のtimeframe指定が5y。コメ兵HDは2021年10月にホールディングス体制へ移行しており、連結財務の一貫性が担保される期間。"
-    raw_data_range: "EDINET保有分全期間（2019〜2025）をパースし保持するが、レポート・メトリクスの主要比較対象はFY2021-FY2025の5年間"
-    pre_2021_handling: "FY2019-FY2020のデータはinventory.mdに記載するが、メトリクス比較表・レポート本文では参考値として注記付きで掲載（HD体制移行前のため直接比較不適）"
-
-  current_data_state:
-    raw_edinet: "12 ZIPファイル（XBRL）+ 日次documents JSON + 10 PDF（有価証券報告書 2016-2025）"
-    raw_jquants: "2ファイル（statements_2026-02-15.json, statements_2026-02-17.json）"
-    parsed: "financials.json（12文書）, metrics.json（7件, company_name='Unknown'）, jquants_fins_statements.json（10レコード）"
-    missing: "integrated_financials.json, reports/, inventory.md"
-    known_issues:
-      - id: "ISSUE-001"
-        description: "metrics_series 7件 vs financials.json 12文書の乖離"
-        gate_condition: "T1完了時に原因を特定し、T3開始前ゲートとして乖離理由を文書化すること。理由が不明な場合はT3に進まずSeniorに報告。"
-      - id: "ISSUE-002"
-        description: "metrics.json の company_name が 'Unknown'"
-        gate_condition: "T3のメトリクス再計算で解消されること。解消しない場合はparser調査タスクを追加。"
+  current_state:
+    edinet_collected: "四半期報告書12件 + 半期報告書1件（有価証券報告書は0件）"
+    missing_annual: "FY2021, FY2022, FY2023, FY2024, FY2025の有価証券報告書が未収集"
+    jquants_annual: "FY2024, FY2025の通期データはJ-Quantsから取得済み"
+    key_gap: "FY2021-FY2023の通期データが完全欠損（EDINET有報なし＋J-Quants範囲外）"
+    parser_issue: "total_liabilities が全文書で0%（XBRLコンセプト別名未登録）"
+    edinet_code: "E03416（HD体制移行前後で同一EDINETコード）"
 
   task_decomposition:
-    - task_id: "T1_edinet_parse"
-      assigned_to: junior1
-      phase: 1
-      parallel: true
-      description: "EDINET XBRL再解析 + 連結/非連結監査 + データインベントリ作成"
-      steps:
-        - "既存 raw/edinet/ の12 ZIPファイルの期間・文書種別（有価証券報告書/四半期報告書/半期報告書）を一覧化"
-        - "各文書の連結(consolidated)/非連結(standalone)ステータスを確認し、文書種別×連結区分マトリクスを作成"
-        - "python3 skills/disclosure-parser/scripts/main.py --ticker 2780 を実行し financials.json を再生成"
-        - "解析結果検証: 12文書すべてが正常に解析されているか確認。ISSUE-001の原因（12文書 vs metrics 7件の乖離理由）を特定し文書化"
-        - "data/2780/inventory.md を作成（7685の inventory.md に準拠: 文書ID、期間、文書種別、連結/非連結、カバレッジマトリクス）"
-      deliverables:
-        - "data/2780/parsed/financials.json（更新）"
-        - "data/2780/inventory.md（新規: 文書種別×連結区分マトリクス含む）"
-      quality_criteria:
-        - "12文書すべてが financials.json に含まれること"
-        - "各文書の period_end, fiscal_year, statement_type（consolidated/standalone）が正しいこと"
-        - "BS/PL/CFの主要項目がnull以外で取得できる文書が過半数あること"
-        - "ISSUE-001の原因が特定・文書化されていること（T3開始ゲート条件）"
-        - "連結/非連結の識別が全文書で明示されていること"
+    phase_1_parallel:
+      - task_id: "T1_edinet_annual_collect"
+        assignee: "junior1"
+        description: "EDINETからコメ兵HD (E03416) の有価証券報告書を追加収集。FY2021-FY2025の年次報告書5件をraw/edinet/に保存。既存12文書との重複回避。inventory.md更新。"
+        command: "python3 skills/disclosure-collector/scripts/main.py edinet E03416 --ticker 2780 --start-date 2020-06-01 --end-date 2026-02-27 --report-keyword 有価証券報告書"
+        output: "data/2780/raw/edinet/ に有報ZIPを追加"
+        acceptance_criteria:
+          - "FY2021-FY2025の有価証券報告書5件すべてを収集する（5件必達）"
+          - "各年度の有報doc_idを記録し、期末日(period_end)がFY2021=2021-03-31, FY2022=2022-03-31, FY2023=2023-03-31, FY2024=2024-03-31, FY2025=2025-03-31であることを検証する"
+          - "旧社名一致条件: EDINETコードE03416がHD体制移行前(FY2021以前)と移行後(FY2022以降)で同一であることを確認する。提出者名が「株式会社コメ兵」または「コメ兵ホールディングス株式会社」のいずれかであれば有効とする"
+          - "既存の四半期/半期報告書ZIP 12件と重複しない"
+          - "inventory.md が更新され、収集済み有報5件の一覧（doc_id, form, period_end, filing_date, 提出者名）が追記される"
+          - "manifest.json が更新される"
+        api_retry_policy:
+          description: "EDINET API制限時の再試行方針"
+          strategy: "指数バックオフ（初回2秒、最大60秒、最大5回リトライ）"
+          rate_limit_handling: "HTTP 429 または 503 受信時は指数バックオフで自動再試行"
+          manual_escalation: "5回リトライ後も失敗する場合はエラーログを出力し、Senior に報告（queue/reports/junior1_report.yaml に status: blocked, result に失敗doc_idとHTTPステータスを記録）。Senior が手動再開を判断する"
+          partial_success: "一部年度の有報のみ取得できた場合は取得済み分を保存し、未取得分をreportに明記して Senior に報告"
+        priority: "high"
 
-    - task_id: "T2_jquants_integrate"
-      assigned_to: junior2
-      phase: 1
-      parallel: true
-      description: "J-Quants データ刷新 + 連結/非連結監査 + EDINET統合 + 整合レポート出力"
-      steps:
-        - "python3 skills/disclosure-collector/scripts/main.py jquants 2780 でJ-Quantsデータを最新化"
-        - "J-Quants更新失敗時の例外処理（下記exception_flow参照）"
-        - "jquants_fins_statements.json の内容を検証（レコード数、期間カバレッジ、連結/非連結識別）"
-        - "T1完了後: financials.json の連結/非連結識別とJ-Quantsの連結/非連結を照合し、文書種別差分を監査"
-        - "financials.json と jquants_fins_statements.json を統合し integrated_financials.json を生成（period_endキーでマッチング）"
-        - "整合レポート出力: period_end × source（edinet/jquants/both） × statement_type（consolidated/standalone）のクロス表を integrated_financials.json 内の coverage_matrix として含める"
-      deliverables:
-        - "data/2780/raw/jquants/statements_2026-02-26.json（新規）"
-        - "data/2780/parsed/jquants_fins_statements.json（更新）"
-        - "data/2780/parsed/integrated_financials.json（新規: coverage_matrix含む）"
-      quality_criteria:
-        - "J-Quantsの最新データが取得できていること（例外フロー適用時はその旨記録）"
-        - "integrated_financials.json にcoverage_matrix（period_end×source×statement_type）が含まれること"
-        - "連結/非連結の不一致がある場合、その期間と理由が文書化されていること"
-        - "カバレッジマトリクスで各期間のデータソースが明記されていること"
-      dependency: "統合ステップはT1完了後に実行"
-      exception_flow:
-        trigger: "J-Quants API更新失敗（認証切れ、APIエラー、タイムアウト）"
-        retry_policy:
-          max_retries: 2
-          retry_interval: "auth.pyの自動トークン更新を試行後、再実行"
-        on_auth_failure: "JQUANTS_EMAIL/PASSWORD による自動リフレッシュを試行。それでも失敗した場合は停止しSeniorに報告。"
-        on_max_retries_exceeded: "既存データ（statements_2026-02-17.json）をフォールバックとして使用し、integrated_financials.json の metadata に 'jquants_data_stale: true, last_successful_fetch: 2026-02-17' を記録。レポートに注記を追加。この場合でもT3は実行可能とするが、Seniorは完了報告時にManagerに通知する。"
-        on_partial_failure: "取得できたレコードのみで処理を継続し、欠損期間をcoverage_matrixに明記。"
+      - task_id: "T2_parser_fix_liabilities"
+        assignee: "junior2"
+        description: "disclosure-parser の CONCEPT_ALIASES に total_liabilities の XBRL別名を追加。Liabilities概念名をマッピングし、全文書でtotal_liabilitiesが取得可能になるよう改修。テスト実行で回帰なし確認。"
+        target_file: "skills/disclosure-parser/scripts/parser.py"
+        acceptance_criteria:
+          - "CONCEPT_ALIASESにliabilities→total_liabilitiesのマッピングが追加される"
+          - "pytest skills/disclosure-parser/ が全件パス"
+          - "既存のパース結果に回帰影響がない"
+        priority: "medium"
 
-    - task_id: "T3_metrics_report"
-      assigned_to: junior3
-      phase: 2
-      parallel: false
-      description: "メトリクス再計算 + レポート生成 + QA"
-      gate_conditions:
-        - "T1完了: financials.json更新済み + ISSUE-001原因文書化済み"
-        - "T2完了: integrated_financials.json生成済み + coverage_matrix含む"
-        - "gate未達の場合はT3を開始せず、Seniorに報告"
-      steps:
-        - "T1のISSUE-001原因文書を確認し、12文書→メトリクス変換の期待件数を確定"
-        - "python3 skills/financial-calculator/scripts/main.py calculate --ticker 2780 でメトリクス再計算（integrated_financials.jsonを入力）"
-        - "metrics.json検証: company_nameが'コメ兵ホールディングス'であること、metrics_seriesの件数がcoverage_matrixと整合すること"
-        - "mkdir -p data/2780/reports && python3 skills/financial-reporter/scripts/main.py --ticker 2780 でレポート生成"
-        - "レポート検証: Executive Summary, Time Series（FY2021-FY2025主要5年）, Quarterly Progression, Data Sources, Assumptions & Risk Notes"
-        - "FY2019-FY2020データは参考値として注記付きで掲載（HD体制移行前）"
-      deliverables:
-        - "data/2780/parsed/metrics.json（更新、company_name修正済み）"
-        - "data/2780/reports/2780_report.md（新規）"
-        - "data/2780/reports/2780_report.html（新規）"
-      quality_criteria:
-        - "company_name が 'コメ兵ホールディングス' であること"
-        - "ROE, ROA, Operating Margin, Revenue Growth, FCF が主要5年分計算されていること"
-        - "metrics_series件数とintegrated_financials.jsonの期間数が整合すること"
-        - "レポートにデータソース（EDINET文書ID + J-Quants）が明記されていること"
-        - "前提（期間方針、連結/非連結判定、HD移行）とリスクが明示されていること"
-        - "FY2019-FY2020が参考値注記付きであること"
+    phase_2_sequential:
+      - task_id: "T3_reparse_integrate_metrics_report"
+        assignee: "junior3"
+        depends_on: ["T1_edinet_annual_collect", "T2_parser_fix_liabilities"]
+        description: "有報追加収集+パーサー改善完了後、以下を順次実行: (1) 全文書再パース→financials.json更新 (2) EDINET+J-Quants統合→integrated_financials.json更新 (3) メトリクス再計算→metrics.json更新（5年通期メトリクス完成） (4) レポート再生成→2780_report.md/html更新"
+        sub_steps:
+          - "python3 skills/disclosure-parser/scripts/main.py --ticker 2780 で全文書再パース"
+          - "統合スクリプトでintegrated_financials.json再生成（FY2021-FY2023通期データ追加）"
+          - "python3 skills/financial-calculator/scripts/main.py --ticker 2780 でメトリクス再計算"
+          - "python3 skills/financial-reporter/scripts/main.py --ticker 2780 --format md html でレポート再生成"
+        acceptance_criteria:
+          - "financials.json に有報データが追加され、FY2021-FY2025の通期エントリが存在する"
+          - "integrated_financials.jsonのcoverage_summaryでFY2021-FY2023のannualがnullでなくなる"
+          - "metrics.json に5年分の通期メトリクス（FY2021-FY2025）が含まれる"
+          - "total_liabilitiesフィールドが有効値を持つ"
+          - "2780_report.md/htmlの通期推移表がFY2021-FY2025の5年分を表示する"
+          - "利用データソース（EDINET有報/四半期報/J-Quants）が明記される"
+          - "前提（HD体制移行、制度変更）とリスクが明示される"
+        priority: "high"
 
-  execution_plan:
-    phase_1:
-      description: "データ準備（並列実行）"
-      tasks: ["T1_edinet_parse (Junior 1)", "T2_jquants_integrate (Junior 2, 統合ステップはT1完了待ち)"]
-    phase_2:
-      description: "メトリクス計算 + レポート生成（T1+T2完了後）"
-      tasks: ["T3_metrics_report (Junior 3)"]
-      gate: "T1のISSUE-001文書化 + T2のintegrated_financials.json生成 が両方完了していること"
-    phase_3:
-      description: "統合レビュー + 完了報告"
-      tasks: ["Senior: 成果物レビュー中継 → dashboard更新 → Manager完了報告"]
+  quality_criteria:
+    - "FY2021-FY2025の通期ROE/ROA/利益率/成長率が計算可能"
+    - "total_liabilitiesがパース可能になり、D/Eレシオ等の追加指標も算出可能"
+    - "レポートに利用データソース（EDINET/J-Quants）と前提・リスクが明記"
+    - "既存の四半期データに回帰影響なし"
+    - "pytest 全件パス"
 
-  risk_assessment:
-    - risk: "EDINET APIレート制限"
-      mitigation: "既存rawデータを活用、再収集は不要（パース再実行のみ）"
-    - risk: "J-Quantsトークン期限切れ"
-      mitigation: "auth.pyの自動更新 → 失敗時は既存データフォールバック（exception_flow参照）"
-    - risk: "company_name 'Unknown'問題"
-      mitigation: "T1のparser再実行で解消見込み。解消しない場合はparser調査タスクを追加。"
-    - risk: "連結/非連結の不一致"
-      mitigation: "T1+T2で監査マトリクスを作成し、T3実行前にゲート判定。"
-    - risk: "HD体制移行（2021年10月）前後のデータ一貫性"
-      mitigation: "FY2019-2020を参考値扱いとし、主要比較はFY2021-2025の5年間に限定。"
+  risks:
+    - "HD体制移行前(FY2021)の有報はEDINET上で旧法人名「株式会社コメ兵」で登録されている可能性がある。EDINETコードE03416が同一であれば問題なし。T1受入基準に旧社名一致条件を含む。"
+    - "FY2021の有報は移行期のため連結範囲が異なる可能性がある。レポートにその旨注記が必要。"
+    - "EDINET API制限時は指数バックオフで自動再試行し、5回失敗後はSeniorに報告して手動再開判断。"
+
+  timeline:
+    phase_1: "T1 (Junior1) と T2 (Junior2) を並行実行"
+    phase_2: "Phase 1完了後、T3 (Junior3) を実行"
+    total_tasks: 3
+    total_phases: 2

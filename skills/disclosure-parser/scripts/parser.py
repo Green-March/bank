@@ -41,7 +41,7 @@ CONCEPT_ALIASES: dict[str, tuple[str, ...]] = {
     "total_assets": ("totalassets", "assetstotal"),
     "current_assets": ("currentassets",),
     "noncurrent_assets": ("noncurrentassets", "fixedassets"),
-    "total_liabilities": ("totalliabilities", "liabilitiestotal"),
+    "total_liabilities": ("totalliabilities", "liabilitiestotal", "liabilities"),
     "current_liabilities": ("currentliabilities",),
     "total_equity": (
         "totalequity",

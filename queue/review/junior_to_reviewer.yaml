@@ -1,43 +1,42 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_20260226_T3"
-  task_id: "T3_metrics_report"
-  junior_id: junior3
+  request_id: "rev_T3_002"
+  task_id: "T3_reparse_integrate_metrics_report"
+  junior_id: "junior3"
   status: pending
-  timestamp: "2026-02-26T23:15:00+09:00"
+  timestamp: "2026-02-27T10:57:00+09:00"
   payload:
-    summary: |
-      2780 コメ兵HD メトリクス再計算 + レポート生成 + QA 完了。
-      company_name修正済み（"Unknown"→"コメ兵ホールディングス"）。source_count=17。
-      通期2件（FY2024, FY2025）+ 四半期15件。レポート（md+html）生成済み。
-    deliverables:
-      - "data/2780/parsed/metrics.json（company_name修正済み、source_count=17）"
-      - "data/2780/reports/2780_report.md（新規）"
-      - "data/2780/reports/2780_report.html（新規）"
-    validation_results:
-      company_name: "コメ兵ホールディングス（修正済み、ISSUE-002解消）"
-      source_count: "17（integrated_financials.json期間数と一致）"
-      annual_metrics: "2件（FY2024, FY2025）"
-      quarterly_metrics: "15件（FY2021 Q3 ~ FY2026 Q2）"
-      key_metrics_fy2024: "ROE=18.18%, ROA=7.85%, OPM=6.24%, FCF=-37.6億"
-      key_metrics_fy2025: "ROE=15.22%, ROA=5.39%, OPM=3.88%, RevGrowth=+33.1%, FCF=-118.9億"
-      data_sources_in_report: "EDINET文書ID=12件, J-Quants=8件"
-      report_sections: "概要, 財務諸表種類, 分析期間方針, 主要指標, 通期推移, 四半期推移, データソース, 前提条件, リスク注意点"
-      number_format: "億円単位（--number-format oku_yen）"
-    quality_criteria_check:
-      company_name_not_unknown: true
-      roe_roa_opm_calculated: true
-      metrics_count_matches_integrated: true
-      data_sources_documented: true
-      assumptions_and_risks_stated: true
-      fy2019_2020_reference_noted: true
-      fy2026_in_progress_noted: true
-    caveats:
-      - "FY2021-FY2023通期データなし（有報未収集）→四半期推移で代替"
-      - "FY2024 Revenue Growth YoY=null（前年FY通期なし）"
-      - "FY2019-FY2020はintegrated対象外、参考値注記のみ"
-      - "FY2026は進行期（Q1-Q2半期）として注記"
+    summary: "レビュー指摘2点を反映した修正版。(1) total_liabilities有効件数を再計算しjq再現コマンド付きで検証ログに記録（financials=36/54, integrated annual=7/7, quarterly=12/18） (2) 統合スクリプトをdata/2780/logs/T3_integrate_edinet_jquants.pyとして保存し再現可能な形に整備。"
+    revision_from: "rev_T3_001"
+    changes_made:
+      - "total_liabilities有効件数の再計算・jq再現コマンド付き検証をvalidationに追記"
+      - "data/2780/logs/T3_total_liabilities_validation.md を新規作成（検証ログ）"
+      - "data/2780/logs/T3_integrate_edinet_jquants.py を新規保存（統合スクリプト全文）"
+      - "re_execution_commandsをインラインからスクリプトパスに更新"
+    outputs:
+      - "data/2780/parsed/financials.json (18文書)"
+      - "data/2780/parsed/integrated_financials.json (annual 7件, quarterly 18件)"
+      - "data/2780/parsed/metrics.json (通期7年, 四半期18期間)"
+      - "data/2780/reports/2780_report.md"
+      - "data/2780/reports/2780_report.html"
+      - "data/2780/logs/T3_total_liabilities_validation.md"
+      - "data/2780/logs/T3_integrate_edinet_jquants.py"
+    validation:
+      - "financials.json: document_count=18"
+      - "total_liabilities: financials=36/54期間, integrated annual=7/7, quarterly=12/18 (jq再現コマンド付き)"
+      - "integrated_financials.json: FY2021-FY2023 annual=edinet (not null)"
+      - "metrics.json: FY2021-FY2025 通期メトリクス5年分あり"
+      - "report.md/html: 5年通期推移表+データソース+前提リスク明記"
+      - "quarterly_series: 18 entries preserved (回帰なし)"
+    acceptance_criteria:
+      - "financials.json に18文書分のエントリが存在する"
+      - "integrated_financials.json で FY2021-FY2023 annual が null でない"
+      - "metrics.json に5年分通期メトリクス（FY2021-FY2025）が含まれる"
+      - "total_liabilities フィールドが有効値を持つ"
+      - "2780_report.md/html の通期推移表が5年分表示"
+      - "利用データソース・前提・リスクが明記"
+      - "既存四半期データに回帰影響なし"
 review_followup:
   request_id: null
   task_id: null
