@@ -1,0 +1,67 @@
+{
+  "timestamp": "2026-02-25T14:31:05.055093+00:00",
+  "gates_file": "skills/quality-gate/references/gates_parse.yaml",
+  "data_dir": "data/9743/parsed",
+  "overall_pass": true,
+  "gates": [
+    {
+      "id": "file_check",
+      "pass": true,
+      "detail": {
+        "financials.json": {
+          "exists": true,
+          "size": 36367
+        }
+      }
+    },
+    {
+      "id": "key_coverage",
+      "pass": true,
+      "detail": {
+        "bs": {
+          "pass": true,
+          "all_period_keys": 3,
+          "min_required": 2,
+          "total_periods": 4,
+          "coverage": {
+            "total_assets": 4,
+            "total_liabilities": 4,
+            "total_equity": 4
+          }
+        },
+        "pl": {
+          "pass": true,
+          "all_period_keys": 3,
+          "min_required": 2,
+          "total_periods": 4,
+          "coverage": {
+            "revenue": 4,
+            "operating_income": 4,
+            "net_income": 4
+          }
+        },
+        "cf": {
+          "pass": true,
+          "all_period_keys": 3,
+          "min_required": 2,
+          "total_periods": 4,
+          "coverage": {
+            "operating_cf": 4,
+            "investing_cf": 4,
+            "financing_cf": 4
+          }
+        }
+      }
+    },
+    {
+      "id": "null_rate",
+      "pass": true,
+      "detail": {
+        "total_cells": 80,
+        "null_cells": 15,
+        "null_rate": 0.1875,
+        "threshold": 0.5
+      }
+    }
+  ]
+}

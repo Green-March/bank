@@ -1,43 +1,74 @@
 queue:
-  - request_id: "req_20260225_026"
-    objective: "context_priority() 回帰テストを追加する。Reviewer からの過去フィードバックに基づき、context-checkpoint スキルの context_priority() 関数に対する回帰テストを作成・追加する"
+  - request_id: "req_20260225_029"
+    objective: "ticker-resolver スキルの双方向解決を強化する。ticker→(edinet_code, company_name, fye_month) だけでなく、edinet_code→ticker、company_name→ticker の逆引きも対応させる。既存テストを壊さないこと。"
     ticker: null
     universe: null
-    analysis_type: "skill_improvement"
+    analysis_type: "skill_enhancement"
     timeframe: null
-    output_format: ["py"]
-    priority: "high"
-    due_date: "2026-02-25"
-    constraints:
-      - "既存テストとの整合性を保つ"
-      - "エッジケース（空入力、重複、境界値）を網羅する"
-      - "pytest で実行可能であること"
-
-  - request_id: "req_20260225_027"
-    objective: "disclosure-parser の total_liabilities フォールバック計算を実装する。XBRL パース時に total_liabilities が直接取得できない場合、他の負債項目（流動負債 + 固定負債等）から算出するフォールバックロジックを追加する"
-    ticker: null
-    universe: null
-    analysis_type: "skill_improvement"
-    timeframe: null
-    output_format: ["py"]
+    output_format: ["py", "test"]
     priority: "medium"
     due_date: "2026-02-25"
     constraints:
-      - "既存のパースロジックを壊さない"
-      - "フォールバック使用時はログに記録する"
-      - "テストを追加する"
+      - "skills/ticker-resolver/ 配下を修正"
+      - "既存テスト全パス維持"
+      - "逆引き用のマッピングデータを追加"
 
-  - request_id: "req_20260225_028"
-    objective: "quality-gate の all_period_keys ロジックを修正する。現在パイプラインでバイパスされている all_period_keys チェックを、EDINET 3期データなど短期間データでも正しく動作するように修正する"
+  - request_id: "req_20260225_030"
+    objective: "quality-gate の example_pipeline.yaml から QA bypass フラグを削除し、本番運用で必ず QA チェックが走るようにする。関連コード・テストも整合させる。"
     ticker: null
     universe: null
-    analysis_type: "skill_improvement"
+    analysis_type: "skill_fix"
     timeframe: null
-    output_format: ["py"]
+    output_format: ["yaml", "py", "test"]
     priority: "medium"
     due_date: "2026-02-25"
     constraints:
-      - "3期分データでもパスするようロジックを調整する"
-      - "既存のバリデーション精度を下げない"
-      - "テストを追加する"
-      - "修正後、パイプラインからバイパスを除去可能であることを確認する"
+      - "skills/quality-gate/ 配下を修正"
+      - "bypass フラグ参照箇所をすべて除去または無効化"
+      - "既存テスト全パス維持"
+
+  - request_id: "req_20260225_031"
+    objective: "valuation-calculator スキルを新規作成する。DCF（割引キャッシュフロー）と相対バリュエーション（PER/PBR/EV-EBITDA の同業比較）を計算し JSON で出力する。financial-calculator の出力を入力として受け取れるようにする。"
+    ticker: null
+    universe: null
+    analysis_type: "skill_creation"
+    timeframe: null
+    output_format: ["py", "test", "yaml"]
+    priority: "low"
+    due_date: "2026-02-25"
+    constraints:
+      - "skills/valuation-calculator/ に新規作成"
+      - "DCF: WACC・ターミナルバリュー・FCF ベース"
+      - "相対バリュエーション: PER/PBR/EV-EBITDA"
+      - "financial-calculator の JSON 出力を入力として利用可能にする"
+      - "テストカバレッジ 80% 以上"
+
+  - request_id: "req_20260225_032"
+    objective: "risk-analyzer スキルを新規作成する。有価証券報告書の定性テキスト（事業リスク・経営上のリスク）を抽出・分類し、リスクカテゴリ別に構造化 JSON で出力する。"
+    ticker: null
+    universe: null
+    analysis_type: "skill_creation"
+    timeframe: null
+    output_format: ["py", "test", "yaml"]
+    priority: "low"
+    due_date: "2026-02-25"
+    constraints:
+      - "skills/risk-analyzer/ に新規作成"
+      - "リスクカテゴリ: 市場リスク・信用リスク・オペレーショナルリスク・規制リスク・その他"
+      - "disclosure-parser の出力 or XBRL テキスト要素を入力として利用"
+      - "テストカバレッジ 80% 以上"
+
+  - request_id: "req_20260225_033"
+    objective: "FY2019 ヒストリカルデータの拡充。既存の対象銘柄（7203トヨタ、6758ソニー、9743丹青社）について FY2019 のデータを EDINET から取得し、parsed JSON に統合する。既存の FY2020 以降のデータと整合するフォーマットにすること。"
+    ticker: null
+    universe: ["7203", "6758", "9743"]
+    analysis_type: "data_expansion"
+    timeframe: "FY2019"
+    output_format: ["json"]
+    priority: "low"
+    due_date: "2026-02-25"
+    constraints:
+      - "disclosure-collector + disclosure-parser パイプラインを利用"
+      - "既存データと同一フォーマットで data/ 配下に格納"
+      - "取得期間: FY2019（2019年4月〜2020年3月期）"
+      - "ネットワークアクセスは EDINET API のみ"

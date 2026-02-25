@@ -1,0 +1,73 @@
+/Users/fumitotakahashi/.pyenv/versions/3.11.2/lib/python3.11/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform darwin -- Python 3.11.2, pytest-8.3.5, pluggy-1.5.0 -- /Users/fumitotakahashi/.pyenv/versions/3.11.2/bin/python3.11
+cachedir: .pytest_cache
+rootdir: /Users/fumitotakahashi/Dropbox/dev/bank
+configfile: pyproject.toml
+plugins: cov-6.0.0, asyncio-0.26.0, anyio-4.2.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 58 items
+
+skills/quality-gate/tests/test_validators.py::TestValidateNullRate::test_all_filled PASSED [  1%]
+skills/quality-gate/tests/test_validators.py::TestValidateNullRate::test_below_threshold PASSED [  3%]
+skills/quality-gate/tests/test_validators.py::TestValidateNullRate::test_above_threshold PASSED [  5%]
+skills/quality-gate/tests/test_validators.py::TestValidateNullRate::test_empty_periods PASSED [  6%]
+skills/quality-gate/tests/test_validators.py::TestValidateNullRate::test_exact_threshold PASSED [  8%]
+skills/quality-gate/tests/test_validators.py::TestValidateKeyCoverage::test_all_non_null PASSED [ 10%]
+skills/quality-gate/tests/test_validators.py::TestValidateKeyCoverage::test_partial_null PASSED [ 12%]
+skills/quality-gate/tests/test_validators.py::TestValidateKeyCoverage::test_all_null_fails PASSED [ 13%]
+skills/quality-gate/tests/test_validators.py::TestValidateKeyCoverage::test_min_required_exact PASSED [ 15%]
+skills/quality-gate/tests/test_validators.py::TestValidateValueRange::test_all_in_range PASSED [ 17%]
+skills/quality-gate/tests/test_validators.py::TestValidateValueRange::test_negative_assets PASSED [ 18%]
+skills/quality-gate/tests/test_validators.py::TestValidateValueRange::test_exceeds_max PASSED [ 20%]
+skills/quality-gate/tests/test_validators.py::TestValidateValueRange::test_null_values_skipped PASSED [ 22%]
+skills/quality-gate/tests/test_validators.py::TestValidateValueRange::test_unknown_concept_ignored PASSED [ 24%]
+skills/quality-gate/tests/test_validators.py::TestValidateFileExists::test_file_exists PASSED [ 25%]
+skills/quality-gate/tests/test_validators.py::TestValidateFileExists::test_file_missing PASSED [ 27%]
+skills/quality-gate/tests/test_validators.py::TestValidateFileExists::test_empty_file_fails PASSED [ 29%]
+skills/quality-gate/tests/test_validators.py::TestValidateFileExists::test_multiple_files PASSED [ 31%]
+skills/quality-gate/tests/test_validators.py::TestValidateFileExists::test_partial_missing PASSED [ 32%]
+skills/quality-gate/tests/test_validators.py::TestValidateJsonSchema::test_all_keys_present PASSED [ 34%]
+skills/quality-gate/tests/test_validators.py::TestValidateJsonSchema::test_missing_keys PASSED [ 36%]
+skills/quality-gate/tests/test_validators.py::TestValidateJsonSchema::test_empty_required PASSED [ 37%]
+skills/quality-gate/tests/test_validators.py::TestRunAllGates::test_all_gates_pass PASSED [ 39%]
+skills/quality-gate/tests/test_validators.py::TestRunAllGates::test_one_gate_fails PASSED [ 41%]
+skills/quality-gate/tests/test_validators.py::TestRunAllGates::test_unknown_gate_type PASSED [ 43%]
+skills/quality-gate/tests/test_validators.py::TestRunAllGates::test_no_financials PASSED [ 44%]
+skills/quality-gate/tests/test_validators.py::TestRunAllGates::test_default_gates_yaml PASSED [ 46%]
+skills/quality-gate/tests/test_validators.py::TestGateResultsJsonFormat::test_output_structure PASSED [ 48%]
+skills/quality-gate/tests/test_validators.py::TestGateResultsJsonFormat::test_serializable_to_json PASSED [ 50%]
+skills/quality-gate/tests/test_validators.py::TestLoadFinancials::test_load_valid PASSED [ 51%]
+skills/quality-gate/tests/test_validators.py::TestLoadFinancials::test_load_missing PASSED [ 53%]
+skills/quality-gate/tests/test_validators.py::TestExtractPeriods::test_period_index_present PASSED [ 55%]
+skills/quality-gate/tests/test_validators.py::TestExtractPeriods::test_period_index_empty_fallback_to_documents PASSED [ 56%]
+skills/quality-gate/tests/test_validators.py::TestExtractPeriods::test_period_index_missing_fallback_to_documents PASSED [ 58%]
+skills/quality-gate/tests/test_validators.py::TestExtractPeriods::test_multiple_documents_merged PASSED [ 60%]
+skills/quality-gate/tests/test_validators.py::TestExtractPeriods::test_no_periods_anywhere PASSED [ 62%]
+skills/quality-gate/tests/test_validators.py::TestRunAllGatesFallback::test_fallback_periods_used_by_gates PASSED [ 63%]
+skills/quality-gate/tests/test_validators.py::TestValueRangeAllPeriods::test_cf_only_in_later_periods PASSED [ 65%]
+skills/quality-gate/tests/test_validators.py::TestValueRangeAllPeriods::test_cf_in_all_periods_validated PASSED [ 67%]
+skills/quality-gate/tests/test_validators.py::TestValueRangeAllPeriods::test_cf_violation_in_middle_period PASSED [ 68%]
+skills/quality-gate/tests/test_validators.py::TestKeyCoverageEmptyPeriods::test_empty_periods_fails PASSED [ 70%]
+skills/quality-gate/tests/test_validators.py::TestKeyCoverageStubPeriods::test_key_coverage_stub_period_excluded PASSED [ 72%]
+skills/quality-gate/tests/test_validators.py::TestKeyCoverageStubPeriods::test_key_coverage_all_stub_periods_fails PASSED [ 74%]
+skills/quality-gate/tests/test_validators.py::TestKeyCoverageStubPeriods::test_key_coverage_mixed_sections_different_relevant_counts PASSED [ 75%]
+skills/quality-gate/tests/test_validators.py::TestKeyCoverageStubPeriods::test_key_coverage_detail_includes_total_periods PASSED [ 77%]
+skills/quality-gate/tests/test_validators.py::TestValidateDirNotEmpty::test_dir_with_files PASSED [ 79%]
+skills/quality-gate/tests/test_validators.py::TestValidateDirNotEmpty::test_empty_dir PASSED [ 81%]
+skills/quality-gate/tests/test_validators.py::TestValidateDirNotEmpty::test_nonexistent_dir PASSED [ 82%]
+skills/quality-gate/tests/test_validators.py::TestValidateDirNotEmpty::test_multiple_files PASSED [ 84%]
+skills/quality-gate/tests/test_validators.py::TestValidateMetricsValueRange::test_all_within_range PASSED [ 86%]
+skills/quality-gate/tests/test_validators.py::TestValidateMetricsValueRange::test_violation_below_min PASSED [ 87%]
+skills/quality-gate/tests/test_validators.py::TestValidateMetricsValueRange::test_violation_above_max PASSED [ 89%]
+skills/quality-gate/tests/test_validators.py::TestValidateMetricsValueRange::test_null_metric_ignored PASSED [ 91%]
+skills/quality-gate/tests/test_validators.py::TestValidateMetricsValueRange::test_missing_metrics_file PASSED [ 93%]
+skills/quality-gate/tests/test_validators.py::TestValidateMetricsValueRange::test_empty_rules PASSED [ 94%]
+skills/quality-gate/tests/test_validators.py::TestRunAllGatesNewTypes::test_dir_not_empty_gate PASSED [ 96%]
+skills/quality-gate/tests/test_validators.py::TestRunAllGatesNewTypes::test_dir_not_empty_gate_fail PASSED [ 98%]
+skills/quality-gate/tests/test_validators.py::TestRunAllGatesNewTypes::test_metrics_value_range_gate PASSED [100%]
+
+============================== 58 passed in 0.32s ==============================

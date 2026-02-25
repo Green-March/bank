@@ -1,0 +1,13 @@
+# valuation-calculator デフォルトパラメータ
+
+dcf:
+  wacc: 0.08                # 加重平均資本コスト (8%)
+  terminal_growth_rate: 0.02  # 永久成長率 (2%)
+  projection_years: 5       # FCF予測期間 (年)
+
+relative:
+  # 相対バリュエーション計算に使用するデフォルト指標
+  metrics:
+    - per
+    - pbr
+    - ev_ebitda

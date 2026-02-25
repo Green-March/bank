@@ -1,0 +1,26 @@
+/Users/fumitotakahashi/.pyenv/versions/3.11.2/lib/python3.11/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform darwin -- Python 3.11.2, pytest-8.3.5, pluggy-1.5.0
+rootdir: /Users/fumitotakahashi/Dropbox/dev/bank
+configfile: pyproject.toml
+plugins: cov-6.0.0, asyncio-0.26.0, anyio-4.2.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 30 items
+
+skills/valuation-calculator/tests/test_valuation.py .................... [ 66%]
+..........                                                               [100%]
+
+---------- coverage: platform darwin, python 3.11.2-final-0 ----------
+Name                                               Stmts   Miss  Cover   Missing
+--------------------------------------------------------------------------------
+skills/valuation-calculator/scripts/__init__.py        0      0   100%
+skills/valuation-calculator/scripts/main.py           68      3    96%   19, 28, 135
+skills/valuation-calculator/scripts/valuation.py     124      1    99%   170
+--------------------------------------------------------------------------------
+TOTAL                                                192      4    98%
+
+
+============================== 30 passed in 2.95s ==============================

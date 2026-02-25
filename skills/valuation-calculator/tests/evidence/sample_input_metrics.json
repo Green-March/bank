@@ -1,0 +1,65 @@
+{
+  "ticker": "9743",
+  "company_name": "丹青社",
+  "generated_at": "2026-02-25T12:00:00+00:00",
+  "source_count": 4,
+  "metrics_series": [
+    {
+      "fiscal_year": 2022,
+      "period": "FY",
+      "revenue": 65000000000,
+      "operating_income": 4500000000,
+      "net_income": 3000000000,
+      "roe_percent": 12.0,
+      "roa_percent": 5.5,
+      "operating_margin_percent": 6.92,
+      "operating_cf": 5000000000,
+      "free_cash_flow": 3500000000
+    },
+    {
+      "fiscal_year": 2023,
+      "period": "FY",
+      "revenue": 70000000000,
+      "operating_income": 5000000000,
+      "net_income": 3400000000,
+      "roe_percent": 13.0,
+      "roa_percent": 5.8,
+      "operating_margin_percent": 7.14,
+      "operating_cf": 5500000000,
+      "free_cash_flow": 3800000000
+    },
+    {
+      "fiscal_year": 2024,
+      "period": "FY",
+      "revenue": 75000000000,
+      "operating_income": 5500000000,
+      "net_income": 3700000000,
+      "roe_percent": 13.5,
+      "roa_percent": 6.0,
+      "operating_margin_percent": 7.33,
+      "operating_cf": 6000000000,
+      "free_cash_flow": 4200000000
+    },
+    {
+      "fiscal_year": 2025,
+      "period": "FY",
+      "revenue": 80000000000,
+      "operating_income": 6000000000,
+      "net_income": 4000000000,
+      "roe_percent": 14.0,
+      "roa_percent": 6.2,
+      "operating_margin_percent": 7.5,
+      "operating_cf": 6500000000,
+      "free_cash_flow": 4500000000
+    }
+  ],
+  "latest_snapshot": {
+    "market_cap": 50000000000,
+    "net_income": 4000000000,
+    "equity": 30000000000,
+    "operating_income": 6000000000,
+    "total_debt": 10000000000,
+    "cash_and_equivalents": 5000000000,
+    "depreciation": 1000000000
+  }
+}

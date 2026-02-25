@@ -1,0 +1,4 @@
+# Gate for EDINET collect step: verify output directory has files.
+gates:
+  - id: collect_output
+    type: dir_not_empty

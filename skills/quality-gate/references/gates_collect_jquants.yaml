@@ -1,0 +1,4 @@
+# Gate for J-Quants collect step: verify output directory has files.
+gates:
+  - id: collect_jquants_output
+    type: dir_not_empty

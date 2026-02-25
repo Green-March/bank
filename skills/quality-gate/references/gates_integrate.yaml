@@ -1,0 +1,7 @@
+# Gate for integrate step: integrated output file exists.
+gates:
+  - id: integrate_output
+    type: file_exists
+    params:
+      required_files:
+        - "integrated_financials.json"

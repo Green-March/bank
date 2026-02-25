@@ -1,0 +1,7 @@
+# Gate for resolve step: verify resolver output file exists.
+gates:
+  - id: resolve_output
+    type: file_exists
+    params:
+      required_files:
+        - "resolve_result.json"

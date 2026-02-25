@@ -77,6 +77,43 @@ def _handle_update(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_reverse_edinet(args: argparse.Namespace) -> int:
+    """reverse-edinet サブコマンド: edinet_code → 銘柄情報."""
+    resolver = TickerResolver(cache_dir=_data_root() / ".ticker_cache")
+    result = resolver.resolve_by_edinet_code(args.edinet_code)
+
+    if args.output_format == "json":
+        print(json.dumps(result, ensure_ascii=False))
+    else:
+        fye = f"{result['fye_month']}月" if result["fye_month"] else "不明"
+        print(f"銘柄コード:   {result['ticker']}")
+        print(f"証券コード:   {result['sec_code']}")
+        print(f"EDINETコード: {result['edinet_code']}")
+        print(f"企業名:       {result['company_name']}")
+        print(f"決算月:       {fye}")
+    return 0
+
+
+def _handle_reverse_name(args: argparse.Namespace) -> int:
+    """reverse-name サブコマンド: 企業名 → 銘柄情報（部分一致）."""
+    resolver = TickerResolver(cache_dir=_data_root() / ".ticker_cache")
+    results = resolver.resolve_by_company_name(args.name)
+
+    if args.output_format == "json":
+        print(json.dumps(results, ensure_ascii=False, indent=2))
+    else:
+        if not results:
+            print(f"'{args.name}' に一致する銘柄が見つかりません。")
+            return 0
+        print(f"{'ticker':<8} {'sec_code':<10} {'edinet_code':<16} {'fye':<6} {'company_name'}")
+        print("-" * 72)
+        for e in results:
+            fye = f"{e['fye_month']}月" if e["fye_month"] else "N/A"
+            print(f"{e['ticker']:<8} {e['sec_code']:<10} {e['edinet_code']:<16} {fye:<6} {e['company_name']}")
+        print(f"\n合計: {len(results)}件")
+    return 0
+
+
 def _handle_list(args: argparse.Namespace) -> int:
     """list サブコマンド: キャッシュ内全銘柄一覧."""
     resolver = TickerResolver(cache_dir=_data_root() / ".ticker_cache")
@@ -137,6 +174,42 @@ def build_parser() -> argparse.ArgumentParser:
         help="キャッシュ有効期限を無視して強制更新",
     )
     p_update.set_defaults(func=_handle_update)
+
+    # -- reverse-edinet -------------------------------------------------
+    p_rev_edinet = subparsers.add_parser(
+        "reverse-edinet", help="EDINETコードから銘柄情報を逆引き"
+    )
+    p_rev_edinet.add_argument(
+        "--edinet-code",
+        required=True,
+        help="EDINETコード（例: E02144）",
+    )
+    p_rev_edinet.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="json",
+        dest="output_format",
+        help="出力形式（デフォルト: json）",
+    )
+    p_rev_edinet.set_defaults(func=_handle_reverse_edinet)
+
+    # -- reverse-name ---------------------------------------------------
+    p_rev_name = subparsers.add_parser(
+        "reverse-name", help="企業名から銘柄情報を逆引き（部分一致）"
+    )
+    p_rev_name.add_argument(
+        "--name",
+        required=True,
+        help="検索する企業名（部分一致対応）",
+    )
+    p_rev_name.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="json",
+        dest="output_format",
+        help="出力形式（デフォルト: json）",
+    )
+    p_rev_name.set_defaults(func=_handle_reverse_name)
 
     # -- list -----------------------------------------------------------
     p_list = subparsers.add_parser("list", help="キャッシュ内の全銘柄を一覧表示")

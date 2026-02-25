@@ -60,6 +60,23 @@ class SchemaResult:
 
 
 @dataclass
+class DirResult:
+    """Result of directory not-empty validation."""
+
+    gate_pass: bool
+    detail: dict[str, object]  # {"exists": bool, "file_count": int}
+
+
+@dataclass
+class MetricsRangeResult:
+    """Result of metrics value range validation."""
+
+    gate_pass: bool
+    violations: list[dict]
+    detail: dict[str, object]
+
+
+@dataclass
 class GateResults:
     """Aggregated results from all gates."""
 
@@ -283,6 +300,68 @@ def validate_json_schema(
     )
 
 
+def validate_dir_not_empty(data_dir: Path) -> DirResult:
+    """Check that data_dir exists and contains at least one file."""
+    if not data_dir.is_dir():
+        return DirResult(gate_pass=False, detail={"exists": False, "file_count": 0})
+    file_count = sum(1 for _ in data_dir.iterdir())
+    return DirResult(
+        gate_pass=file_count > 0,
+        detail={"exists": True, "file_count": file_count},
+    )
+
+
+def validate_metrics_value_range(
+    data_dir: Path,
+    rules: dict[str, dict],
+) -> MetricsRangeResult:
+    """Check that metrics in metrics.json fall within specified ranges.
+
+    Loads metrics.json from data_dir and validates latest_snapshot values.
+    rules: {"roe_percent": {"min": -100, "max": 200}, ...}
+    """
+    metrics_path = data_dir / "metrics.json"
+    if not metrics_path.exists():
+        return MetricsRangeResult(
+            gate_pass=False,
+            violations=[],
+            detail={"error": "metrics.json not found"},
+        )
+
+    with metrics_path.open("r", encoding="utf-8") as f:
+        metrics = json.load(f)
+
+    violations: list[dict] = []
+    snapshot = metrics.get("latest_snapshot", {})
+
+    for key, rule in rules.items():
+        value = snapshot.get(key)
+        if value is None:
+            continue
+        min_val = rule.get("min")
+        max_val = rule.get("max")
+        if min_val is not None and value < min_val:
+            violations.append({
+                "metric": key,
+                "value": value,
+                "rule": f"min={min_val}",
+                "reason": f"value {value} < min {min_val}",
+            })
+        if max_val is not None and value > max_val:
+            violations.append({
+                "metric": key,
+                "value": value,
+                "rule": f"max={max_val}",
+                "reason": f"value {value} > max {max_val}",
+            })
+
+    return MetricsRangeResult(
+        gate_pass=len(violations) == 0,
+        violations=violations,
+        detail={"metrics_file": str(metrics_path), "checked_keys": list(rules.keys())},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Gate runner
 # ---------------------------------------------------------------------------
@@ -363,6 +442,26 @@ def run_all_gates(
                         "detail": r.detail,
                     },
                 })
+
+        elif gate_type == "dir_not_empty":
+            r = validate_dir_not_empty(data_dir)
+            results.append({
+                "id": gate_id,
+                "pass": r.gate_pass,
+                "detail": r.detail,
+            })
+
+        elif gate_type == "metrics_value_range":
+            r = validate_metrics_value_range(data_dir, rules=params)
+            results.append({
+                "id": gate_id,
+                "pass": r.gate_pass,
+                "detail": {
+                    "violations": r.violations,
+                    "violation_count": len(r.violations),
+                    **r.detail,
+                },
+            })
 
         else:
             logger.warning("Unknown gate type: %s", gate_type)

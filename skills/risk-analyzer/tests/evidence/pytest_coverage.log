@@ -1,0 +1,69 @@
+/Users/fumitotakahashi/.pyenv/versions/3.11.2/lib/python3.11/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform darwin -- Python 3.11.2, pytest-8.3.5, pluggy-1.5.0 -- /Users/fumitotakahashi/.pyenv/versions/3.11.2/bin/python3
+cachedir: .pytest_cache
+rootdir: /Users/fumitotakahashi/Dropbox/dev/bank
+configfile: pyproject.toml
+plugins: cov-6.0.0, asyncio-0.26.0, anyio-4.2.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 44 items
+
+skills/risk-analyzer/tests/test_analyzer.py::TestStripHtml::test_removes_tags PASSED [  2%]
+skills/risk-analyzer/tests/test_analyzer.py::TestStripHtml::test_collapses_whitespace PASSED [  4%]
+skills/risk-analyzer/tests/test_analyzer.py::TestStripHtml::test_empty PASSED [  6%]
+skills/risk-analyzer/tests/test_analyzer.py::TestStripHtml::test_nested_tags PASSED [  9%]
+skills/risk-analyzer/tests/test_analyzer.py::TestClassifyCategory::test_market_risk PASSED [ 11%]
+skills/risk-analyzer/tests/test_analyzer.py::TestClassifyCategory::test_credit_risk PASSED [ 13%]
+skills/risk-analyzer/tests/test_analyzer.py::TestClassifyCategory::test_operational_risk PASSED [ 15%]
+skills/risk-analyzer/tests/test_analyzer.py::TestClassifyCategory::test_regulatory_risk PASSED [ 18%]
+skills/risk-analyzer/tests/test_analyzer.py::TestClassifyCategory::test_other_risk PASSED [ 20%]
+skills/risk-analyzer/tests/test_analyzer.py::TestClassifyCategory::test_multiple_keywords_strongest_wins PASSED [ 22%]
+skills/risk-analyzer/tests/test_analyzer.py::TestAssessSeverity::test_high PASSED [ 25%]
+skills/risk-analyzer/tests/test_analyzer.py::TestAssessSeverity::test_low PASSED [ 27%]
+skills/risk-analyzer/tests/test_analyzer.py::TestAssessSeverity::test_medium_default PASSED [ 29%]
+skills/risk-analyzer/tests/test_analyzer.py::TestAssessSeverity::test_high_keywords PASSED [ 31%]
+skills/risk-analyzer/tests/test_analyzer.py::TestAssessSeverity::test_low_keywords PASSED [ 34%]
+skills/risk-analyzer/tests/test_analyzer.py::TestSplitRiskParagraphs::test_numbered_split PASSED [ 36%]
+skills/risk-analyzer/tests/test_analyzer.py::TestSplitRiskParagraphs::test_double_newline_split PASSED [ 38%]
+skills/risk-analyzer/tests/test_analyzer.py::TestSplitRiskParagraphs::test_single_paragraph PASSED [ 40%]
+skills/risk-analyzer/tests/test_analyzer.py::TestSplitRiskParagraphs::test_empty PASSED [ 43%]
+skills/risk-analyzer/tests/test_analyzer.py::TestSplitRiskParagraphs::test_short_fragments_filtered PASSED [ 45%]
+skills/risk-analyzer/tests/test_analyzer.py::TestExtractFromZip::test_normal_xbrl PASSED [ 47%]
+skills/risk-analyzer/tests/test_analyzer.py::TestExtractFromZip::test_empty_text_block PASSED [ 50%]
+skills/risk-analyzer/tests/test_analyzer.py::TestExtractFromZip::test_no_risk_element PASSED [ 52%]
+skills/risk-analyzer/tests/test_analyzer.py::TestExtractFromZip::test_nonexistent_xbrl_in_zip PASSED [ 54%]
+skills/risk-analyzer/tests/test_analyzer.py::TestExtractFromDir::test_multiple_zips PASSED [ 56%]
+skills/risk-analyzer/tests/test_analyzer.py::TestExtractFromDir::test_empty_dir PASSED [ 59%]
+skills/risk-analyzer/tests/test_analyzer.py::TestExtractFromDir::test_nonexistent_dir PASSED [ 61%]
+skills/risk-analyzer/tests/test_analyzer.py::TestExtractFromParsedJson::test_with_source_zip PASSED [ 63%]
+skills/risk-analyzer/tests/test_analyzer.py::TestExtractFromParsedJson::test_fallback_to_raw_dir PASSED [ 65%]
+skills/risk-analyzer/tests/test_analyzer.py::TestExtractFromParsedJson::test_empty_json PASSED [ 68%]
+skills/risk-analyzer/tests/test_analyzer.py::TestAnalyzeRisks::test_full_analysis PASSED [ 70%]
+skills/risk-analyzer/tests/test_analyzer.py::TestAnalyzeRisks::test_empty_input PASSED [ 72%]
+skills/risk-analyzer/tests/test_analyzer.py::TestAnalyzeRisks::test_multiple_documents PASSED [ 75%]
+skills/risk-analyzer/tests/test_analyzer.py::TestToDictOutput::test_structure PASSED [ 77%]
+skills/risk-analyzer/tests/test_analyzer.py::TestRunAnalysis::test_with_input_dir PASSED [ 79%]
+skills/risk-analyzer/tests/test_analyzer.py::TestRunAnalysis::test_with_parsed_json PASSED [ 81%]
+skills/risk-analyzer/tests/test_analyzer.py::TestRunAnalysis::test_no_input_raises PASSED [ 84%]
+skills/risk-analyzer/tests/test_analyzer.py::TestRunAnalysis::test_empty_dir_returns_zero_risks PASSED [ 86%]
+skills/risk-analyzer/tests/test_analyzer.py::TestCli::test_no_command_returns_1 PASSED [ 88%]
+skills/risk-analyzer/tests/test_analyzer.py::TestCli::test_analyze_no_input_returns_1 PASSED [ 90%]
+skills/risk-analyzer/tests/test_analyzer.py::TestCli::test_analyze_with_input_dir_stdout PASSED [ 93%]
+skills/risk-analyzer/tests/test_analyzer.py::TestCli::test_analyze_with_output_file PASSED [ 95%]
+skills/risk-analyzer/tests/test_analyzer.py::TestCli::test_analyze_with_parsed_json PASSED [ 97%]
+skills/risk-analyzer/tests/test_analyzer.py::TestCli::test_build_parser PASSED [100%]
+
+---------- coverage: platform darwin, python 3.11.2-final-0 ----------
+Name                                       Stmts   Miss  Cover   Missing
+------------------------------------------------------------------------
+skills/risk-analyzer/scripts/__init__.py       0      0   100%
+skills/risk-analyzer/scripts/analyzer.py     148      4    97%   164, 215-217
+skills/risk-analyzer/scripts/main.py          46      6    87%   14, 18, 22-23, 74, 78
+------------------------------------------------------------------------
+TOTAL                                        194     10    95%
+
+
+============================== 44 passed in 0.62s ==============================

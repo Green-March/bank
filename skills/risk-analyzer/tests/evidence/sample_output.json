@@ -1,0 +1,59 @@
+{
+  "ticker": "7203",
+  "analyzed_at": "2026-02-25T14:30:05.371742+00:00",
+  "source_documents": [
+    "sample_input_S100SAMPLE"
+  ],
+  "risk_categories": {
+    "market_risk": [
+      {
+        "text": "為替リスクについて\n 当社グループは海外での事業活動を行っており、為替変動による重大な影響を受ける可能性があります。",
+        "source": "sample_input_S100SAMPLE",
+        "severity": "high"
+      }
+    ],
+    "credit_risk": [
+      {
+        "text": "取引先の信用リスク\n 主要取引先の経営破綻や債務不履行により、売掛金の回収が困難になる可能性があります。",
+        "source": "sample_input_S100SAMPLE",
+        "severity": "medium"
+      }
+    ],
+    "operational_risk": [
+      {
+        "text": "情報セキュリティリスク\n サイバー攻撃や情報漏洩により、事業運営に限定的な影響が生じる可能性があります。",
+        "source": "sample_input_S100SAMPLE",
+        "severity": "low"
+      }
+    ],
+    "regulatory_risk": [
+      {
+        "text": "法令遵守リスク\n 各国の法令改正に伴い、コンプライアンス体制の強化が求められる可能性があります。",
+        "source": "sample_input_S100SAMPLE",
+        "severity": "medium"
+      }
+    ],
+    "other_risk": [
+      {
+        "text": "その他のリスク\n 予測困難な外部環境の変化により事業に影響を及ぼす可能性があります。",
+        "source": "sample_input_S100SAMPLE",
+        "severity": "medium"
+      }
+    ]
+  },
+  "summary": {
+    "total_risks": 5,
+    "by_category": {
+      "market_risk": 1,
+      "credit_risk": 1,
+      "operational_risk": 1,
+      "regulatory_risk": 1,
+      "other_risk": 1
+    },
+    "by_severity": {
+      "high": 1,
+      "medium": 3,
+      "low": 1
+    }
+  }
+}

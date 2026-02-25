@@ -1,0 +1,16 @@
+{
+  "ticker": "9743",
+  "valuation_type": "dcf",
+  "enterprise_value": 102115349771.21,
+  "equity_value": 97115349771.21,
+  "per_share_value": 1942.31,
+  "assumptions": {
+    "wacc": 0.08,
+    "terminal_growth_rate": 0.02,
+    "projection_years": 5,
+    "base_fcf": 4500000000.0,
+    "estimated_growth_rate": 0.08738,
+    "net_debt": 5000000000.0,
+    "shares_outstanding": 50000000.0
+  }
+}

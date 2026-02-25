@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-02-25T14:31:07.265285+00:00",
+  "gates_file": "skills/quality-gate/references/gates_calculate.yaml",
+  "data_dir": "data/9743/parsed",
+  "overall_pass": true,
+  "gates": [
+    {
+      "id": "metrics_file_check",
+      "pass": true,
+      "detail": {
+        "metrics.json": {
+          "exists": true,
+          "size": 3022
+        }
+      }
+    },
+    {
+      "id": "metrics_range",
+      "pass": true,
+      "detail": {
+        "violations": [],
+        "violation_count": 0,
+        "metrics_file": "data/9743/parsed/metrics.json",
+        "checked_keys": [
+          "roe_percent",
+          "roa_percent",
+          "operating_margin_percent",
+          "equity_ratio_percent"
+        ]
+      }
+    }
+  ]
+}

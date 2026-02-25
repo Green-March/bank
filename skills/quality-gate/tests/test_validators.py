@@ -17,17 +17,21 @@ if str(_scripts_dir) not in sys.path:
 
 from validators import (
     CoverageResult,
+    DirResult,
     FileResult,
     GateResults,
+    MetricsRangeResult,
     NullRateResult,
     RangeResult,
     SchemaResult,
     extract_periods,
     load_financials,
     run_all_gates,
+    validate_dir_not_empty,
     validate_file_exists,
     validate_json_schema,
     validate_key_coverage,
+    validate_metrics_value_range,
     validate_null_rate,
     validate_value_range,
 )
@@ -759,3 +763,157 @@ class TestKeyCoverageStubPeriods:
         for section in ("bs", "pl"):
             assert "total_periods" in result.detail[section]
             assert result.detail[section]["total_periods"] == 2
+
+
+# ---------------------------------------------------------------------------
+# test_validate_dir_not_empty
+# ---------------------------------------------------------------------------
+
+class TestValidateDirNotEmpty:
+    """Tests for validate_dir_not_empty."""
+
+    def test_dir_with_files(self, tmp_path):
+        """Directory with files passes."""
+        (tmp_path / "file1.json").write_text("{}")
+        result = validate_dir_not_empty(tmp_path)
+        assert result.gate_pass is True
+        assert result.detail["exists"] is True
+        assert result.detail["file_count"] >= 1
+
+    def test_empty_dir(self, tmp_path):
+        """Empty directory fails."""
+        result = validate_dir_not_empty(tmp_path)
+        assert result.gate_pass is False
+        assert result.detail["exists"] is True
+        assert result.detail["file_count"] == 0
+
+    def test_nonexistent_dir(self, tmp_path):
+        """Non-existent directory fails."""
+        result = validate_dir_not_empty(tmp_path / "no_such_dir")
+        assert result.gate_pass is False
+        assert result.detail["exists"] is False
+
+    def test_multiple_files(self, tmp_path):
+        """Directory with multiple files passes."""
+        for i in range(3):
+            (tmp_path / f"file{i}.json").write_text("{}")
+        result = validate_dir_not_empty(tmp_path)
+        assert result.gate_pass is True
+        assert result.detail["file_count"] == 3
+
+
+# ---------------------------------------------------------------------------
+# test_validate_metrics_value_range
+# ---------------------------------------------------------------------------
+
+class TestValidateMetricsValueRange:
+    """Tests for validate_metrics_value_range."""
+
+    def _write_metrics(self, tmp_path, snapshot):
+        """Write a metrics.json file with the given latest_snapshot."""
+        data = {
+            "ticker": "TEST",
+            "company_name": "テスト株式会社",
+            "generated_at": "2026-01-01T00:00:00",
+            "source_count": 1,
+            "metrics_series": [],
+            "latest_snapshot": snapshot,
+        }
+        (tmp_path / "metrics.json").write_text(
+            json.dumps(data, ensure_ascii=False), encoding="utf-8"
+        )
+
+    def test_all_within_range(self, tmp_path):
+        """All metrics within range passes."""
+        self._write_metrics(tmp_path, {
+            "roe_percent": 10.0,
+            "roa_percent": 5.0,
+            "operating_margin_percent": 8.0,
+        })
+        rules = {
+            "roe_percent": {"min": -100, "max": 200},
+            "roa_percent": {"min": -50, "max": 100},
+            "operating_margin_percent": {"min": -100, "max": 100},
+        }
+        result = validate_metrics_value_range(tmp_path, rules)
+        assert result.gate_pass is True
+        assert len(result.violations) == 0
+
+    def test_violation_below_min(self, tmp_path):
+        """Value below min triggers violation."""
+        self._write_metrics(tmp_path, {"roe_percent": -150.0})
+        rules = {"roe_percent": {"min": -100, "max": 200}}
+        result = validate_metrics_value_range(tmp_path, rules)
+        assert result.gate_pass is False
+        assert len(result.violations) == 1
+        assert result.violations[0]["metric"] == "roe_percent"
+
+    def test_violation_above_max(self, tmp_path):
+        """Value above max triggers violation."""
+        self._write_metrics(tmp_path, {"roa_percent": 150.0})
+        rules = {"roa_percent": {"min": -50, "max": 100}}
+        result = validate_metrics_value_range(tmp_path, rules)
+        assert result.gate_pass is False
+        assert len(result.violations) == 1
+
+    def test_null_metric_ignored(self, tmp_path):
+        """Null metric values are skipped (not violations)."""
+        self._write_metrics(tmp_path, {"roe_percent": None, "roa_percent": 5.0})
+        rules = {
+            "roe_percent": {"min": -100, "max": 200},
+            "roa_percent": {"min": -50, "max": 100},
+        }
+        result = validate_metrics_value_range(tmp_path, rules)
+        assert result.gate_pass is True
+
+    def test_missing_metrics_file(self, tmp_path):
+        """Missing metrics.json fails."""
+        rules = {"roe_percent": {"min": -100, "max": 200}}
+        result = validate_metrics_value_range(tmp_path, rules)
+        assert result.gate_pass is False
+
+    def test_empty_rules(self, tmp_path):
+        """Empty rules with existing file passes."""
+        self._write_metrics(tmp_path, {"roe_percent": 10.0})
+        result = validate_metrics_value_range(tmp_path, {})
+        assert result.gate_pass is True
+
+
+# ---------------------------------------------------------------------------
+# test_run_all_gates with new gate types
+# ---------------------------------------------------------------------------
+
+class TestRunAllGatesNewTypes:
+    """Tests for dir_not_empty and metrics_value_range in run_all_gates."""
+
+    def test_dir_not_empty_gate(self, tmp_path):
+        """dir_not_empty gate via run_all_gates."""
+        (tmp_path / "some_file.json").write_text("{}")
+        gates_config = [{"id": "dir_check", "type": "dir_not_empty"}]
+        result = run_all_gates(gates_config, tmp_path)
+        assert result.overall_pass is True
+
+    def test_dir_not_empty_gate_fail(self, tmp_path):
+        """dir_not_empty fails for empty directory."""
+        gates_config = [{"id": "dir_check", "type": "dir_not_empty"}]
+        result = run_all_gates(gates_config, tmp_path)
+        assert result.overall_pass is False
+
+    def test_metrics_value_range_gate(self, tmp_path):
+        """metrics_value_range gate via run_all_gates."""
+        data = {
+            "ticker": "TEST",
+            "company_name": "テスト",
+            "generated_at": "2026-01-01",
+            "source_count": 1,
+            "metrics_series": [],
+            "latest_snapshot": {"roe_percent": 10.0},
+        }
+        (tmp_path / "metrics.json").write_text(json.dumps(data))
+        gates_config = [{
+            "id": "metrics_range",
+            "type": "metrics_value_range",
+            "params": {"roe_percent": {"min": -100, "max": 200}},
+        }]
+        result = run_all_gates(gates_config, tmp_path)
+        assert result.overall_pass is True

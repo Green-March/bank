@@ -426,6 +426,128 @@ def _write_jquants_cache(cache_dir: Path, records: list[dict]) -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# 逆引きテスト
+# ---------------------------------------------------------------------------
+
+
+class TestResolveByEdinetCode:
+    """resolve_by_edinet_code() テスト."""
+
+    def test_resolve_by_edinet_code_found(self, tmp_path: Path) -> None:
+        """既知の EDINETコードから銘柄を逆引きできる."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        _write_cache_csv(cache_dir, [TOYOTA_ROW, SONY_ROW])
+        _write_cache_meta(cache_dir)
+
+        resolver = TickerResolver(cache_dir=cache_dir)
+        result = resolver.resolve_by_edinet_code("E02144")
+
+        assert result["ticker"] == "7203"
+        assert result["edinet_code"] == "E02144"
+        assert result["company_name"] == "トヨタ自動車株式会社"
+        assert result["sec_code"] == "72030"
+        assert result["fye_month"] == 3
+
+    def test_resolve_by_edinet_code_not_found(self, tmp_path: Path) -> None:
+        """存在しない EDINETコード → TickerNotFoundError."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        _write_cache_csv(cache_dir, [TOYOTA_ROW])
+        _write_cache_meta(cache_dir)
+
+        resolver = TickerResolver(cache_dir=cache_dir)
+        with pytest.raises(TickerNotFoundError, match="E99999"):
+            resolver.resolve_by_edinet_code("E99999")
+
+    def test_resolve_by_edinet_code_no_cache(self, tmp_path: Path) -> None:
+        """キャッシュ未取得時 → CacheExpiredError."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
+        resolver = TickerResolver(cache_dir=cache_dir)
+        with pytest.raises(CacheExpiredError):
+            resolver.resolve_by_edinet_code("E02144")
+
+
+class TestResolveByCompanyName:
+    """resolve_by_company_name() テスト."""
+
+    def test_resolve_by_company_name_exact(self, tmp_path: Path) -> None:
+        """完全一致で企業を逆引きできる."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        _write_cache_csv(cache_dir, [TOYOTA_ROW, SONY_ROW])
+        _write_cache_meta(cache_dir)
+
+        resolver = TickerResolver(cache_dir=cache_dir)
+        results = resolver.resolve_by_company_name("トヨタ自動車株式会社")
+
+        assert len(results) == 1
+        assert results[0]["ticker"] == "7203"
+        assert results[0]["company_name"] == "トヨタ自動車株式会社"
+
+    def test_resolve_by_company_name_partial(self, tmp_path: Path) -> None:
+        """部分一致で企業を逆引きできる."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        _write_cache_csv(cache_dir, [TOYOTA_ROW, SONY_ROW])
+        _write_cache_meta(cache_dir)
+
+        resolver = TickerResolver(cache_dir=cache_dir)
+        results = resolver.resolve_by_company_name("トヨタ")
+
+        assert len(results) == 1
+        assert results[0]["ticker"] == "7203"
+
+    def test_resolve_by_company_name_multiple(self, tmp_path: Path) -> None:
+        """複数マッチ: 「株式会社」で全銘柄がマッチする."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        _write_cache_csv(cache_dir, [TOYOTA_ROW, SONY_ROW, DECEMBER_ROW])
+        _write_cache_meta(cache_dir)
+
+        resolver = TickerResolver(cache_dir=cache_dir)
+        results = resolver.resolve_by_company_name("株式会社")
+
+        assert len(results) == 3
+
+    def test_resolve_by_company_name_no_match(self, tmp_path: Path) -> None:
+        """マッチなし → 空リスト."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        _write_cache_csv(cache_dir, [TOYOTA_ROW])
+        _write_cache_meta(cache_dir)
+
+        resolver = TickerResolver(cache_dir=cache_dir)
+        results = resolver.resolve_by_company_name("存在しない企業")
+
+        assert results == []
+
+    def test_resolve_by_company_name_case_insensitive(self, tmp_path: Path) -> None:
+        """大文字小文字を区別しない（英字混在ケース）."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        _write_jquants_cache(cache_dir, [JQUANTS_KEYENCE])
+        _write_cache_meta(cache_dir)
+
+        resolver = TickerResolver(cache_dir=cache_dir)
+        results = resolver.resolve_by_company_name("キーエンス")
+
+        assert len(results) == 1
+        assert results[0]["ticker"] == "6861"
+
+    def test_resolve_by_company_name_no_cache(self, tmp_path: Path) -> None:
+        """キャッシュ未取得時 → CacheExpiredError."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
+        resolver = TickerResolver(cache_dir=cache_dir)
+        with pytest.raises(CacheExpiredError):
+            resolver.resolve_by_company_name("トヨタ")
+
+
 class TestJQuantsLoadCache:
     """J-Quants キャッシュ読み込みテスト."""
 

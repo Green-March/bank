@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-02-25T14:31:06.072594+00:00",
+  "gates_file": "skills/quality-gate/references/gates_integrate.yaml",
+  "data_dir": "data/9743/integrated",
+  "overall_pass": true,
+  "gates": [
+    {
+      "id": "integrate_output",
+      "pass": true,
+      "detail": {
+        "integrated_financials.json": {
+          "exists": true,
+          "size": 5642
+        }
+      }
+    }
+  ]
+}

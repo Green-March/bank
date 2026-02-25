@@ -1,0 +1,4 @@
+# Gate for report step: verify output directory has report files.
+gates:
+  - id: report_output
+    type: dir_not_empty

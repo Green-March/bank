@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-02-25T14:31:15.282184+00:00",
+  "gates_file": "skills/quality-gate/references/gates_collect.yaml",
+  "data_dir": "data/2780/raw/edinet",
+  "overall_pass": true,
+  "gates": [
+    {
+      "id": "collect_output",
+      "pass": true,
+      "detail": {
+        "exists": true,
+        "file_count": 3689
+      }
+    }
+  ]
+}

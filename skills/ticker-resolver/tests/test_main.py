@@ -346,6 +346,124 @@ class TestListSubcommand:
 
 
 # ---------------------------------------------------------------------------
+# reverse-edinet サブコマンド
+# ---------------------------------------------------------------------------
+
+
+class TestReverseEdinetSubcommand:
+    """reverse-edinet サブコマンドのテスト."""
+
+    def test_reverse_edinet_json_output(self, tmp_path: Path) -> None:
+        """正常系: reverse-edinet --edinet-code E02144 → JSON 出力."""
+        _setup_cache(tmp_path, [TOYOTA_ROW, SONY_ROW])
+        result = _run_main(
+            ["reverse-edinet", "--edinet-code", "E02144"],
+            data_path=str(tmp_path),
+        )
+
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["ticker"] == "7203"
+        assert data["edinet_code"] == "E02144"
+        assert data["company_name"] == "トヨタ自動車株式会社"
+
+    def test_reverse_edinet_text_output(self, tmp_path: Path) -> None:
+        """--format text: テキスト形式出力確認."""
+        _setup_cache(tmp_path, [TOYOTA_ROW])
+        result = _run_main(
+            ["reverse-edinet", "--edinet-code", "E02144", "--format", "text"],
+            data_path=str(tmp_path),
+        )
+
+        assert result.returncode == 0
+        assert "7203" in result.stdout
+        assert "トヨタ自動車株式会社" in result.stdout
+        assert "E02144" in result.stdout
+
+    def test_reverse_edinet_not_found(self, tmp_path: Path) -> None:
+        """異常系: 存在しない EDINETコード → exit code 1."""
+        _setup_cache(tmp_path, [TOYOTA_ROW])
+        result = _run_main(
+            ["reverse-edinet", "--edinet-code", "E99999"],
+            data_path=str(tmp_path),
+        )
+
+        assert result.returncode == 1
+        assert "エラー" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# reverse-name サブコマンド
+# ---------------------------------------------------------------------------
+
+
+class TestReverseNameSubcommand:
+    """reverse-name サブコマンドのテスト."""
+
+    def test_reverse_name_json_output(self, tmp_path: Path) -> None:
+        """正常系: reverse-name --name トヨタ → JSON 出力."""
+        _setup_cache(tmp_path, [TOYOTA_ROW, SONY_ROW])
+        result = _run_main(
+            ["reverse-name", "--name", "トヨタ"],
+            data_path=str(tmp_path),
+        )
+
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert isinstance(data, list)
+        assert len(data) == 1
+        assert data[0]["ticker"] == "7203"
+
+    def test_reverse_name_text_output(self, tmp_path: Path) -> None:
+        """--format text: テキスト形式出力確認."""
+        _setup_cache(tmp_path, [TOYOTA_ROW, SONY_ROW])
+        result = _run_main(
+            ["reverse-name", "--name", "トヨタ", "--format", "text"],
+            data_path=str(tmp_path),
+        )
+
+        assert result.returncode == 0
+        assert "7203" in result.stdout
+        assert "トヨタ" in result.stdout
+        assert "合計" in result.stdout
+
+    def test_reverse_name_multiple_matches(self, tmp_path: Path) -> None:
+        """部分一致で複数マッチ."""
+        _setup_cache(tmp_path, [TOYOTA_ROW, SONY_ROW, DECEMBER_ROW])
+        result = _run_main(
+            ["reverse-name", "--name", "株式会社", "--format", "json"],
+            data_path=str(tmp_path),
+        )
+
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert len(data) == 3
+
+    def test_reverse_name_no_match(self, tmp_path: Path) -> None:
+        """マッチなし → 空配列 / メッセージ."""
+        _setup_cache(tmp_path, [TOYOTA_ROW])
+        result = _run_main(
+            ["reverse-name", "--name", "存在しない企業", "--format", "json"],
+            data_path=str(tmp_path),
+        )
+
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data == []
+
+    def test_reverse_name_no_match_text(self, tmp_path: Path) -> None:
+        """マッチなし（テキスト形式） → メッセージ."""
+        _setup_cache(tmp_path, [TOYOTA_ROW])
+        result = _run_main(
+            ["reverse-name", "--name", "存在しない企業", "--format", "text"],
+            data_path=str(tmp_path),
+        )
+
+        assert result.returncode == 0
+        assert "見つかりません" in result.stdout
+
+
+# ---------------------------------------------------------------------------
 # その他
 # ---------------------------------------------------------------------------
 

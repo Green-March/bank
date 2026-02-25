@@ -4,9 +4,9 @@ pipeline:
   steps:
     - id: resolve
       skill: ticker-resolver
-      command: "python3 skills/ticker-resolver/scripts/main.py resolve {ticker}"
+      command: "mkdir -p data/{ticker}/resolved && python3 skills/ticker-resolver/scripts/main.py resolve {ticker} > data/{ticker}/resolved/resolve_result.json && cat data/{ticker}/resolved/resolve_result.json"
       output_dir: "data/{ticker}/resolved"
-      gates: null
+      gates: "skills/quality-gate/references/gates_resolve.yaml"
       output_vars:
         fye_month: fye_month
         edinet_code: edinet_code
@@ -16,40 +16,40 @@ pipeline:
       command: "python3 skills/disclosure-collector/scripts/main.py jquants {ticker} --output-dir data/{ticker}/raw/jquants"
       output_dir: "data/{ticker}/raw/jquants"
       depends_on: [resolve]
-      gates: null
+      gates: "skills/quality-gate/references/gates_collect_jquants.yaml"
     - id: collect
       skill: disclosure-collector
       command: "python3 skills/disclosure-collector/scripts/main.py edinet {edinet_code} --ticker {ticker} --start-date $(python3 -c 'import datetime as d;print((d.date.today()-d.timedelta(days=1095)).isoformat())') --end-date $(python3 -c 'import datetime as d;print(d.date.today().isoformat())')"
       output_dir: "data/{ticker}/raw/edinet"
       depends_on: [resolve]
-      gates: null
+      gates: "skills/quality-gate/references/gates_collect.yaml"
     - id: parse
       skill: disclosure-parser
       command: "python3 skills/disclosure-parser/scripts/main.py --ticker {ticker} --input-dir {prev_output} --output-dir data/{ticker}/parsed"
       output_dir: "data/{ticker}/parsed"
       depends_on: [collect]
-      gates: null
+      gates: "skills/quality-gate/references/gates_parse.yaml"
     - id: integrate
       skill: financial-integrator
       command: "python3 skills/financial-integrator/scripts/main.py --ticker {ticker} --fye-month {fye_month} --parsed-dir data/{ticker}/parsed --output data/{ticker}/integrated/integrated_financials.json"
       output_dir: "data/{ticker}/integrated"
       depends_on: [parse]
-      gates: null
+      gates: "skills/quality-gate/references/gates_integrate.yaml"
     - id: calculate
       skill: financial-calculator
       command: "python3 skills/financial-calculator/scripts/main.py calculate --ticker {ticker} --parsed-dir data/{ticker}/parsed --output data/{ticker}/parsed/metrics.json"
       output_dir: "data/{ticker}/parsed"
       depends_on: [integrate]
-      gates: null
+      gates: "skills/quality-gate/references/gates_calculate.yaml"
     - id: inventory
       skill: inventory-builder
       command: "python3 skills/inventory-builder/scripts/main.py --ticker {ticker} --fye-month {fye_month}"
       output_dir: "data/{ticker}"
       depends_on: [calculate]
-      gates: null
+      gates: "skills/quality-gate/references/gates_inventory.yaml"
     - id: report
       skill: financial-reporter
       command: "python3 skills/financial-reporter/scripts/main.py --ticker {ticker} --metrics data/{ticker}/parsed/metrics.json --output-md data/{ticker}/reports/{ticker}_report.md --output-html data/{ticker}/reports/{ticker}_report.html"
       output_dir: "data/{ticker}/reports"
       depends_on: [inventory]
-      gates: null
+      gates: "skills/quality-gate/references/gates_report.yaml"

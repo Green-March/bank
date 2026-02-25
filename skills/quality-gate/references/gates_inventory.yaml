@@ -1,0 +1,7 @@
+# Gate for inventory step: inventory file exists.
+gates:
+  - id: inventory_output
+    type: file_exists
+    params:
+      required_files:
+        - "inventory.md"

@@ -1,0 +1,46 @@
+/Users/fumitotakahashi/.pyenv/versions/3.11.2/lib/python3.11/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform darwin -- Python 3.11.2, pytest-8.3.5, pluggy-1.5.0 -- /Users/fumitotakahashi/.pyenv/versions/3.11.2/bin/python3.11
+cachedir: .pytest_cache
+rootdir: /Users/fumitotakahashi/Dropbox/dev/bank
+configfile: pyproject.toml
+plugins: cov-6.0.0, asyncio-0.26.0, anyio-4.2.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 31 items
+
+skills/pipeline-runner/tests/test_dag_complex.py::test_diamond_dependency_execution_order PASSED [  3%]
+skills/pipeline-runner/tests/test_dag_complex.py::test_diamond_dependency_all_steps_run PASSED [  6%]
+skills/pipeline-runner/tests/test_dag_complex.py::test_intermediate_failure_skips_dependents PASSED [  9%]
+skills/pipeline-runner/tests/test_dag_complex.py::test_failure_stops_pipeline_immediately PASSED [ 12%]
+skills/pipeline-runner/tests/test_dag_complex.py::test_multiple_undefined_vars_raises_error PASSED [ 16%]
+skills/pipeline-runner/tests/test_dag_complex.py::test_single_undefined_var_with_others_defined PASSED [ 19%]
+skills/pipeline-runner/tests/test_dag_complex.py::test_output_vars_satisfy_later_step_placeholders PASSED [ 22%]
+skills/pipeline-runner/tests/test_dag_complex.py::test_gate_failure_stops_pipeline PASSED [ 25%]
+skills/pipeline-runner/tests/test_dag_complex.py::test_gate_failure_records_in_log PASSED [ 29%]
+skills/pipeline-runner/tests/test_output_vars.py::test_output_vars_propagation PASSED [ 32%]
+skills/pipeline-runner/tests/test_output_vars.py::test_output_vars_no_override_user_vars PASSED [ 35%]
+skills/pipeline-runner/tests/test_output_vars.py::test_unresolved_placeholder_validation PASSED [ 38%]
+skills/pipeline-runner/tests/test_output_vars.py::test_output_vars_json_parse_failure PASSED [ 41%]
+skills/pipeline-runner/tests/test_output_vars.py::test_output_vars_non_dict_json[bad_value0-list] PASSED [ 45%]
+skills/pipeline-runner/tests/test_output_vars.py::test_output_vars_non_dict_json[42-int] PASSED [ 48%]
+skills/pipeline-runner/tests/test_output_vars.py::test_output_vars_non_dict_json[hello-str] PASSED [ 51%]
+skills/pipeline-runner/tests/test_output_vars.py::test_output_vars_missing_key PASSED [ 54%]
+skills/pipeline-runner/tests/test_output_vars.py::test_stderr_forwarding_and_error PASSED [ 58%]
+skills/pipeline-runner/tests/test_output_vars.py::test_stderr_empty_exit_code_fallback PASSED [ 61%]
+skills/pipeline-runner/tests/test_pipeline.py::test_pipeline_config_load PASSED [ 64%]
+skills/pipeline-runner/tests/test_pipeline.py::test_dag_validation_valid PASSED [ 67%]
+skills/pipeline-runner/tests/test_pipeline.py::test_dag_validation_cycle PASSED [ 70%]
+skills/pipeline-runner/tests/test_pipeline.py::test_execution_order PASSED [ 74%]
+skills/pipeline-runner/tests/test_pipeline.py::test_pipeline_step_execution PASSED [ 77%]
+skills/pipeline-runner/tests/test_pipeline.py::test_quality_gate_integration PASSED [ 80%]
+skills/pipeline-runner/tests/test_pipeline.py::test_pipeline_log_format PASSED [ 83%]
+skills/pipeline-runner/tests/test_pipeline.py::test_error_handling PASSED [ 87%]
+skills/pipeline-runner/tests/test_pipeline.py::test_variable_expansion PASSED [ 90%]
+skills/pipeline-runner/tests/test_pipeline.py::test_validate_subcommand PASSED [ 93%]
+skills/pipeline-runner/tests/test_smoke_pipeline.py::test_validate_example_pipeline PASSED [ 96%]
+skills/pipeline-runner/tests/test_smoke_pipeline.py::test_mock_run_example_pipeline PASSED [100%]
+
+============================== 31 passed in 0.94s ==============================

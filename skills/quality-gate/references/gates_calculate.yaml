@@ -1,0 +1,23 @@
+# Gate for calculate step: metrics.json exists and key metrics are within reasonable ranges.
+gates:
+  - id: metrics_file_check
+    type: file_exists
+    params:
+      required_files:
+        - "metrics.json"
+
+  - id: metrics_range
+    type: metrics_value_range
+    params:
+      roe_percent:
+        min: -100
+        max: 200
+      roa_percent:
+        min: -50
+        max: 100
+      operating_margin_percent:
+        min: -100
+        max: 100
+      equity_ratio_percent:
+        min: 0
+        max: 100

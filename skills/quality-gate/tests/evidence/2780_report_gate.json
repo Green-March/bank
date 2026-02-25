@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-02-25T14:31:18.202017+00:00",
+  "gates_file": "skills/quality-gate/references/gates_report.yaml",
+  "data_dir": "data/2780/reports",
+  "overall_pass": true,
+  "gates": [
+    {
+      "id": "report_output",
+      "pass": true,
+      "detail": {
+        "exists": true,
+        "file_count": 2
+      }
+    }
+  ]
+}

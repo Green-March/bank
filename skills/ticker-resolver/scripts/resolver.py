@@ -181,6 +181,86 @@ class TickerResolver:
 
         return len(self._data)
 
+    def resolve_by_edinet_code(self, edinet_code: str) -> dict[str, Any]:
+        """EDINETコードから銘柄情報を逆引きする.
+
+        Parameters
+        ----------
+        edinet_code : str
+            EDINETコード（例: "E02144"）
+
+        Returns
+        -------
+        dict
+            {"edinet_code", "company_name", "sec_code", "ticker", "fye_month"}
+
+        Raises
+        ------
+        CacheExpiredError
+            キャッシュが未取得または有効期限切れの場合。
+        TickerNotFoundError
+            キャッシュに該当EDINETコードが存在しない場合。
+        """
+        if not self._data or self._is_cache_expired():
+            raise CacheExpiredError(
+                "キャッシュが未取得または期限切れです。update_cache() を実行してください。"
+            )
+
+        for entry in self._data:
+            if entry.get("edinet_code") == edinet_code:
+                sec = entry.get("sec_code", "")
+                return {
+                    "edinet_code": entry["edinet_code"],
+                    "company_name": entry["company_name"],
+                    "sec_code": sec,
+                    "ticker": sec[:4] if len(sec) >= 4 else sec,
+                    "fye_month": entry["fye_month"],
+                }
+
+        raise TickerNotFoundError(
+            f"EDINETコード '{edinet_code}' が見つかりません。"
+        )
+
+    def resolve_by_company_name(self, company_name: str) -> list[dict[str, Any]]:
+        """企業名から銘柄情報を逆引きする（部分一致対応）.
+
+        Parameters
+        ----------
+        company_name : str
+            検索する企業名（部分一致）
+
+        Returns
+        -------
+        list[dict]
+            マッチした銘柄情報のリスト。
+            各要素: {"edinet_code", "company_name", "sec_code", "ticker", "fye_month"}
+
+        Raises
+        ------
+        CacheExpiredError
+            キャッシュが未取得または有効期限切れの場合。
+        """
+        if not self._data or self._is_cache_expired():
+            raise CacheExpiredError(
+                "キャッシュが未取得または期限切れです。update_cache() を実行してください。"
+            )
+
+        results: list[dict[str, Any]] = []
+        query = company_name.lower()
+        for entry in self._data:
+            if query in entry.get("company_name", "").lower():
+                sec = entry.get("sec_code", "")
+                results.append(
+                    {
+                        "edinet_code": entry["edinet_code"],
+                        "company_name": entry["company_name"],
+                        "sec_code": sec,
+                        "ticker": sec[:4] if len(sec) >= 4 else sec,
+                        "fye_month": entry["fye_month"],
+                    }
+                )
+        return results
+
     def list_all(self, fye_month: int | None = None) -> list[dict[str, Any]]:
         """キャッシュ内の全銘柄を返す.
 

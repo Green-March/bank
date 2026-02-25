@@ -1,34 +1,56 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_026_02"
-  task_id: "task_026"
-  junior_id: "junior1"
-  status: pending_review
-  timestamp: "2026-02-25T23:09:00+09:00"
+  request_id: "rev_030_002"
+  task_id: "task_030"
+  junior_id: junior2
+  status: pending
+  timestamp: "2026-02-26T01:35:00+09:00"
   payload:
-    objective: "context_priority() 回帰テスト追加 (修正再提出)"
+    parent_cmd: "req_20260225_030"
+    description: "quality-gate QA bypass問題を修正（修正版 — レビュー指摘2点対応済み）"
     outputs:
-      - "skills/disclosure-parser/tests/test_context_priority.py"
-    summary: |
-      前回レビュー指摘2点を修正:
-      1. None入力のAttributeError回帰テストを追加
-      2. 件数を正確に修正 (既存13 + 新規31 = 全44テスト)
-      全44テスト pass (pytest 0.21s)。
+      - "skills/quality-gate/scripts/validators.py (dir_not_empty, metrics_value_range追加)"
+      - "skills/quality-gate/references/gates_*.yaml (8ファイル: ステップ別ゲート定義)"
+      - "skills/quality-gate/SKILL.md (新ゲート閾値・失敗時停止条件・既存差分を追記)"
+      - "skills/pipeline-runner/references/example_pipeline.yaml (全ステップgate設定)"
+      - "skills/pipeline-runner/tests/test_smoke_pipeline.py (7→8ステップ修正)"
+      - "skills/quality-gate/tests/test_validators.py (新バリデータテスト13件追加)"
+      - "skills/quality-gate/tests/evidence/pytest_run.log (quality-gate 58 passed)"
+      - "skills/pipeline-runner/tests/evidence/pytest_run.log (pipeline-runner 31 passed)"
+      - "skills/quality-gate/tests/evidence/regression_run.log (9743+2780全ゲートPASS)"
+      - "skills/quality-gate/tests/evidence/*_gate.json (銘柄別ゲート結果13ファイル)"
     validation:
-      - "pytest 44 passed in 0.21s"
-      - "None入力テスト追加済み"
-      - "件数サマリ修正済み (既存13/新規31/全44)"
-    previous_review:
-      request_id: "rev_026_01"
-      verdict: "revise"
-      issues_addressed:
-        - "None入力ケース未追加 → AttributeError回帰テスト追加"
-        - "件数食い違い (既存12/追加31) → 実測値 (既存13/新規31) に修正"
+      - "quality-gate tests: 58 passed"
+      - "pipeline-runner tests: 31 passed"
+      - "合計: 89 passed, 0 failed"
+      - "9743 全7ゲート: PASS"
+      - "2780 全6ゲート: PASS"
+      - "example_pipeline.yaml gates: null count = 0"
+    revision_changes:
+      - "指摘1対応: tests/evidence/ にpytest実行ログ(quality-gate/pipeline-runner)、回帰テストログ、銘柄別ゲート結果JSONを保存し再現性を担保"
+      - "指摘2対応: SKILL.mdに新ゲート(dir_not_empty, metrics_value_range)の閾値定義・失敗時停止条件・既存出力との差分・resolve step変更意図を明記"
+    reproduction:
+      commands:
+        - "pytest skills/quality-gate/tests/ -v"
+        - "pytest skills/pipeline-runner/tests/ -v"
+        - "python3 skills/quality-gate/scripts/main.py --gates skills/quality-gate/references/gates_parse.yaml --data-dir data/9743/parsed"
+        - "python3 skills/quality-gate/scripts/main.py --gates skills/quality-gate/references/gates_calculate.yaml --data-dir data/9743/parsed"
+      evidence_dir: "skills/quality-gate/tests/evidence/"
+    caveats:
+      - "resolve stepコマンドをmkdir+redirect+cat方式に変更（SKILL.mdに変更意図と既存挙動への影響を記載済み）"
+    review_criteria:
+      - "指摘1: 再現性 — pytest/regression ログ・ゲート結果JSONが添付され検証可能か"
+      - "指摘2: 新ゲート閾値・失敗時停止条件・既存差分 — SKILL.mdに明記されているか"
+      - "example_pipeline.yaml の全ステップに gates 設定があるか"
+      - "既存テスト全パス（89 passed）"
+      - "既存データ回帰テスト結果"
 review_followup:
-  request_id: null
-  task_id: null
-  junior_id: null
-  status: null
-  timestamp: ""
-  payload: null
+  request_id: "rev_030_001"
+  task_id: "task_030"
+  junior_id: junior2
+  status: revised
+  timestamp: "2026-02-26T01:35:00+09:00"
+  payload:
+    previous_verdict: revise
+    revision_summary: "Reviewer指摘2点（evidenceログ保存、新ゲート閾値・失敗条件・差分のSKILL.md明記）を対応済み"

@@ -1,0 +1,25 @@
+# Gate for parse step: financials.json exists with adequate key coverage and low null rate.
+gates:
+  - id: file_check
+    type: file_exists
+    params:
+      required_files:
+        - "financials.json"
+
+  - id: key_coverage
+    type: key_coverage
+    params:
+      bs:
+        keys: [total_assets, total_liabilities, total_equity]
+        min_required: 2
+      pl:
+        keys: [revenue, operating_income, net_income]
+        min_required: 2
+      cf:
+        keys: [operating_cf, investing_cf, financing_cf]
+        min_required: 2
+
+  - id: null_rate
+    type: null_rate
+    params:
+      threshold: 0.5
