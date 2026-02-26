@@ -1,39 +1,32 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_req035_A_001"
-  task_id: "req_035_A"
-  junior_id: "junior1"
-  status: pending_review
-  timestamp: "2026-02-26T14:08:00+09:00"
+  request_id: "rev_s33_T5"
+  task_id: T5
+  junior_id: junior3
+  status: pending
+  timestamp: "2026-02-26T19:17:00+09:00"
   payload:
-    description: "web-data-harmonizer テスト実行・カバレッジ測定・修正 (93テスト全パス, カバレッジ92%)"
+    description: "EDINET FY2019 リトライ (9743 丹青社) — API復旧確認、FY2019-2022 有報4件取得、全9期XBRLパース完了"
     outputs:
-      - "skills/web-data-harmonizer/tests/evidence/coverage_log.txt"
-      - "skills/web-data-harmonizer/scripts/main.py (修正)"
-      - "skills/web-data-harmonizer/scripts/harmonizer.py (修正)"
-    test_results:
-      total: 93
-      passed: 93
-      failed: 0
-      coverage_total: "92%"
-      coverage_harmonizer: "94%"
-      coverage_main: "84%"
-    fixes_applied:
-      - "main.py: 相対インポート失敗時に絶対インポートへフォールバック (try/except)"
-      - "harmonizer.py: _make_annual_entry に eps パラメータ追加、_harmonize_kabutan で eps 渡し、_merge_periods の PL マージに eps 追加"
-      - "harmonizer.py: _extract_indicators に shikiho indicators 処理追加 (大文字キー PER/PBR 対応)"
-    review_points:
-      - "93テスト全パスの結果が妥当か"
-      - "カバレッジ92%が目標85%を超過しているか"
-      - "修正1: インポートフォールバックが適切か（既存スキルパターンとの整合）"
-      - "修正2: eps フィールド追加が FinancialRecord 互換性を損なわないか"
-      - "修正3: shikiho indicators 処理が kabutan 優先ルールを維持しているか"
-      - "main.py カバレッジ84%の未カバー箇所が許容範囲か"
-    quality_criteria:
-      - "全テスト PASS"
-      - "カバレッジ 85% 以上"
-      - "修正が既存仕様・品質基準を維持していること"
+      - "data/9743/raw/edinet/S100FNV6.zip (FY2019)"
+      - "data/9743/raw/edinet/S100IGWG.zip (FY2020)"
+      - "data/9743/raw/edinet/S100L825.zip (FY2021)"
+      - "data/9743/raw/edinet/S100NXXX.zip (FY2022)"
+      - "data/9743/parsed/financials.json (全9期統合 FY2017-FY2025)"
+    validation:
+      - "edinet_api_status=200 (復旧確認)"
+      - "new_doc_count=4"
+      - "total_parsed_periods=9 (FY2017-FY2025)"
+      - "bs_pl_cf_complete=FY2018-FY2025 (8期)"
+      - "missing_required_fields=0 (FY2018以降)"
+    caveats:
+      - "FY2017 は比較期間データのみ（net_assets のみ、BS/PL/CF 不完全）"
+      - "EDINET API の安定性は不明（前日は 302 redirect で停止）"
+    review_focus:
+      - "取得データの完全性（FY2019-FY2022 の4期が揃っているか）"
+      - "パース結果の品質（BS/PL/CF 全項目が FY2018 以降で揃っているか）"
+      - "financials.json の9期統合に不整合がないか"
 review_followup:
   request_id: null
   task_id: null

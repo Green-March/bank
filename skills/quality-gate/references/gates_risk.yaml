@@ -1,0 +1,36 @@
+# Gate for analyze_risk step: risk_analysis.json exists with required keys and sane ranges.
+# Output path: data/{ticker}/risk/risk_analysis.json
+#
+# RiskAnalysisResult.to_dict() schema (risk-analyzer):
+#   ticker: str
+#   analyzed_at: str
+#   source_documents: list[str]
+#   risk_categories: dict[str, list]
+#   summary:
+#     total_risks: int
+#     by_category: dict
+#     by_severity: dict
+gates:
+  - id: risk_file_check
+    type: file_exists
+    params:
+      required_files:
+        - "risk_analysis.json"
+
+  - id: risk_schema
+    type: json_file_schema
+    params:
+      file: "risk_analysis.json"
+      required_keys:
+        - "risk_categories"
+        - "summary"
+        - "summary.by_category"
+        - "summary.by_severity"
+
+  - id: risk_summary_range
+    type: json_file_value_range
+    params:
+      file: "risk_analysis.json"
+      rules:
+        summary.total_risks:
+          min: 0

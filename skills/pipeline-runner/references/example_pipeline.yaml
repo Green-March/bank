@@ -1,6 +1,6 @@
 pipeline:
   name: "disclosure_analysis"
-  description: "銘柄解決→収集→パース→統合→指標計算→棚卸→レポート生成"
+  description: "銘柄解決→収集→パース→統合→指標計算→バリュエーション/リスク分析/棚卸→レポート生成"
   steps:
     - id: resolve
       skill: ticker-resolver
@@ -47,9 +47,21 @@ pipeline:
       output_dir: "data/{ticker}"
       depends_on: [calculate]
       gates: "skills/quality-gate/references/gates_inventory.yaml"
+    - id: valuate
+      skill: valuation-calculator
+      command: "python3 skills/valuation-calculator/scripts/main.py dcf --metrics data/{ticker}/parsed/metrics.json --output data/{ticker}/valuation/dcf.json"
+      output_dir: "data/{ticker}/valuation"
+      depends_on: [calculate]
+      gates: "skills/quality-gate/references/gates_valuation.yaml"
+    - id: analyze_risk
+      skill: risk-analyzer
+      command: "python3 skills/risk-analyzer/scripts/main.py analyze --ticker {ticker} --input-dir data/{ticker}/raw/edinet --output data/{ticker}/risk/risk_analysis.json"
+      output_dir: "data/{ticker}/risk"
+      depends_on: [calculate]
+      gates: "skills/quality-gate/references/gates_risk.yaml"
     - id: report
       skill: financial-reporter
       command: "python3 skills/financial-reporter/scripts/main.py --ticker {ticker} --metrics data/{ticker}/parsed/metrics.json --output-md data/{ticker}/reports/{ticker}_report.md --output-html data/{ticker}/reports/{ticker}_report.html"
       output_dir: "data/{ticker}/reports"
-      depends_on: [inventory]
+      depends_on: [valuate, analyze_risk, inventory]
       gates: "skills/quality-gate/references/gates_report.yaml"

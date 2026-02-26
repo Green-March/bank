@@ -77,6 +77,24 @@ class MetricsRangeResult:
 
 
 @dataclass
+class JsonFileSchemaResult:
+    """Result of JSON file schema validation."""
+
+    gate_pass: bool
+    missing_keys: list[str]
+    detail: str
+
+
+@dataclass
+class JsonFileValueRangeResult:
+    """Result of JSON file value range validation."""
+
+    gate_pass: bool
+    violations: list[dict]
+    detail: dict[str, object]
+
+
+@dataclass
 class GateResults:
     """Aggregated results from all gates."""
 
@@ -362,6 +380,96 @@ def validate_metrics_value_range(
     )
 
 
+def _resolve_nested(data: dict, dotted_key: str) -> object:
+    """Resolve a dot-separated key path (e.g. 'summary.total_risks') in a dict."""
+    parts = dotted_key.split(".")
+    current: object = data
+    for part in parts:
+        if not isinstance(current, dict) or part not in current:
+            return None
+        current = current[part]
+    return current
+
+
+def validate_json_file_schema(
+    data_dir: Path,
+    filename: str,
+    required_keys: list[str],
+) -> JsonFileSchemaResult:
+    """Check that required keys exist in an arbitrary JSON file.
+
+    Supports dot-notation for nested keys (e.g. 'summary.by_category').
+    """
+    json_path = data_dir / filename
+    if not json_path.exists():
+        return JsonFileSchemaResult(
+            gate_pass=False,
+            missing_keys=required_keys,
+            detail=f"{filename} not found",
+        )
+    with json_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    missing = [k for k in required_keys if _resolve_nested(data, k) is None]
+    return JsonFileSchemaResult(
+        gate_pass=len(missing) == 0,
+        missing_keys=missing,
+        detail=f"checked {len(required_keys)} keys in {filename}, {len(missing)} missing",
+    )
+
+
+def validate_json_file_value_range(
+    data_dir: Path,
+    filename: str,
+    rules: dict[str, dict],
+) -> JsonFileValueRangeResult:
+    """Check that numeric values in an arbitrary JSON file fall within specified ranges.
+
+    Supports dot-notation for nested keys (e.g. 'summary.total_risks').
+    rules: {"enterprise_value": {"min": 0}, "summary.total_risks": {"min": 0}}
+    """
+    json_path = data_dir / filename
+    if not json_path.exists():
+        return JsonFileValueRangeResult(
+            gate_pass=False,
+            violations=[],
+            detail={"error": f"{filename} not found"},
+        )
+    with json_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    violations: list[dict] = []
+    for key, rule in rules.items():
+        value = _resolve_nested(data, key)
+        if value is None:
+            continue
+        if not isinstance(value, (int, float)):
+            continue
+
+        min_val = rule.get("min")
+        max_val = rule.get("max")
+        if min_val is not None and value < min_val:
+            violations.append({
+                "key": key,
+                "value": value,
+                "rule": f"min={min_val}",
+                "reason": f"value {value} < min {min_val}",
+            })
+        if max_val is not None and value > max_val:
+            violations.append({
+                "key": key,
+                "value": value,
+                "rule": f"max={max_val}",
+                "reason": f"value {value} > max {max_val}",
+            })
+
+    return JsonFileValueRangeResult(
+        gate_pass=len(violations) == 0,
+        violations=violations,
+        detail={"json_file": str(json_path), "checked_keys": list(rules.keys())},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Gate runner
 # ---------------------------------------------------------------------------
@@ -453,6 +561,33 @@ def run_all_gates(
 
         elif gate_type == "metrics_value_range":
             r = validate_metrics_value_range(data_dir, rules=params)
+            results.append({
+                "id": gate_id,
+                "pass": r.gate_pass,
+                "detail": {
+                    "violations": r.violations,
+                    "violation_count": len(r.violations),
+                    **r.detail,
+                },
+            })
+
+        elif gate_type == "json_file_schema":
+            filename = params.get("file", "")
+            required_keys = params.get("required_keys", [])
+            r = validate_json_file_schema(data_dir, filename, required_keys)
+            results.append({
+                "id": gate_id,
+                "pass": r.gate_pass,
+                "detail": {
+                    "missing_keys": r.missing_keys,
+                    "detail": r.detail,
+                },
+            })
+
+        elif gate_type == "json_file_value_range":
+            filename = params.get("file", "")
+            rules = params.get("rules", {})
+            r = validate_json_file_value_range(data_dir, filename, rules)
             results.append({
                 "id": gate_id,
                 "pass": r.gate_pass,

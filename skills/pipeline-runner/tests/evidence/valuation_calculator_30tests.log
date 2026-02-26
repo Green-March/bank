@@ -1,0 +1,41 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.11.2, pytest-8.3.5, pluggy-1.5.0 -- /Users/fumitotakahashi/.pyenv/versions/3.11.2/bin/python3
+cachedir: .pytest_cache
+rootdir: /Users/fumitotakahashi/Dropbox/dev/bank
+configfile: pyproject.toml
+plugins: cov-6.0.0, asyncio-0.26.0, anyio-4.2.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 30 items
+
+skills/valuation-calculator/tests/test_valuation.py::TestComputeDCF::test_normal_calculation PASSED [  3%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeDCF::test_with_shares PASSED [  6%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeDCF::test_with_net_debt PASSED [ 10%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeDCF::test_single_fcf PASSED [ 13%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeDCF::test_empty_fcf_raises PASSED [ 16%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeDCF::test_wacc_lte_growth_raises PASSED [ 20%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeDCF::test_negative_wacc_raises PASSED [ 23%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeDCF::test_negative_fcf PASSED [ 26%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeDCF::test_growth_rate_clamped PASSED [ 30%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeDCF::test_projection_years PASSED [ 33%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeRelativeMetrics::test_normal_calculation PASSED [ 36%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeRelativeMetrics::test_ev_ebitda_calculation PASSED [ 40%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeRelativeMetrics::test_missing_market_cap_fallback_to_series PASSED [ 43%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeRelativeMetrics::test_zero_net_income PASSED [ 46%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeRelativeMetrics::test_none_values PASSED [ 50%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeRelativeMetrics::test_zero_ebitda PASSED [ 53%]
+skills/valuation-calculator/tests/test_valuation.py::TestComputeRelativeMetrics::test_no_depreciation PASSED [ 56%]
+skills/valuation-calculator/tests/test_valuation.py::TestPeerComparison::test_normal_comparison PASSED [ 60%]
+skills/valuation-calculator/tests/test_valuation.py::TestPeerComparison::test_empty_peers PASSED [ 63%]
+skills/valuation-calculator/tests/test_valuation.py::TestPeerComparison::test_peer_with_missing_data PASSED [ 66%]
+skills/valuation-calculator/tests/test_valuation.py::TestExtractors::test_extract_fcf_series PASSED [ 70%]
+skills/valuation-calculator/tests/test_valuation.py::TestExtractors::test_extract_fcf_series_empty PASSED [ 73%]
+skills/valuation-calculator/tests/test_valuation.py::TestExtractors::test_extract_fcf_series_partial_none PASSED [ 76%]
+skills/valuation-calculator/tests/test_valuation.py::TestExtractors::test_extract_net_debt PASSED [ 80%]
+skills/valuation-calculator/tests/test_valuation.py::TestExtractors::test_extract_net_debt_missing PASSED [ 83%]
+skills/valuation-calculator/tests/test_valuation.py::TestExtractors::test_extract_net_debt_none_values PASSED [ 86%]
+skills/valuation-calculator/tests/test_valuation.py::TestCLI::test_dcf_command PASSED [ 90%]
+skills/valuation-calculator/tests/test_valuation.py::TestCLI::test_relative_command PASSED [ 93%]
+skills/valuation-calculator/tests/test_valuation.py::TestCLI::test_relative_with_peers PASSED [ 96%]
+skills/valuation-calculator/tests/test_valuation.py::TestCLI::test_dcf_no_fcf_error PASSED [100%]
+
+============================== 30 passed in 0.97s ==============================

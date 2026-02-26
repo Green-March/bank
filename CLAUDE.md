@@ -199,7 +199,13 @@ review_response:
   task_id: null
   junior_id: null
   verdict: null
-  comments: null
+  comments:
+    schema_conformance: null
+    data_integrity: null
+    source_traceability: null
+    analytical_validity: null
+    clarity: null
+    risk_disclosure: null
   suggested_changes: null
   status: idle
   timestamp: ""

@@ -1,0 +1,33 @@
+# Gate for valuate step: dcf.json exists with required keys and sane value ranges.
+# Output path: data/{ticker}/valuation/dcf.json
+#
+# DCFResult schema (valuation-calculator):
+#   enterprise_value: float
+#   equity_value: float
+#   per_share_value: float | null
+#   assumptions: dict
+gates:
+  - id: valuation_file_check
+    type: file_exists
+    params:
+      required_files:
+        - "dcf.json"
+
+  - id: valuation_schema
+    type: json_file_schema
+    params:
+      file: "dcf.json"
+      required_keys:
+        - "enterprise_value"
+        - "equity_value"
+        - "assumptions"
+
+  - id: valuation_range
+    type: json_file_value_range
+    params:
+      file: "dcf.json"
+      rules:
+        enterprise_value:
+          min: 0
+        equity_value:
+          min: 0

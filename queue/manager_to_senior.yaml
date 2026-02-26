@@ -1,18 +1,43 @@
 queue:
-  - request_id: "req_035"
-    objective: "web-data-harmonizer テスト実行・カバレッジ測定 + manifest.json 作成 — req_034 成果物の統合検証とスキル登録完成"
+  - request_id: "req_036"
+    objective: "valuation-calculator と risk-analyzer を pipeline-runner から呼び出せるように組み込む。pipeline-runner のステップ定義に valuation と risk-analysis ステップを追加し、既存ステップとのデータ受け渡し（financial-calculator 出力 → valuation-calculator 入力、全スキル出力 → risk-analyzer 入力）を実装する。"
     ticker: null
     universe: null
-    analysis_type: "skill_verification"
+    analysis_type: "pipeline_integration"
     timeframe: null
-    output_format: ["json", "tests"]
+    output_format: ["md"]
     priority: "high"
     due_date: "2026-02-26"
     constraints:
-      - "タスクA: pytest で skills/web-data-harmonizer/tests/ の全93テストを実行し、全パスを確認する"
-      - "タスクA: テスト失敗があれば原因を特定し修正する（harmonizer.py, main.py, テストコード自体のいずれか）"
-      - "タスクA: pytest --cov で カバレッジを測定し、85%以上を達成する"
-      - "タスクA: カバレッジ不足箇所があれば追加テストを書く"
-      - "タスクB: skills/web-data-harmonizer/manifest.json を既存スキルと同じフォーマットで作成する"
-      - "タスクB: 既存スキル（例: skills/web-researcher/manifest.json）を参考にフォーマットを合わせる"
-      - "タスクA,B は別 Junior に並列割り当て可能"
+      - "既存の pipeline-runner テストが壊れないこと"
+      - "valuation-calculator (30 tests) と risk-analyzer (44 tests) の既存テストも全パスすること"
+      - "ステップ間のスキーマ整合性を確認すること"
+      - "pipeline-runner の SKILL.md にステップ追加を反映すること"
+
+  - request_id: "req_037"
+    objective: "Reviewer (Codex) の instructions/reviewer.md にスキーマ整合性チェック観点を追加する。スキル間のデータ受け渡し（disclosure-parser → financial-integrator → financial-calculator → valuation-calculator など）でスキーマ不整合がないかを検証する観点を reviewer のレビュー基準に組み込む。"
+    ticker: null
+    universe: null
+    analysis_type: "instruction_update"
+    timeframe: null
+    output_format: ["md"]
+    priority: "medium"
+    due_date: "2026-02-26"
+    constraints:
+      - "既存のレビュー観点（5観点）を維持しつつ追加すること"
+      - "Reviewer の簡潔出力ルール（各1文、suggested_changes最大2件）は変更しない"
+      - "各スキルの manifest.json の input/output スキーマを参照基準とする"
+
+  - request_id: "req_038"
+    objective: "req_033 リトライ — EDINET API で FY2019 過去データの取得を再試行する。前回は 302 redirect → notfound.html でブロックされた。API の現在の状態を確認し、取得可能であれば disclosure-collector 経由でデータ収集を実行する。取得不可の場合は代替データソース（J-Quants、web-researcher 経由の公開情報）で補完可能か調査・報告する。"
+    ticker: "9743"
+    universe: null
+    analysis_type: "data_collection"
+    timeframe: "FY2019"
+    output_format: ["md"]
+    priority: "low"
+    due_date: "2026-02-27"
+    constraints:
+      - "EDINET API が依然 302 の場合、無理にリトライせず代替手段を報告"
+      - "取得できた場合は disclosure-parser でパースまで完了させる"
+      - "結果を dashboard.md の該当セクションに反映"

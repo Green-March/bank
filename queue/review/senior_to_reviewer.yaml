@@ -2,197 +2,119 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_req034_web_data_harmonizer"
-  request_id: "req_034"
-  timestamp: "2026-02-26T12:30:00+09:00"
-  objective: "web-data-harmonizer スキル新規開発 — web-researcher出力を既存パイプラインスキーマに変換するアダプタースキル"
+  plan_id: "plan_s33_001"
+  timestamp: "2026-02-26T18:00:00+09:00"
+  requests:
+    - req_036 (HIGH): pipeline-runner に valuation-calculator / risk-analyzer ステップ統合
+    - req_037 (MED): Reviewer instructions にスキーマ整合性チェック観点追加
+    - req_038 (LOW): EDINET FY2019 リトライ (9743 丹青社)
 
-  background: |
-    web-researcher (req_033) は Yahoo/株探/四季報/公式HP から株式情報を収集するが、
-    出力形式がパイプライン（disclosure-parser → financial-integrator → financial-calculator）と
-    互換性がない。主な課題:
-    1. shikiho は文字列型（'1,234百万円'）— 数値型への変換が必要
-    2. 期間形式が不統一（yahoo: YYYY-MM, kabutan: YYYY.MM, shikiho: なし）
-    3. パイプラインの BS/PL/CF スキーマとフィールド名が異なる
-    4. source_attribution（出典追跡）が未対応
-    5. homepage は企業メタデータ特化で財務数値なし
-
-  output_schema: |
-    harmonized_financials.json:
-      ticker: str
-      company_name: str | null
-      generated_at: ISO datetime
-      harmonization_metadata:
-        input_file: str
-        sources_used: [str]
-        sources_skipped: [str]
-        source_priority: "kabutan > yahoo > shikiho (PL重複時)"
-      annual:
-        - period_end: "YYYY-MM-DD"
-          fiscal_year: int
-          quarter: "FY"
-          source: "web:kabutan" | "web:yahoo" | "web:shikiho"
-          statement_type: null
-          bs: {total_assets: null, ...}  # Web源はBS不提供
-          pl: {revenue: float|null, operating_income: float|null, ordinary_income: float|null, net_income: float|null}
-          cf: {operating_cf: null, ...}  # Web源はCF不提供
-      indicators:
-        per: float | null
-        pbr: float | null
-        dividend_yield: float | null
-        market_cap: float | null
-        eps: float | null
-        shares_outstanding: int | null
-      qualitative:
-        company_overview: dict | null
-        consensus: dict | null
-        shareholders: list | null
-        news: list | null
-        earnings_flash: dict | null
-        ir_links: list | null
-
-  data_availability_analysis: |
-    Web源から取得可能なパイプライン対応データ:
-    - PL: revenue, operating_income (yahoo/kabutan), ordinary_income (kabutan), net_income (kabutan)
-    - BS: なし（Web源では未提供）
-    - CF: なし（Web源では未提供）
-    - Indicators: PER, PBR, dividend_yield, market_cap (yahoo/kabutan), EPS (kabutan)
-    - Qualitative: company_overview, consensus, shareholders (shikiho), news, earnings_flash (kabutan), ir_links (homepage)
-    → PLデータとマーケット指標の補完が主な価値。BS/CFはnullで出力。
+  plan_overview: |
+    3件の依頼を優先度順に処理する。req_036 と req_037 は独立しており Phase 1 で並列実行。
+    req_038 は低優先で Phase 2 で実行。Junior 3名を最大限並列活用する。
 
   task_decomposition:
-    - task_id: "req_034_T1"
-      assigned_to: junior1
-      description: |
-        Core harmonizer module 開発
-        ファイル: skills/web-data-harmonizer/scripts/harmonizer.py
+    phase_1_parallel:
+      - task_id: T1
+        request: req_036
+        assignee: junior1
+        description: |
+          pipeline-runner の example_pipeline.yaml に valuation と risk-analysis の2ステップを追加する。
+          - valuate ステップ: depends_on=[calculate], valuation-calculator dcf コマンド実行
+          - analyze_risk ステップ: depends_on=[calculate], risk-analyzer analyze コマンド実行
+          - report ステップの depends_on に valuate と analyze_risk を追加（ダイアモンド依存パターン）
+          - SKILL.md のステップ一覧を更新
+          - 既存テスト31件が全パスすることを確認
+        output_path: skills/pipeline-runner/
+        acceptance_criteria:
+          - example_pipeline.yaml に valuate, analyze_risk ステップが正しく定義されている
+          - report ステップの depends_on が [valuate, analyze_risk, inventory] になっている
+          - 既存テスト31件が全パス
+          - SKILL.md のステップ一覧が更新されている
 
-        実装内容:
-        1. _parse_japanese_number(text: str) -> float | None
-           - '1,234百万円' → 1234000000.0, '△1,234' → -1234.0, '---' → None
-           - 兆/億/万の単位変換対応
-        2. _infer_period_end(period_str: str, source: str) -> str | None
-           - yahoo "2024-03" → "2024-03-31", kabutan "2024.03" → "2024-03-31"
-           - 月末日計算（2月は閏年考慮）
-        3. _infer_fiscal_year(period_end: str) -> int | None
-           - period_end から fiscal_year を導出
-        4. _harmonize_yahoo(data: dict) -> list[dict]
-           - yahoo.data.financials[] を annual エントリに変換
-        5. _harmonize_kabutan(data: dict) -> list[dict]
-           - kabutan.data.financials[] を annual エントリに変換
-        6. _harmonize_shikiho(data: dict) -> list[dict]
-           - shikiho.data.earnings_forecast を annual エントリに変換（文字列パース）
-        7. _extract_indicators(sources: dict) -> dict
-           - yahoo/kabutan の indicators をマージ（kabutan優先）
-        8. _extract_qualitative(sources: dict) -> dict
-           - shikiho: company_overview, consensus, shareholders
-           - kabutan: earnings_flash, news
-           - homepage: ir_links
-        9. _merge_periods(all_records: list[list[dict]]) -> list[dict]
-           - 同一 period_end のレコードをマージ（kabutan > yahoo > shikiho 優先）
-           - source_attribution に "web:source_name" 形式で記録
-        10. harmonize(web_research: dict, source_filter: str = "all") -> dict
-            - メインエントリポイント。source_filter で個別ソースまたは全統合選択可能
-            - 戻り値: harmonized_financials 辞書
+      - task_id: T2
+        request: req_036
+        assignee: junior2
+        description: |
+          pipeline-runner 統合のための新規テストと quality-gate YAML を作成する。
+          - skills/quality-gate/references/ に gates_valuation.yaml を作成
+            (valuation 出力の enterprise_value, equity_value, per_share_value の値域チェック)
+          - skills/quality-gate/references/ に gates_risk.yaml を作成
+            (risk_analysis 出力の total_risks >= 0, by_category 存在チェック)
+          - skills/pipeline-runner/tests/ に test_valuation_risk_steps.py を作成
+            (新ステップの DAG 検証、依存関係テスト、変数伝搬テスト)
+        output_path: skills/quality-gate/references/, skills/pipeline-runner/tests/
+        acceptance_criteria:
+          - gates_valuation.yaml が valuation-calculator 出力スキーマに適合
+          - gates_risk.yaml が risk-analyzer 出力スキーマに適合
+          - 新テストが全パス
+          - 既存テスト (valuation-calculator 30件, risk-analyzer 44件) が壊れない
 
-        品質基準:
-        - financial-calculator の FinancialRecord と互換の annual エントリ
-        - すべての数値フィールドは float | None（文字列不可）
-        - period_end は ISO YYYY-MM-DD 形式
+      - task_id: T3
+        request: req_037
+        assignee: junior3
+        description: |
+          instructions/reviewer.md に Schema Conformance（スキーマ整合性）観点を追加する。
+          - 成果物レビュー観点を5観点→6観点に拡張
+          - 第1観点として Schema Conformance を追加:
+            「出力JSON が下流スキルの入力スキーマ要件を満たし、nested field の型・必須性・
+             cross-field dependency が確保されているか」
+          - 既存5観点 (data_integrity, source_traceability, analytical_validity,
+            clarity, risk_disclosure) は番号2-6として維持
+          - 出力テンプレートの comments に schema_conformance フィールドを追加
+          - Reviewer の簡潔出力ルール（各1文、suggested_changes 最大2件）は変更しない
+          - 各スキル manifest.json の input/output を参照基準として記載
+        output_path: instructions/reviewer.md
+        acceptance_criteria:
+          - Schema Conformance 観点が成果物レビュー観点の第1項目に追加されている
+          - 既存5観点が維持されている
+          - 出力テンプレートに schema_conformance フィールドがある
+          - 簡潔出力ルールが変更されていない
 
-    - task_id: "req_034_T2"
-      assigned_to: junior2
-      description: |
-        CLI + スキル骨格 開発
-        ファイル:
-        - skills/web-data-harmonizer/scripts/__init__.py (空ファイル)
-        - skills/web-data-harmonizer/scripts/main.py
-        - skills/web-data-harmonizer/SKILL.md
+    phase_2_sequential:
+      - task_id: T4
+        request: req_036
+        assignee: junior1 (T1完了後)
+        depends_on: [T1, T2]
+        description: |
+          pipeline-runner 統合の最終検証。
+          - 全テスト実行: pipeline-runner (既存31件 + 新規テスト)
+          - valuation-calculator テスト確認 (30件)
+          - risk-analyzer テスト確認 (44件)
+          - スキーマ整合性の確認: financial-calculator 出力 → valuation-calculator 入力の
+            フィールド対応 (metrics_series, latest_snapshot の必須フィールド)
+        output_path: skills/pipeline-runner/tests/evidence/
+        acceptance_criteria:
+          - 全テスト (31+新規+30+44) がパス
+          - スキーマ整合性に問題がないことを確認
 
-        main.py 実装内容:
-        1. build_parser() → argparse
-           - サブコマンド: harmonize
-           - --ticker (必須): 銘柄コード
-           - --source (デフォルト: all): all | yahoo | kabutan | shikiho | カンマ区切り
-           - --input (省略可): web-researcher出力JSONパス（デフォルト: data/{ticker}/web_research/research.json）
-           - --output (省略可): 出力パス（デフォルト: data/{ticker}/harmonized/harmonized_financials.json）
-        2. cmd_harmonize(args) → int
-           - 入力JSON読み込み → harmonize() 呼び出し → 結果JSON出力
-           - 出力先ディレクトリの自動作成
-           - stdout にもJSON出力
-        3. main(argv=None) → int
-           - エントリポイント
-        4. if __name__ == "__main__" でインポート分岐
-
-        harmonizer.py からのインポート:
-        - from harmonizer import harmonize (直接実行時)
-        - from .harmonizer import harmonize (パッケージ実行時)
-
-        SKILL.md: Usage, Output schema, Tests セクションを含む標準フォーマット
-
-    - task_id: "req_034_T3"
-      assigned_to: junior3
-      description: |
-        テストスイート開発
-        ファイル:
-        - skills/web-data-harmonizer/tests/__init__.py (空)
-        - skills/web-data-harmonizer/tests/conftest.py
-        - skills/web-data-harmonizer/tests/test_harmonizer.py
-        - skills/web-data-harmonizer/tests/test_main.py
-        - skills/web-data-harmonizer/tests/evidence/sample_web_research.json
-
-        conftest.py:
-        - sys.path 設定
-        - sample_web_research フィクスチャ（evidence/sample_web_research.json 読み込み）
-        - tmp_output_dir フィクスチャ
-
-        evidence/sample_web_research.json:
-        - web-researcher 出力形式のサンプルデータ（4ソース分）
-        - yahoo: financials 3期分（数値型）、indicators
-        - kabutan: financials 3期分（数値型）、indicators、earnings_flash
-        - shikiho: earnings_forecast（文字列型 '1,234百万円'）、company_overview、consensus、shareholders
-        - homepage: company_info、ir_page、ir_links
-
-        test_harmonizer.py (最低40テスト):
-        - TestParseJapaneseNumber: 正常系（カンマ区切り、百万円、億、兆、万、マイナス△/▲）、異常系（None、空文字、'---'、'N/A'）
-        - TestInferPeriodEnd: yahoo形式、kabutan形式、不正形式、月末日（2月閏年）
-        - TestInferFiscalYear: 正常系、None入力
-        - TestHarmonizeYahoo: 正常データ、空データ、部分欠損
-        - TestHarmonizeKabutan: 正常データ、空データ、部分欠損
-        - TestHarmonizeShikiho: 文字列→数値変換、空データ
-        - TestExtractIndicators: マージ動作、片方のみ、両方null
-        - TestExtractQualitative: 各ソースからの抽出
-        - TestMergePeriods: 同一期間の優先度マージ、異なる期間の結合
-        - TestHarmonize: E2E統合テスト（全ソース、個別ソース、source_filter）
-        - TestOutputSchema: 出力がパイプラインスキーマ準拠か（BS/PL/CF キー存在、数値型）
-
-        test_main.py (最低15テスト):
-        - TestBuildParser: 引数パース、デフォルト値
-        - TestCmdHarmonize: 正常実行、ファイル出力、stdout出力
-        - TestMain: エントリポイント、不正引数
-
-        目標: カバレッジ 85%以上
+      - task_id: T5
+        request: req_038
+        assignee: junior3 (T3完了後)
+        depends_on: [T3]
+        description: |
+          EDINET API FY2019 リトライ (9743 丹青社)。
+          - Step 1: EDINET API 疎通確認 (curl で documents.json エンドポイント確認)
+          - Step 2A (API復旧時): disclosure-collector で FY2019-2022 データ取得
+            edinet_code=E00208, start_date=2019-01-01, end_date=2023-02-25
+          - Step 2B (API停止継続時): 代替データソースの調査・報告
+            - J-Quants API で FY2019 決算短信データ取得可否確認
+            - web-researcher で Yahoo/Kabutan/四季報 の過去データ取得可否確認
+          - Step 3: 結果をレポートにまとめる
+        output_path: data/9743/
+        acceptance_criteria:
+          - EDINET API 状態が確認されている
+          - 取得可能なら FY2019 データが data/9743/raw/edinet/ に保存されている
+          - 取得不可なら代替手段の調査結果がレポートされている
 
   quality_criteria:
-    - "出力 annual エントリが financial-calculator の FinancialRecord 入力形式に準拠"
-    - "すべての数値フィールドが float | None（文字列不可）"
-    - "period_end が ISO YYYY-MM-DD 形式"
-    - "source_attribution が 'web:yahoo' / 'web:kabutan' / 'web:shikiho' 形式"
-    - "BS/CF フィールドは null で出力（Web源では取得不可のため）"
-    - "テストカバレッジ 85%以上"
-    - "既存スキルと同じ構成パターン（scripts/, tests/, SKILL.md）"
+    - 既存テスト全パス (pipeline-runner 31, valuation-calculator 30, risk-analyzer 44)
+    - 新規テストも全パス
+    - スキーマ整合性 — financial-calculator → valuation-calculator のデータフロー検証
+    - SKILL.md とコードの一致
+    - race condition なし (各 Junior の出力パスが重複しない)
 
-  parallelization:
-    round_1:
-      - "junior1: req_034_T1 (harmonizer.py)"
-      - "junior2: req_034_T2 (main.py + SKILL.md)"
-      - "junior3: req_034_T3 (tests/)"
-    note: "3タスクは異なるファイルを書くため並列実行可能。T2とT3はharmonizer.pyのAPIインターフェースを記述で共有。"
-
-  risk_assessment:
-    - risk: "shikiho の earnings_forecast フォーマットが不定形"
-      mitigation: "パース失敗時はフィールドを null で出力。ログ出力して続行。"
-    - risk: "テストが実コード未完成で書けない"
-      mitigation: "APIインターフェースを計画で明確化。テストはインターフェースに対して書く。"
-    - risk: "web-researcher出力のサンプルデータがdata/に存在しない"
-      mitigation: "テスト用のevidenceデータをJunior3が手動作成。"
+  risk_mitigation:
+    - T1 と T2 で同一ファイルを編集しない (T1=example_pipeline.yaml/SKILL.md, T2=tests/+gates/)
+    - EDINET API 停止継続のリスク → 代替手段調査を計画に含めている
+    - ダイアモンド依存パターン (valuate + analyze_risk → report) は pipeline-runner の既存 DAG 検証で対応済み

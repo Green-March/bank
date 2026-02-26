@@ -163,6 +163,21 @@ If the gate fails (exit code != 0), the pipeline stops at that step.
 - `scripts/main.py` — CLI entrypoint with run/validate/status subcommands.
 - `scripts/pipeline.py` — Pipeline config loading, DAG validation, and execution engine.
 
+## Example Pipeline Steps (`references/example_pipeline.yaml`)
+
+| # | id | skill | depends_on | output_dir |
+|---|---|---|---|---|
+| 1 | resolve | ticker-resolver | — | `data/{ticker}/resolved` |
+| 2 | collect_jquants | disclosure-collector | resolve | `data/{ticker}/raw/jquants` |
+| 3 | collect | disclosure-collector | resolve | `data/{ticker}/raw/edinet` |
+| 4 | parse | disclosure-parser | collect | `data/{ticker}/parsed` |
+| 5 | integrate | financial-integrator | parse | `data/{ticker}/integrated` |
+| 6 | calculate | financial-calculator | integrate | `data/{ticker}/parsed` |
+| 7 | inventory | inventory-builder | calculate | `data/{ticker}` |
+| 8 | valuate | valuation-calculator | calculate | `data/{ticker}/valuation` |
+| 9 | analyze_risk | risk-analyzer | calculate | `data/{ticker}/risk` |
+| 10 | report | financial-reporter | valuate, analyze_risk, inventory | `data/{ticker}/reports` |
+
 ## References
 
 - `references/example_pipeline.yaml` — Disclosure analysis pipeline definition example.

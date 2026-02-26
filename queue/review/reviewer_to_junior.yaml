@@ -1,16 +1,17 @@
 review_response:
   request_type: deliverable_review_response
   review_type: deliverable
-  request_id: 'rev_req035_A_001'
-  task_id: 'req_035_A'
-  junior_id: 'junior1'
+  request_id: 'rev_s33_T5'
+  task_id: 'T5'
+  junior_id: 'junior3'
   verdict: 'ok'
   comments:
-    data_integrity: 'eps を PL に追加し、四季報の純利益キーを両対応により欠損を抑制できています。'
-    source_traceability: 'source_flags/ metadata と source_attribution は保持され、収集源の有無と優先参照先を追跡可能です。'
-    analytical_validity: 'kabutan > yahoo > shikiho の統合順序と指標上書き順は一貫し、回帰テストでも一致しています。'
-    clarity: '93件PASS・カバレッジ92%(main84/harmonizer94)の根拠が明示され、結論の妥当性を確認できます。'
-    risk_disclosure: '再実装上の既知制約として、mainではsource_filter検証結果をそのまま渡しておらず直接呼び出し時の再検証は別途担保が必要です。'
+    schema_conformance: 'financials.json は period_index/documents を保ち、financials schema の主要キーと数値型を満たしています。'
+    data_integrity: 'FY2017〜FY2025の9期統合で、FY2018以降はBS/PL/CFの必須項目が欠損なく揃っています。'
+    source_traceability: 'manifest.json が対象docIDと取得日時を保持し、raw zip/個別JSON/financials の追跡経路が確認できます。'
+    analytical_validity: '4件の新規有報はFY2019〜FY2022の比較期を補完し、既存FY列との突合で整合的です。'
+    clarity: '提出結果は対象件数、対象年度、FY2017比較のみという前提を明確に分けて報告しています。'
+    risk_disclosure: 'manifestのfailed_datesにAPI接続障害が残るため、監視継続と再試行手順の明記が必要です。'
   suggested_changes: []
   status: 'completed'
-  timestamp: '2026-02-26 13:06:30'
+  timestamp: '2026-02-26 18:35:11'

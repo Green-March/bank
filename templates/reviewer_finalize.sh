@@ -15,6 +15,7 @@ Deliverable review options:
   --request-id <id>             (required)
   --task-id <id>                (required)
   --junior-id <id>              (required)
+  --schema-conformance <text>   (required)
   --data-integrity <text>       (required)
   --source-traceability <text>  (required)
   --analytical-validity <text>  (required)
@@ -68,6 +69,7 @@ notify_message=""
 request_id=""
 task_id=""
 junior_id=""
+schema_conformance=""
 data_integrity=""
 source_traceability=""
 analytical_validity=""
@@ -119,6 +121,10 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     --suggestion)
       suggestions+=("${2-}")
+      shift 2
+      ;;
+    --schema-conformance)
+      schema_conformance="${2-}"
       shift 2
       ;;
     --data-integrity)
@@ -180,6 +186,7 @@ if [[ "${mode}" == "deliverable" ]]; then
   require_value "--request-id" "${request_id}"
   require_value "--task-id" "${task_id}"
   require_value "--junior-id" "${junior_id}"
+  require_value "--schema-conformance" "${schema_conformance}"
   require_value "--data-integrity" "${data_integrity}"
   require_value "--source-traceability" "${source_traceability}"
   require_value "--analytical-validity" "${analytical_validity}"
@@ -238,6 +245,7 @@ tmp_file="$(mktemp "${output_dir}/.$(basename "${output}").tmp.XXXXXX")"
     printf '  junior_id: %s\n' "$(yaml_quote "${junior_id}")"
     printf '  verdict: %s\n' "$(yaml_quote "${verdict}")"
     echo "  comments:"
+    printf '    schema_conformance: %s\n' "$(yaml_quote "${schema_conformance}")"
     printf '    data_integrity: %s\n' "$(yaml_quote "${data_integrity}")"
     printf '    source_traceability: %s\n' "$(yaml_quote "${source_traceability}")"
     printf '    analytical_validity: %s\n' "$(yaml_quote "${analytical_validity}")"
