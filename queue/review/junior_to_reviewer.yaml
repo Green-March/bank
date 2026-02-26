@@ -1,56 +1,45 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_030_002"
-  task_id: "task_030"
-  junior_id: junior2
+  request_id: "rev_T6_req033"
+  task_id: "T6_req033"
+  junior_id: "junior3"
   status: pending
-  timestamp: "2026-02-26T01:35:00+09:00"
+  timestamp: "2026-02-26T13:35:00+09:00"
   payload:
-    parent_cmd: "req_20260225_030"
-    description: "quality-gate QA bypass問題を修正（修正版 — レビュー指摘2点対応済み）"
+    summary: "web-researcher スキルの統合・ドキュメント・設定更新・品質ゲート定義・テスト追加を完了。102テスト全PASS、カバレッジ91%。全完了条件(a)-(e)クリア。"
     outputs:
-      - "skills/quality-gate/scripts/validators.py (dir_not_empty, metrics_value_range追加)"
-      - "skills/quality-gate/references/gates_*.yaml (8ファイル: ステップ別ゲート定義)"
-      - "skills/quality-gate/SKILL.md (新ゲート閾値・失敗時停止条件・既存差分を追記)"
-      - "skills/pipeline-runner/references/example_pipeline.yaml (全ステップgate設定)"
-      - "skills/pipeline-runner/tests/test_smoke_pipeline.py (7→8ステップ修正)"
-      - "skills/quality-gate/tests/test_validators.py (新バリデータテスト13件追加)"
-      - "skills/quality-gate/tests/evidence/pytest_run.log (quality-gate 58 passed)"
-      - "skills/pipeline-runner/tests/evidence/pytest_run.log (pipeline-runner 31 passed)"
-      - "skills/quality-gate/tests/evidence/regression_run.log (9743+2780全ゲートPASS)"
-      - "skills/quality-gate/tests/evidence/*_gate.json (銘柄別ゲート結果13ファイル)"
+      - "skills/web-researcher/SKILL.md"
+      - "skills/web-researcher/scripts/main.py"
+      - "skills/web-researcher/tests/test_main.py"
+      - "skills/web-researcher/tests/test_collector_base.py"
+      - "skills/web-researcher/tests/evidence/coverage_log.txt"
+      - "skills/quality-gate/references/gates_web_research.yaml"
+      - "config/permissions.yaml"
+      - ".env.example"
     validation:
-      - "quality-gate tests: 58 passed"
-      - "pipeline-runner tests: 31 passed"
-      - "合計: 89 passed, 0 failed"
-      - "9743 全7ゲート: PASS"
-      - "2780 全6ゲート: PASS"
-      - "example_pipeline.yaml gates: null count = 0"
-    revision_changes:
-      - "指摘1対応: tests/evidence/ にpytest実行ログ(quality-gate/pipeline-runner)、回帰テストログ、銘柄別ゲート結果JSONを保存し再現性を担保"
-      - "指摘2対応: SKILL.mdに新ゲート(dir_not_empty, metrics_value_range)の閾値定義・失敗時停止条件・既存出力との差分・resolve step変更意図を明記"
-    reproduction:
-      commands:
-        - "pytest skills/quality-gate/tests/ -v"
-        - "pytest skills/pipeline-runner/tests/ -v"
-        - "python3 skills/quality-gate/scripts/main.py --gates skills/quality-gate/references/gates_parse.yaml --data-dir data/9743/parsed"
-        - "python3 skills/quality-gate/scripts/main.py --gates skills/quality-gate/references/gates_calculate.yaml --data-dir data/9743/parsed"
-      evidence_dir: "skills/quality-gate/tests/evidence/"
-    caveats:
-      - "resolve stepコマンドをmkdir+redirect+cat方式に変更（SKILL.mdに変更意図と既存挙動への影響を記載済み）"
+      total_tests: 102
+      total_passed: 102
+      total_failed: 0
+      coverage_percent: 91
+      coverage_target: 90
     review_criteria:
-      - "指摘1: 再現性 — pytest/regression ログ・ゲート結果JSONが添付され検証可能か"
-      - "指摘2: 新ゲート閾値・失敗時停止条件・既存差分 — SKILL.mdに明記されているか"
-      - "example_pipeline.yaml の全ステップに gates 設定があるか"
-      - "既存テスト全パス（89 passed）"
-      - "既存データ回帰テスト結果"
+      - "main.py: 全4コレクター（Yahoo, Kabutan, Shikiho, Homepage）が統合されているか"
+      - "main.py: --merge 実装、source routing（all/単一/カンマ区切り）、post-check（exit code）が正しいか"
+      - "SKILL.md: 既存フォーマット準拠（Usage, CLI Options, Output, Environment Variables）"
+      - "permissions.yaml: kabutan.jp, shikiho.toyokeizai.net が追加されているか"
+      - ".env.example: SHIKIHO_EMAIL/PASSWORD がコメント付きで追加されているか"
+      - "gates_web_research.yaml: file_exists タイプで web_research/research.json チェック"
+      - "完了条件(a) robots.txt: 全4コレクターが _check_robots() を呼び出しているか"
+      - "完了条件(b) シークレット: env変数のみ取得、cli_no_secret_leak テスト PASS"
+      - "完了条件(c) ドメイン: permissions.yaml 更新済み"
+      - "完了条件(d) カバレッジ: 91% >= 90% 目標達成、coverage_log.txt 保存"
+      - "完了条件(e) quality gate: gates_web_research.yaml が既存タイプのみで定義されているか"
+      - "統合テスト10件: json_schema, sources_schema, metadata_schema, all_sources, single_source, comma_sources, merge_mode, exit_code_success, exit_code_all_fail, cli_no_secret_leak"
 review_followup:
-  request_id: "rev_030_001"
-  task_id: "task_030"
-  junior_id: junior2
-  status: revised
-  timestamp: "2026-02-26T01:35:00+09:00"
-  payload:
-    previous_verdict: revise
-    revision_summary: "Reviewer指摘2点（evidenceログ保存、新ゲート閾値・失敗条件・差分のSKILL.md明記）を対応済み"
+  request_id: null
+  task_id: null
+  junior_id: null
+  status: null
+  timestamp: ""
+  payload: null

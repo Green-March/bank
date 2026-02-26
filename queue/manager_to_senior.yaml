@@ -1,74 +1,22 @@
 queue:
-  - request_id: "req_20260225_029"
-    objective: "ticker-resolver スキルの双方向解決を強化する。ticker→(edinet_code, company_name, fye_month) だけでなく、edinet_code→ticker、company_name→ticker の逆引きも対応させる。既存テストを壊さないこと。"
+  - request_id: "req_033"
+    objective: "4サイト巡回型の株式情報収集スキル（web-researcher）を新規開発する"
     ticker: null
     universe: null
-    analysis_type: "skill_enhancement"
+    analysis_type: "skill_development"
     timeframe: null
-    output_format: ["py", "test"]
-    priority: "medium"
-    due_date: "2026-02-25"
+    output_format: ["skill"]
+    priority: "high"
+    due_date: "2026-02-26"
     constraints:
-      - "skills/ticker-resolver/ 配下を修正"
-      - "既存テスト全パス維持"
-      - "逆引き用のマッピングデータを追加"
-
-  - request_id: "req_20260225_030"
-    objective: "quality-gate の example_pipeline.yaml から QA bypass フラグを削除し、本番運用で必ず QA チェックが走るようにする。関連コード・テストも整合させる。"
-    ticker: null
-    universe: null
-    analysis_type: "skill_fix"
-    timeframe: null
-    output_format: ["yaml", "py", "test"]
-    priority: "medium"
-    due_date: "2026-02-25"
-    constraints:
-      - "skills/quality-gate/ 配下を修正"
-      - "bypass フラグ参照箇所をすべて除去または無効化"
-      - "既存テスト全パス維持"
-
-  - request_id: "req_20260225_031"
-    objective: "valuation-calculator スキルを新規作成する。DCF（割引キャッシュフロー）と相対バリュエーション（PER/PBR/EV-EBITDA の同業比較）を計算し JSON で出力する。financial-calculator の出力を入力として受け取れるようにする。"
-    ticker: null
-    universe: null
-    analysis_type: "skill_creation"
-    timeframe: null
-    output_format: ["py", "test", "yaml"]
-    priority: "low"
-    due_date: "2026-02-25"
-    constraints:
-      - "skills/valuation-calculator/ に新規作成"
-      - "DCF: WACC・ターミナルバリュー・FCF ベース"
-      - "相対バリュエーション: PER/PBR/EV-EBITDA"
-      - "financial-calculator の JSON 出力を入力として利用可能にする"
-      - "テストカバレッジ 80% 以上"
-
-  - request_id: "req_20260225_032"
-    objective: "risk-analyzer スキルを新規作成する。有価証券報告書の定性テキスト（事業リスク・経営上のリスク）を抽出・分類し、リスクカテゴリ別に構造化 JSON で出力する。"
-    ticker: null
-    universe: null
-    analysis_type: "skill_creation"
-    timeframe: null
-    output_format: ["py", "test", "yaml"]
-    priority: "low"
-    due_date: "2026-02-25"
-    constraints:
-      - "skills/risk-analyzer/ に新規作成"
-      - "リスクカテゴリ: 市場リスク・信用リスク・オペレーショナルリスク・規制リスク・その他"
-      - "disclosure-parser の出力 or XBRL テキスト要素を入力として利用"
-      - "テストカバレッジ 80% 以上"
-
-  - request_id: "req_20260225_033"
-    objective: "FY2019 ヒストリカルデータの拡充。既存の対象銘柄（7203トヨタ、6758ソニー、9743丹青社）について FY2019 のデータを EDINET から取得し、parsed JSON に統合する。既存の FY2020 以降のデータと整合するフォーマットにすること。"
-    ticker: null
-    universe: ["7203", "6758", "9743"]
-    analysis_type: "data_expansion"
-    timeframe: "FY2019"
-    output_format: ["json"]
-    priority: "low"
-    due_date: "2026-02-25"
-    constraints:
-      - "disclosure-collector + disclosure-parser パイプラインを利用"
-      - "既存データと同一フォーマットで data/ 配下に格納"
-      - "取得期間: FY2019（2019年4月〜2020年3月期）"
-      - "ネットワークアクセスは EDINET API のみ"
+      - "1スキルに統合（web-researcher）。--source オプションで対象サイトを選択可能にする"
+      - "対象4サイト: (1)会社公式HP、(2)会社四季報オンライン(shikiho.toyokeizai.net)、(3)Yahoo!ファイナンス(finance.yahoo.co.jp)、(4)株探(kabutan.jp)"
+      - "各サイトから取得可能な主要情報を網羅的に収集する（業績、指標、ニュース、株価、コンセンサス等）"
+      - "会社公式HPのURL特定はEDINETメタデータ（既存ticker-resolverスキル）を活用する"
+      - "会社四季報オンラインは有料会員認証あり。認証情報は環境変数またはconfig経由で管理する"
+      - "Yahoo!ファイナンス、株探は無料公開情報を収集する"
+      - "robots.txt を尊重し、適切なリクエスト間隔を設ける"
+      - "出力はJSON形式で統一し、既存パイプライン（disclosure-parser等）との接続を考慮する"
+      - "CLI エントリポイント: python -m skills.web_researcher.main --ticker XXXX --source all|homepage|shikiho|yahoo|kabutan"
+      - "既存スキルの設計パターン（tests/、defaults/、__init__.py）に準拠する"
+      - "テストカバレッジ 90%以上を目標とする"

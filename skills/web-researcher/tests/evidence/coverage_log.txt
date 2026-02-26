@@ -1,0 +1,131 @@
+/Users/fumitotakahashi/.pyenv/versions/3.11.2/lib/python3.11/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform darwin -- Python 3.11.2, pytest-8.3.5, pluggy-1.5.0 -- /Users/fumitotakahashi/.pyenv/versions/3.11.2/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/fumitotakahashi/Dropbox/dev/bank
+configfile: pyproject.toml
+plugins: cov-6.0.0, asyncio-0.26.0, anyio-4.2.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 102 items
+
+skills/web-researcher/tests/test_collector_base.py::TestCheckRobots::test_check_robots_allowed PASSED [  0%]
+skills/web-researcher/tests/test_collector_base.py::TestCheckRobots::test_check_robots_denied PASSED [  1%]
+skills/web-researcher/tests/test_collector_base.py::TestDomainValidation::test_domain_validation_static_allowed PASSED [  2%]
+skills/web-researcher/tests/test_collector_base.py::TestDomainValidation::test_domain_validation_denied PASSED [  3%]
+skills/web-researcher/tests/test_collector_base.py::TestRateLimit::test_rate_limit PASSED [  4%]
+skills/web-researcher/tests/test_collector_base.py::TestBackoffRetry::test_backoff_retry PASSED [  5%]
+skills/web-researcher/tests/test_collector_base.py::TestSanitizeLog::test_sanitize_log_masks_email PASSED [  6%]
+skills/web-researcher/tests/test_collector_base.py::TestSanitizeLog::test_sanitize_log_masks_password PASSED [  7%]
+skills/web-researcher/tests/test_collector_base.py::TestUserAgent::test_user_agent PASSED [  8%]
+skills/web-researcher/tests/test_collector_base.py::TestEdinetOrigin::test_add_and_check_edinet_origin PASSED [  9%]
+skills/web-researcher/tests/test_collector_base.py::TestEdinetOrigin::test_edinet_origin_allows_fetch PASSED [ 10%]
+skills/web-researcher/tests/test_collector_base.py::TestDomainWithPort::test_domain_with_port PASSED [ 11%]
+skills/web-researcher/tests/test_collector_base.py::TestCheckRobotsReadFailure::test_robots_read_failure_allows_access PASSED [ 12%]
+skills/web-researcher/tests/test_collector_base.py::TestFetchTimeoutAndRequestError::test_fetch_timeout_exhausted PASSED [ 13%]
+skills/web-researcher/tests/test_collector_base.py::TestFetchTimeoutAndRequestError::test_fetch_request_error_exhausted PASSED [ 14%]
+skills/web-researcher/tests/test_collector_base.py::TestFetchTimeoutAndRequestError::test_fetch_http_error_non_retryable PASSED [ 15%]
+skills/web-researcher/tests/test_collector_base.py::TestSanitizeLogNonString::test_sanitize_non_string_values PASSED [ 16%]
+skills/web-researcher/tests/test_collector_base.py::TestLoadDefaultConfigMissing::test_missing_config_returns_empty PASSED [ 17%]
+skills/web-researcher/tests/test_homepage.py::TestCollectSuccess::test_collect_success PASSED [ 18%]
+skills/web-researcher/tests/test_homepage.py::TestUrlNotInEdinet::test_url_not_in_edinet PASSED [ 19%]
+skills/web-researcher/tests/test_homepage.py::TestRobotsDenied::test_robots_denied PASSED [ 20%]
+skills/web-researcher/tests/test_homepage.py::TestHttpsUpgrade::test_https_upgrade PASSED [ 21%]
+skills/web-researcher/tests/test_homepage.py::TestHttpsUpgradeFailure::test_https_upgrade_failure PASSED [ 22%]
+skills/web-researcher/tests/test_homepage.py::TestIrPageDetection::test_ir_page_detection PASSED [ 23%]
+skills/web-researcher/tests/test_homepage.py::TestIrPageNotFound::test_ir_page_not_found PASSED [ 24%]
+skills/web-researcher/tests/test_homepage.py::TestNewsExtraction::test_news_extraction PASSED [ 25%]
+skills/web-researcher/tests/test_homepage.py::TestAccessedDomainsRecorded::test_accessed_domains_recorded PASSED [ 26%]
+skills/web-researcher/tests/test_homepage.py::TestResolverNotAvailable::test_resolver_none_explicit PASSED [ 27%]
+skills/web-researcher/tests/test_homepage.py::TestResolverNotAvailable::test_resolver_auto_init_import_fails PASSED [ 28%]
+skills/web-researcher/tests/test_homepage.py::TestResolverNotAvailable::test_resolver_auto_init_exception PASSED [ 29%]
+skills/web-researcher/tests/test_homepage.py::TestMainCollectIntegration::test_homepage_collected_true_via_main PASSED [ 30%]
+skills/web-researcher/tests/test_kabutan.py::TestCollectSuccess::test_collect_success PASSED [ 31%]
+skills/web-researcher/tests/test_kabutan.py::TestParseTable::test_parse_table_header_data PASSED [ 32%]
+skills/web-researcher/tests/test_kabutan.py::TestParseTable::test_parse_table_empty PASSED [ 33%]
+skills/web-researcher/tests/test_kabutan.py::TestParseFinancialsTable::test_multi_period_financials PASSED [ 34%]
+skills/web-researcher/tests/test_kabutan.py::TestCollectPageNotFound::test_page_not_found PASSED [ 35%]
+skills/web-researcher/tests/test_kabutan.py::TestCollectRobotsBlocked::test_robots_blocked PASSED [ 36%]
+skills/web-researcher/tests/test_kabutan.py::TestNumberFormatParsing::test_comma_separated PASSED [ 37%]
+skills/web-researcher/tests/test_kabutan.py::TestNumberFormatParsing::test_negative_hyphen PASSED [ 38%]
+skills/web-researcher/tests/test_kabutan.py::TestNumberFormatParsing::test_negative_triangle PASSED [ 39%]
+skills/web-researcher/tests/test_kabutan.py::TestNumberFormatParsing::test_float_value PASSED [ 40%]
+skills/web-researcher/tests/test_kabutan.py::TestNumberFormatParsing::test_with_unit_suffix PASSED [ 41%]
+skills/web-researcher/tests/test_kabutan.py::TestNumberFormatParsing::test_empty_and_dash PASSED [ 42%]
+skills/web-researcher/tests/test_kabutan.py::TestNumberFormatParsing::test_market_cap_oku PASSED [ 43%]
+skills/web-researcher/tests/test_kabutan.py::TestNumberFormatParsing::test_market_cap_cho_oku PASSED [ 44%]
+skills/web-researcher/tests/test_kabutan.py::TestNumberFormatParsing::test_market_cap_empty PASSED [ 45%]
+skills/web-researcher/tests/test_main.py::TestHelp::test_help PASSED     [ 46%]
+skills/web-researcher/tests/test_main.py::TestMissingTicker::test_missing_ticker PASSED [ 47%]
+skills/web-researcher/tests/test_main.py::TestCollectDefaultSource::test_collect_default_source PASSED [ 48%]
+skills/web-researcher/tests/test_main.py::TestCollectSpecificSource::test_collect_specific_source PASSED [ 49%]
+skills/web-researcher/tests/test_main.py::TestCollectCommaSources::test_collect_comma_sources PASSED [ 50%]
+skills/web-researcher/tests/test_main.py::TestMetadataAccessedDomains::test_accessed_domains_populated PASSED [ 50%]
+skills/web-researcher/tests/test_main.py::TestMetadataAccessedDomains::test_accessed_domains_multiple PASSED [ 51%]
+skills/web-researcher/tests/test_main.py::TestMetadataAccessedDomains::test_robots_checked_always_true PASSED [ 52%]
+skills/web-researcher/tests/test_main.py::TestDefaultOutputPath::test_default_output_uses_web_research PASSED [ 53%]
+skills/web-researcher/tests/test_main.py::TestOutputJsonSchemaIntegration::test_output_json_schema PASSED [ 54%]
+skills/web-researcher/tests/test_main.py::TestOutputSourcesSchemaIntegration::test_output_sources_schema PASSED [ 55%]
+skills/web-researcher/tests/test_main.py::TestOutputMetadataSchemaIntegration::test_output_metadata_schema PASSED [ 56%]
+skills/web-researcher/tests/test_main.py::TestCollectAllSourcesIntegration::test_collect_all_sources PASSED [ 57%]
+skills/web-researcher/tests/test_main.py::TestCollectSingleSourceIntegration::test_collect_single_source PASSED [ 58%]
+skills/web-researcher/tests/test_main.py::TestCollectCommaSourcesIntegration::test_collect_comma_sources PASSED [ 59%]
+skills/web-researcher/tests/test_main.py::TestMergeModeIntegration::test_merge_mode PASSED [ 60%]
+skills/web-researcher/tests/test_main.py::TestExitCodeSuccessIntegration::test_exit_code_success PASSED [ 61%]
+skills/web-researcher/tests/test_main.py::TestExitCodeAllFailIntegration::test_exit_code_all_fail PASSED [ 62%]
+skills/web-researcher/tests/test_main.py::TestDataRoot::test_data_root_default PASSED [ 63%]
+skills/web-researcher/tests/test_main.py::TestDataRoot::test_data_root_absolute PASSED [ 64%]
+skills/web-researcher/tests/test_main.py::TestDataRoot::test_data_root_relative PASSED [ 65%]
+skills/web-researcher/tests/test_main.py::TestParseSourcesUnknown::test_unknown_source_skipped PASSED [ 66%]
+skills/web-researcher/tests/test_main.py::TestParseSourcesUnknown::test_all_unknown_returns_empty PASSED [ 67%]
+skills/web-researcher/tests/test_main.py::TestCollectExceptionHandling::test_collector_error_handled PASSED [ 68%]
+skills/web-researcher/tests/test_main.py::TestCollectExceptionHandling::test_unexpected_exception_handled PASSED [ 69%]
+skills/web-researcher/tests/test_main.py::TestMainNoSubcommand::test_no_subcommand_returns_1 PASSED [ 70%]
+skills/web-researcher/tests/test_main.py::TestMainNoSubcommand::test_empty_valid_sources_via_subprocess PASSED [ 71%]
+skills/web-researcher/tests/test_main.py::TestCliNoSecretLeakIntegration::test_cli_no_secret_leak PASSED [ 72%]
+skills/web-researcher/tests/test_shikiho.py::TestCollectSuccess::test_collect_success PASSED [ 73%]
+skills/web-researcher/tests/test_shikiho.py::TestCollectAuthFailure::test_collect_auth_failure PASSED [ 74%]
+skills/web-researcher/tests/test_shikiho.py::TestCollectEnvNotSet::test_collect_env_not_set PASSED [ 75%]
+skills/web-researcher/tests/test_shikiho.py::TestCollectPartialEnv::test_email_only PASSED [ 76%]
+skills/web-researcher/tests/test_shikiho.py::TestCollectPartialEnv::test_password_only PASSED [ 77%]
+skills/web-researcher/tests/test_shikiho.py::TestNoSecretLeakInOutput::test_no_secret_leak_in_output PASSED [ 78%]
+skills/web-researcher/tests/test_shikiho.py::TestNoSecretLeakInError::test_no_secret_leak_in_error PASSED [ 79%]
+skills/web-researcher/tests/test_shikiho.py::TestSanitizeLogMasksCredentials::test_sanitize_log_masks_email PASSED [ 80%]
+skills/web-researcher/tests/test_shikiho.py::TestSanitizeLogMasksCredentials::test_sanitize_log_masks_password PASSED [ 81%]
+skills/web-researcher/tests/test_shikiho.py::TestSanitizeLogMasksCredentials::test_sanitize_log_masks_nested PASSED [ 82%]
+skills/web-researcher/tests/test_shikiho.py::TestSanitizeLogMasksCredentials::test_sanitize_via_collector_static_method PASSED [ 83%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestCollectSuccess::test_collect_success PASSED [ 84%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestParseJapaneseNumber::test_comma_separated PASSED [ 85%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestParseJapaneseNumber::test_oku_man PASSED [ 86%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestParseJapaneseNumber::test_cho PASSED [ 87%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestParseJapaneseNumber::test_single_unit PASSED [ 88%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestParseJapaneseNumber::test_suffix_removal PASSED [ 89%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestParseJapaneseNumber::test_plain_number PASSED [ 90%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestParseJapaneseNumber::test_none_empty PASSED [ 91%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestParseNegativeNumber::test_triangle_negative PASSED [ 92%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestParseNegativeNumber::test_black_triangle_negative PASSED [ 93%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestParseNegativeNumber::test_minus_sign PASSED [ 94%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestParseNegativeNumber::test_negative_with_unit PASSED [ 95%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestCollectPageNotFound::test_collect_page_not_found PASSED [ 96%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestCollectPageNotFound::test_collect_http_404 PASSED [ 97%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestCollectRobotsBlocked::test_collect_robots_blocked PASSED [ 98%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestNewsExtraction::test_news_from_articles PASSED [ 99%]
+skills/web-researcher/tests/test_yahoo_finance.py::TestNewsExtraction::test_news_from_symbol_topics PASSED [100%]
+
+---------- coverage: platform darwin, python 3.11.2-final-0 ----------
+Name                                              Stmts   Miss  Cover   Missing
+-------------------------------------------------------------------------------
+skills/web-researcher/scripts/__init__.py             0      0   100%
+skills/web-researcher/scripts/collector_base.py     138      2    99%   168, 242
+skills/web-researcher/scripts/homepage.py           158     15    91%   30, 49-52, 102, 131-132, 155-156, 170, 172, 181, 188, 269, 289
+skills/web-researcher/scripts/kabutan.py            207     31    85%   36-37, 60, 66-70, 90, 96, 121-122, 165, 200, 208, 227-228, 232-233, 237-238, 242-243, 256, 272, 280, 285-286, 295, 304, 310
+skills/web-researcher/scripts/main.py               136      8    94%   116, 136-139, 253, 256-258
+skills/web-researcher/scripts/shikiho.py            104     10    90%   78-79, 89-91, 131, 142, 156, 170, 186
+skills/web-researcher/scripts/yahoo_finance.py      148     14    91%   58, 72-73, 79-82, 90-91, 160-162, 175, 229
+-------------------------------------------------------------------------------
+TOTAL                                               891     80    91%
+
+
+============================= 102 passed in 23.21s =============================

@@ -1,0 +1,6 @@
+gates:
+  - id: web_research_file_check
+    type: file_exists
+    params:
+      required_files:
+        - "web_research/research.json"

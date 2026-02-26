@@ -2,185 +2,311 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_20260226_session30_v2"
-  timestamp: "2026-02-26T00:15:00+09:00"
-  status: pending
-  revision_note: "Reviewer指摘3点を反映: Round2担当明示、req_030回帰条件追加、テストカバレッジ計測範囲明示"
+  plan_id: "plan_req_033_web_researcher_v5"
+  request_id: "req_033"
+  timestamp: "2026-02-26T10:00:00+09:00"
+  revision_note: "Reviewer指摘v4反映: (1) quality gate は file_exists のみ、JSONキー検証はpytestに移管 (2) secret漏洩テストを環境変数値の直接不一致検証に修正"
+
+  objective: "4サイト巡回型の株式情報収集スキル（web-researcher）を新規開発する"
 
   overview: |
-    Manager から5件のリクエスト(req_029〜033)を受領。
-    スキル強化2件(medium)、スキル新規作成2件(low)、データ拡充1件(low)。
-    3名のJuniorで2ラウンドに分けて並列実行する。
-    各Juniorは最大2タスク（Round1 + Round2で1件ずつ）。
+    銘柄コード指定で4つの情報源（会社公式HP、四季報オンライン、Yahoo!ファイナンス、株探）から
+    株式関連情報を網羅的に収集し、統一JSONフォーマットで出力するスキルを開発する。
+    既存スキルの設計パターン（dual-run, argparse, JSON出力, _data_root/_repo_root）に完全準拠する。
+
+  cli_specification: |
+    実行形式: python3 skills/web-researcher/scripts/main.py collect --ticker 7203 --source all
+    サブコマンド: collect
+    引数: --ticker(required), --source(default:all), --output(optional), --merge(optional)
+    出力先: _data_root()/{ticker}/web_research/research.json
+    exit code: success_count>=1→0, 全失敗/引数エラー→1
+
+  architecture:
+    directory_structure: |
+      skills/web-researcher/
+      ├── scripts/
+      │   ├── __init__.py
+      │   ├── main.py
+      │   ├── collector_base.py
+      │   ├── homepage.py
+      │   ├── shikiho.py
+      │   ├── yahoo_finance.py
+      │   └── kabutan.py
+      ├── tests/
+      │   ├── __init__.py
+      │   ├── conftest.py
+      │   ├── test_collector_base.py
+      │   ├── test_homepage.py
+      │   ├── test_shikiho.py
+      │   ├── test_yahoo_finance.py
+      │   ├── test_kabutan.py
+      │   ├── test_main.py
+      │   └── evidence/
+      ├── references/
+      │   └── default_config.yaml
+      └── SKILL.md
+
+    data_output_contract: |
+      出力先: _data_root()/{ticker}/web_research/research.json
+      _data_root()/_repo_root(): 既存パターン完全コピー
+      quality gate 実行: --data-dir data/{ticker}
+      ゲート内パス: web_research/research.json（data_dir相対）
+
+    environment_variables: |
+      必須: なし
+      オプション: DATA_PATH, SHIKIHO_EMAIL, SHIKIHO_PASSWORD
+
+    retry_strategy: |
+      コレクター単位: backoff(max 3, base 2s, max 30s)
+      ソース単位: graceful degradation
+      部分再実行: --merge
+
+    quality_gate_integration: |
+      【Reviewer指摘v4対応: file_exists のみ使用】
+
+      新規ゲート: skills/quality-gate/references/gates_web_research.yaml
+
+      gates:
+        - id: web_research_file_check
+          type: file_exists
+          params:
+            required_files:
+              - "web_research/research.json"
+
+      これが唯一の quality gate。
+      ・file_exists は quality-gate の既存実装で確実に動作する。
+      ・data_dir 相対パス: {data_dir}/web_research/research.json
+      ・実行: python3 skills/quality-gate/scripts/main.py --gates .../gates_web_research.yaml --data-dir data/{ticker}
+
+      JSONスキーマ検証は quality gate ではなく pytest で実施（下記参照）。
+      source_coverage は main.py exit code で保証（下記参照）。
+
+    json_schema_validation_in_pytest: |
+      【Reviewer指摘v4対応: JSONキー検証をpytestに移管】
+
+      tests/test_main.py に以下のテストを実装:
+
+        def test_output_json_schema():
+            """出力JSONのトップレベルキーが正しいことを検証"""
+            result = run_collect(ticker="7203", source="yahoo")
+            output = json.loads(result.stdout)
+            required_keys = {"ticker", "collected_at", "sources", "metadata"}
+            assert required_keys.issubset(output.keys())
+
+        def test_output_sources_schema():
+            """sources 内の各ソースが url/collected/data キーを持つことを検証"""
+            result = run_collect(ticker="7203", source="yahoo")
+            output = json.loads(result.stdout)
+            for source_name, source_data in output["sources"].items():
+                assert "url" in source_data
+                assert "collected" in source_data
+                assert "data" in source_data
+
+        def test_output_metadata_schema():
+            """metadata が必須キーを持つことを検証"""
+            result = run_collect(ticker="7203", source="yahoo")
+            output = json.loads(result.stdout)
+            meta = output["metadata"]
+            assert "source_count" in meta
+            assert "success_count" in meta
+            assert "accessed_domains" in meta
+
+    secret_leak_testing: |
+      【Reviewer指摘v4対応: 環境変数値の直接不一致検証に修正】
+
+      tests/test_shikiho.py:
+
+        def test_no_secret_leak_in_output(monkeypatch):
+            """出力JSONにSHIKIHO認証情報が含まれないことを直接検証"""
+            test_email = "test-user@example.com"
+            test_password = "s3cret-P@ssw0rd!"
+            monkeypatch.setenv("SHIKIHO_EMAIL", test_email)
+            monkeypatch.setenv("SHIKIHO_PASSWORD", test_password)
+
+            collector = ShikihoCollector(config=default_config)
+            # モックHTTPで認証成功をシミュレート
+            result = collector.collect("7203")
+            output_str = json.dumps(result, ensure_ascii=False)
+
+            # 環境変数の値が出力に含まれないことを直接検証
+            assert test_email not in output_str, "メールアドレスが出力に漏洩"
+            assert test_password not in output_str, "パスワードが出力に漏洩"
+
+        def test_no_secret_leak_in_error(monkeypatch):
+            """認証失敗時のエラーメッセージにも認証情報が含まれないことを検証"""
+            test_email = "test-user@example.com"
+            test_password = "s3cret-P@ssw0rd!"
+            monkeypatch.setenv("SHIKIHO_EMAIL", test_email)
+            monkeypatch.setenv("SHIKIHO_PASSWORD", test_password)
+
+            collector = ShikihoCollector(config=default_config)
+            # モックHTTPで認証失敗をシミュレート
+            result = collector.collect("7203")
+            output_str = json.dumps(result, ensure_ascii=False)
+            error_str = result.get("error", "")
+
+            assert test_email not in output_str
+            assert test_password not in output_str
+            assert test_email not in error_str
+            assert test_password not in error_str
+
+        def test_sanitize_log_masks_credentials(monkeypatch):
+            """_sanitize_log が認証情報を確実にマスクすることを検証"""
+            test_email = "test-user@example.com"
+            test_password = "s3cret-P@ssw0rd!"
+
+            collector = ShikihoCollector(config=default_config)
+            raw = {"email": test_email, "password": test_password, "data": "safe"}
+            sanitized = collector._sanitize_log(raw)
+            sanitized_str = json.dumps(sanitized, ensure_ascii=False)
+
+            assert test_email not in sanitized_str
+            assert test_password not in sanitized_str
+            assert "***" in sanitized_str  # マスク文字列が含まれること
+
+      tests/test_main.py:
+
+        def test_cli_no_secret_leak(monkeypatch, tmp_path):
+            """CLI経由の全出力（stdout+file）に認証情報が含まれないことを検証"""
+            test_email = "integration-test@example.com"
+            test_password = "1nt3gr@tion-P@ss!"
+            monkeypatch.setenv("SHIKIHO_EMAIL", test_email)
+            monkeypatch.setenv("SHIKIHO_PASSWORD", test_password)
+
+            output_file = tmp_path / "research.json"
+            result = subprocess.run([...], capture_output=True, text=True)
+
+            # stdout + stderr + ファイル出力すべてをチェック
+            all_output = result.stdout + result.stderr + output_file.read_text()
+            assert test_email not in all_output, "CLI出力にメールアドレスが漏洩"
+            assert test_password not in all_output, "CLI出力にパスワードが漏洩"
+
+    base_collector_design: |
+      class BaseCollector:
+          robots.txt, rate-limit(2s), httpx, backoff(3,2s,30s),
+          UA "BANK-WebResearcher/1.0", _sanitize_log, _check_robots,
+          domain validation, collect(ticker)->dict abstract,
+          CollectorError > RobotsBlockedError / AuthenticationError / DomainNotAllowedError
+
+    domain_policy: |
+      (A) 静的: finance.yahoo.co.jp, kabutan.jp, shikiho.toyokeizai.net
+      (B) EDINET起点動的: 会社HP (HTTPS強制+robots.txt+ドメインログ)
+      (C) 未許可: DomainNotAllowedError
+
+    secret_management_policy: |
+      取得: env変数のみ。保護: _sanitize_log。テスト: 上記の直接不一致検証。
+
+    output_json_schema: |
+      { "ticker", "company_name", "collected_at", "sources": {...}, "metadata": {...} }
 
   task_decomposition:
-    round_1:
-      description: "medium優先度2件 + 重量タスク1件を3 Junior並列実行"
+    phase_1:
+      name: "Foundation"
       tasks:
-        - task_id: "task_029"
-          request_id: "req_20260225_029"
-          assigned_to: junior1
+        - task_id: "T1"
+          assignee: "junior1"
           description: |
-            ticker-resolver スキルの双方向解決を強化する。
-            現状: ticker→(edinet_code, company_name, fye_month)の正引きのみ。
-            追加: edinet_code→ticker、company_name→ticker の逆引き機能。
-          scope:
-            - "skills/ticker-resolver/scripts/resolver.py に逆引きメソッド追加 (resolve_by_edinet_code, resolve_by_company_name)"
-            - "skills/ticker-resolver/scripts/main.py に逆引きCLIサブコマンド追加"
-            - "skills/ticker-resolver/tests/ に逆引きテスト追加"
-          acceptance_criteria:
-            - "既存テスト全パス (pytest skills/ticker-resolver/tests/)"
-            - "edinet_code→ticker の逆引きが動作"
-            - "company_name→ticker の逆引きが動作（部分一致対応）"
-            - "既存の resolve/update/list サブコマンドが変更なく動作（回帰確認）"
-          estimated_weight: medium
-
-        - task_id: "task_030"
-          request_id: "req_20260225_030"
-          assigned_to: junior2
-          description: |
-            quality-gate 関連の QA bypass 問題を修正する。
-            現状: pipeline-runner/references/example_pipeline.yaml の全ステップで gates: null。
-            これにより本番でも QA チェックが一切走らない状態。
-            修正: 適切な gate 設定を追加し、QA が必ず実行されるようにする。
-          scope:
-            - "skills/pipeline-runner/references/example_pipeline.yaml の gates: null を適切なgate設定に変更"
-            - "skills/quality-gate/references/default_gates.yaml をパイプラインステップに対応させる"
-            - "skills/pipeline-runner/ のコードで gates: null 時の動作を確認・修正"
-            - "関連テスト追加・修正"
-          step_by_step_expectations:
-            - step: parse
-              gate: "key_coverage + null_rate — パース後のfinancials.jsonにBS/PL/CF主要キーが揃っていること"
-              regression: "既存のparse済みデータ（data/7203等）でgate PASSすること"
-            - step: integrate
-              gate: "file_exists + json_schema — integrated_financials.json が存在し必須キーを含むこと"
-              regression: "既存のintegrate済みデータでgate PASSすること"
-            - step: calculate
-              gate: "file_exists + value_range — metrics.json が存在し、ROE/ROA等が妥当な値域にあること"
-              regression: "既存のmetrics.jsonでgate PASSすること"
-            - step: "resolve, collect, collect_jquants, inventory, report"
-              gate: "file_exists — 各ステップの出力ファイルが存在すること（最低限）"
-              regression: "既存データで検証可能なステップはPASS確認"
-          regression_conditions:
-            - "修正前にpytest skills/quality-gate/tests/ と pytest skills/pipeline-runner/tests/ を実行し、全パスを確認"
-            - "修正後も同テストが全パス"
-            - "既存データ(data/7203, data/6758, data/9743)に対してexample_pipeline.yamlのgate設定でquality-gateを実行し、全PASSすること"
-            - "gates: null を gates設定ありに変更した場合、pipeline-runnerのステップ実行ロジックがgate結果を正しくハンドリングすること"
-          acceptance_criteria:
-            - "example_pipeline.yaml の全ステップに適切なgates設定あり（gates: null が残らない）"
-            - "pipeline-runnerがgate失敗時に適切にエラーハンドリングすること"
-            - "既存テスト全パス"
-            - "上記regression_conditionsをすべて満たすこと"
-          estimated_weight: medium
-
-        - task_id: "task_031"
-          request_id: "req_20260225_031"
-          assigned_to: junior3
-          description: |
-            valuation-calculator スキルを新規作成する。
-            DCF（割引キャッシュフロー）と相対バリュエーション（PER/PBR/EV-EBITDA同業比較）を計算。
-          scope:
-            - "skills/valuation-calculator/SKILL.md 作成"
-            - "skills/valuation-calculator/scripts/main.py (CLI)"
-            - "skills/valuation-calculator/scripts/valuation.py (計算ロジック)"
-            - "skills/valuation-calculator/references/ (デフォルトパラメータYAML)"
-            - "skills/valuation-calculator/tests/test_valuation.py テスト"
-          acceptance_criteria:
-            - "DCF計算: WACC、ターミナルバリュー、FCFベース"
-            - "相対バリュエーション: PER/PBR/EV-EBITDA"
-            - "financial-calculator の metrics.json を入力として受け取れる"
-            - "JSON出力"
-          test_coverage:
-            target: "80% 以上"
-            scope: "skills/valuation-calculator/scripts/valuation.py"
-            measurement: "pytest --cov=skills/valuation-calculator/scripts --cov-report=term-missing skills/valuation-calculator/tests/"
-            minimum_cases:
-              - "DCF正常計算（FCF系列あり）"
-              - "DCF入力不足時のエラーハンドリング"
-              - "PER/PBR/EV-EBITDA正常計算"
-              - "同業比較（複数銘柄入力）"
-              - "financial-calculator metrics.json 読み込み"
-              - "エッジケース（ゼロ除算、負のFCF等）"
-          input_format: |
-            financial-calculator の metrics.json:
-            {ticker, metrics_series: [{fiscal_year, revenue, operating_income, net_income,
-             roe_percent, roa_percent, operating_margin_percent, operating_cf, free_cash_flow, ...}],
-             latest_snapshot: {...}}
-          estimated_weight: heavy
-
-    round_2:
-      description: "Round 1完了のJuniorから順に割り当て。担当を事前指定する。"
+            スキャフォールド + BaseCollector + CLI skeleton。
+            CLI: python3 skills/web-researcher/scripts/main.py collect --ticker --source --output --merge
+            _repo_root/_data_root既存コピー。出力: _data_root()/{ticker}/web_research/research.json
+            collector_base.py: robots.txt, rate-limit(2s), httpx, backoff(3,2s,30s), UA, _sanitize_log, _check_robots, domain validation, 例外階層
+            main.py: collect, dual-run, source routing, --merge, post-check(exit code)
+            references/default_config.yaml
+            tests: conftest.py, test_collector_base.py, test_main.py
+          output_path: "skills/web-researcher/"
+          priority: "high"
+          depends_on: []
+    phase_2:
+      name: "Free-source Collectors"
+      parallel: true
       tasks:
-        - task_id: "task_032"
-          request_id: "req_20260225_032"
-          assigned_to: junior1
-          rationale: "junior1のRound1タスク(req_029)はmedium weightで最も早く完了見込み"
+        - task_id: "T2"
+          assignee: "junior2"
           description: |
-            risk-analyzer スキルを新規作成する。
-            有価証券報告書の定性テキスト（事業リスク・経営上のリスク）を抽出・分類。
-          scope:
-            - "skills/risk-analyzer/SKILL.md 作成"
-            - "skills/risk-analyzer/scripts/main.py (CLI)"
-            - "skills/risk-analyzer/scripts/analyzer.py (リスク抽出・分類ロジック)"
-            - "skills/risk-analyzer/tests/test_analyzer.py テスト"
-          acceptance_criteria:
-            - "リスクカテゴリ: 市場リスク・信用リスク・オペレーショナルリスク・規制リスク・その他"
-            - "disclosure-parser出力 or XBRLテキスト要素を入力として利用"
-            - "構造化JSON出力"
-          test_coverage:
-            target: "80% 以上"
-            scope: "skills/risk-analyzer/scripts/analyzer.py"
-            measurement: "pytest --cov=skills/risk-analyzer/scripts --cov-report=term-missing skills/risk-analyzer/tests/"
-            minimum_cases:
-              - "リスクテキスト抽出（正常XBRL入力）"
-              - "5カテゴリ分類が正しく動作"
-              - "入力なし/空テキスト時のエラーハンドリング"
-              - "複数リスク項目の構造化出力"
-              - "disclosure-parser JSON 読み込み"
-          estimated_weight: heavy
-
-        - task_id: "task_033"
-          request_id: "req_20260225_033"
-          assigned_to: junior2
-          rationale: "junior2のRound1タスク(req_030)はmedium weightで2番目に完了見込み"
+            Yahoo!ファイナンスコレクター。
+            YahooFinanceCollector(BaseCollector), finance.yahoo.co.jp/quote/{ticker}
+            株価, 業績, 指標(PER/PBR/配当利回り/時価総額), ニュース
+            BS4+CSSセレクタ, 日本語数値パース(億/万)
+            tests/test_yahoo_finance.py + evidence/サンプルHTML
+          output_path: "skills/web-researcher/scripts/yahoo_finance.py"
+          priority: "high"
+          depends_on: ["T1"]
+        - task_id: "T3"
+          assignee: "junior3"
           description: |
-            FY2019ヒストリカルデータ拡充。
-            7203トヨタ、6758ソニー、9743丹青社のFY2019データをEDINETから取得し統合。
-          scope:
-            - "disclosure-collector で FY2019 期間のXBRLデータ取得（EDINET API）"
-            - "disclosure-parser で正規化JSON生成"
-            - "data/{ticker}/parsed/ に既存データと同一フォーマットで格納"
-          acceptance_criteria:
-            - "3銘柄すべてのFY2019データ取得完了"
-            - "既存FY2020以降データと同一フォーマット"
-            - "financials.json に統合済み"
-            - "取得期間: FY2019（2019年4月〜2020年3月期）"
-          estimated_weight: medium
-          network_required: true
-
-  junior_assignment_summary:
-    junior1: ["task_029 (Round1)", "task_032 (Round2)"]
-    junior2: ["task_030 (Round1)", "task_033 (Round2)"]
-    junior3: ["task_031 (Round1)", "Round2なし（Round1がheavy taskのため）"]
-    max_per_junior: 2
-    load_balance: "junior3はheavyタスク1件のみ。junior1/2はmedium+heavy/mediumの2件。"
+            株探コレクター。
+            KabutanCollector(BaseCollector), kabutan.jp/stock/?code={ticker}
+            株価, 業績推移, 財務指標, 決算速報, ニュース
+            BS4+テーブルパース, 数値フォーマット
+            tests/test_kabutan.py + evidence/サンプルHTML
+          output_path: "skills/web-researcher/scripts/kabutan.py"
+          priority: "high"
+          depends_on: ["T1"]
+    phase_3:
+      name: "Authenticated & Complex Collectors"
+      parallel: true
+      tasks:
+        - task_id: "T4"
+          assignee: "junior1"
+          description: |
+            四季報オンラインコレクター（認証付き）。
+            ShikihoCollector(BaseCollector), shikiho.toyokeizai.net/stocks/{ticker}
+            認証: SHIKIHO_EMAIL/PASSWORD env変数のみ。未設定→スキップ。
+            収集: 企業概要, 業績予想, コンセンサス, 株主構成, 指標
+            graceful degradation + _sanitize_log
+            tests/test_shikiho.py: 認証モック + パース + 秘密漏洩直接検証
+              - test_no_secret_leak_in_output (env値全文不一致)
+              - test_no_secret_leak_in_error (エラー時も検証)
+              - test_sanitize_log_masks_credentials (マスク検証)
+          output_path: "skills/web-researcher/scripts/shikiho.py"
+          priority: "medium"
+          depends_on: ["T1"]
+        - task_id: "T5"
+          assignee: "junior2"
+          description: |
+            会社公式HPコレクター。
+            HomepageCollector(BaseCollector), ticker-resolver→EDINET CSV→HP URL
+            HTTPS強制+robots.txt必須+accessed_domains記録
+            IR検出, 企業概要, ニュース
+            tests/test_homepage.py: フルチェーン再現テスト
+          output_path: "skills/web-researcher/scripts/homepage.py"
+          priority: "medium"
+          depends_on: ["T1"]
+    phase_4:
+      name: "Integration & Documentation"
+      tasks:
+        - task_id: "T6"
+          assignee: "junior3"
+          description: |
+            統合・ドキュメント・設定・品質ゲート。
+            ■ main.py完成: 全4コレクター統合, --merge
+            ■ SKILL.md
+            ■ permissions.yaml: shikiho.toyokeizai.net, kabutan.jp追加
+            ■ .env.example: SHIKIHO_EMAIL/PASSWORD追加
+            ■ quality gate: gates_web_research.yaml (file_existsのみ)
+              gates:
+                - id: web_research_file_check
+                  type: file_exists
+                  params:
+                    required_files: ["web_research/research.json"]
+            ■ tests/test_main.py:
+              - test_output_json_schema (トップレベルキー検証)
+              - test_output_sources_schema (sources内構造検証)
+              - test_output_metadata_schema (metadata検証)
+              - test_cli_no_secret_leak (全出力の秘密漏洩直接検証)
+            ■ pytest --cov 90%+, evidence/coverage_log.txt
+          output_path: "skills/web-researcher/"
+          priority: "high"
+          depends_on: ["T2", "T3", "T4", "T5"]
 
   quality_criteria:
-    - "全既存テストがパス (pytest 全パス)"
-    - "req_031: pytest --cov でvaluation.pyのカバレッジ80%以上"
-    - "req_032: pytest --cov でanalyzer.pyのカバレッジ80%以上"
-    - "既存スキルの後方互換性維持"
-    - "コードスタイル準拠 (black, ruff)"
-
-  risk_assessment:
-    - risk: "req_033 の EDINET API アクセスが失敗する可能性"
-      mitigation: "リトライロジック活用、期間指定を適切に設定"
-    - risk: "req_031 の valuation-calculator が複雑で時間超過"
-      mitigation: "DCF と相対バリュエーションを段階的に実装、最低限DCFを優先"
-    - risk: "req_030 の gates:null 修正が pipeline-runner の既存動作を壊す"
-      mitigation: "修正前に既存テスト全パス確認、段階的にgate追加、既存データで回帰テスト実施"
-
-  parallelization_strategy:
-    round_1_parallel: ["task_029 (J1)", "task_030 (J2)", "task_031 (J3)"]
-    round_2_assignments: ["task_032 → J1", "task_033 → J2"]
-    race_condition_check: "各タスクは独立したスキルディレクトリを操作するため、ファイル競合なし"
+    - "CLI: python3 skills/web-researcher/scripts/main.py collect（既存パターン準拠）"
+    - "_repo_root/_data_root 既存コピー、出力先 _data_root()/{ticker}/web_research/research.json"
+    - "robots.txt 全コレクター必須、拒否→graceful degradation"
+    - "リクエスト間隔2秒以上"
+    - "graceful degradation + exit code(>=1成功→0, 全失敗→1)"
+    - "シークレット: env変数のみ、pytestで環境変数値の直接不一致検証"
+    - "テストカバレッジ90%以上"
+    - "quality gate: file_exists のみ（既存実装で確実動作）"
+    - "JSONスキーマ: pytestで検証（quality gateではない）"
+    - "--mergeで部分再実行対応"

@@ -1,0 +1,45 @@
+# _parse_japanese_number テストケース一覧
+test_cases:
+  # カンマ区切り
+  - input: "1,234.56"
+    expected: 1234.56
+  - input: "1,234"
+    expected: 1234.0
+
+  # 兆/億/万 単位
+  - input: "1兆2,345億"
+    expected: 1234500000000.0
+  - input: "1,234億5,678万"
+    expected: 123456780000.0
+  - input: "58,757,353"
+    expected: 58757353.0
+  - input: "5万"
+    expected: 50000.0
+  - input: "1億"
+    expected: 100000000.0
+  - input: "1兆"
+    expected: 1000000000000.0
+
+  # マイナス記号
+  - input: "△1,234"
+    expected: -1234.0
+  - input: "▲500"
+    expected: -500.0
+  - input: "-1,234"
+    expected: -1234.0
+
+  # 単位サフィックス
+  - input: "13.58倍"
+    expected: 13.58
+  - input: "2.55%"
+    expected: 2.55
+  - input: "3,720円"
+    expected: 3720.0
+
+  # 非数値
+  - input: "---"
+    expected: null
+  - input: ""
+    expected: null
+  - input: null
+    expected: null

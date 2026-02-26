@@ -37,6 +37,8 @@ allowed:
       - api.jpx-jquants.com
       - www.nikkei.com
       - finance.yahoo.co.jp
+      - kabutan.jp
+      - shikiho.toyokeizai.net
 
 denied:
   destructive:
