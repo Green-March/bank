@@ -1,41 +1,39 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_T6_req033"
-  task_id: "T6_req033"
-  junior_id: "junior3"
-  status: pending
-  timestamp: "2026-02-26T13:35:00+09:00"
+  request_id: "rev_req035_A_001"
+  task_id: "req_035_A"
+  junior_id: "junior1"
+  status: pending_review
+  timestamp: "2026-02-26T14:08:00+09:00"
   payload:
-    summary: "web-researcher スキルの統合・ドキュメント・設定更新・品質ゲート定義・テスト追加を完了。102テスト全PASS、カバレッジ91%。全完了条件(a)-(e)クリア。"
+    description: "web-data-harmonizer テスト実行・カバレッジ測定・修正 (93テスト全パス, カバレッジ92%)"
     outputs:
-      - "skills/web-researcher/SKILL.md"
-      - "skills/web-researcher/scripts/main.py"
-      - "skills/web-researcher/tests/test_main.py"
-      - "skills/web-researcher/tests/test_collector_base.py"
-      - "skills/web-researcher/tests/evidence/coverage_log.txt"
-      - "skills/quality-gate/references/gates_web_research.yaml"
-      - "config/permissions.yaml"
-      - ".env.example"
-    validation:
-      total_tests: 102
-      total_passed: 102
-      total_failed: 0
-      coverage_percent: 91
-      coverage_target: 90
-    review_criteria:
-      - "main.py: 全4コレクター（Yahoo, Kabutan, Shikiho, Homepage）が統合されているか"
-      - "main.py: --merge 実装、source routing（all/単一/カンマ区切り）、post-check（exit code）が正しいか"
-      - "SKILL.md: 既存フォーマット準拠（Usage, CLI Options, Output, Environment Variables）"
-      - "permissions.yaml: kabutan.jp, shikiho.toyokeizai.net が追加されているか"
-      - ".env.example: SHIKIHO_EMAIL/PASSWORD がコメント付きで追加されているか"
-      - "gates_web_research.yaml: file_exists タイプで web_research/research.json チェック"
-      - "完了条件(a) robots.txt: 全4コレクターが _check_robots() を呼び出しているか"
-      - "完了条件(b) シークレット: env変数のみ取得、cli_no_secret_leak テスト PASS"
-      - "完了条件(c) ドメイン: permissions.yaml 更新済み"
-      - "完了条件(d) カバレッジ: 91% >= 90% 目標達成、coverage_log.txt 保存"
-      - "完了条件(e) quality gate: gates_web_research.yaml が既存タイプのみで定義されているか"
-      - "統合テスト10件: json_schema, sources_schema, metadata_schema, all_sources, single_source, comma_sources, merge_mode, exit_code_success, exit_code_all_fail, cli_no_secret_leak"
+      - "skills/web-data-harmonizer/tests/evidence/coverage_log.txt"
+      - "skills/web-data-harmonizer/scripts/main.py (修正)"
+      - "skills/web-data-harmonizer/scripts/harmonizer.py (修正)"
+    test_results:
+      total: 93
+      passed: 93
+      failed: 0
+      coverage_total: "92%"
+      coverage_harmonizer: "94%"
+      coverage_main: "84%"
+    fixes_applied:
+      - "main.py: 相対インポート失敗時に絶対インポートへフォールバック (try/except)"
+      - "harmonizer.py: _make_annual_entry に eps パラメータ追加、_harmonize_kabutan で eps 渡し、_merge_periods の PL マージに eps 追加"
+      - "harmonizer.py: _extract_indicators に shikiho indicators 処理追加 (大文字キー PER/PBR 対応)"
+    review_points:
+      - "93テスト全パスの結果が妥当か"
+      - "カバレッジ92%が目標85%を超過しているか"
+      - "修正1: インポートフォールバックが適切か（既存スキルパターンとの整合）"
+      - "修正2: eps フィールド追加が FinancialRecord 互換性を損なわないか"
+      - "修正3: shikiho indicators 処理が kabutan 優先ルールを維持しているか"
+      - "main.py カバレッジ84%の未カバー箇所が許容範囲か"
+    quality_criteria:
+      - "全テスト PASS"
+      - "カバレッジ 85% 以上"
+      - "修正が既存仕様・品質基準を維持していること"
 review_followup:
   request_id: null
   task_id: null

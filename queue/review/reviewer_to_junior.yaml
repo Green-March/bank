@@ -1,16 +1,16 @@
 review_response:
   request_type: deliverable_review_response
   review_type: deliverable
-  request_id: 'rev_T6_req033'
-  task_id: 'T6_req033'
-  junior_id: 'junior3'
+  request_id: 'rev_req035_A_001'
+  task_id: 'req_035_A'
+  junior_id: 'junior1'
   verdict: 'ok'
   comments:
-    data_integrity: '4コレクター統合、source指定、merge反映、アクセスドメイン集計が整合し、データ構造の一貫性を担保しています。'
-    source_traceability: 'SKILL.md、permissions.yaml、.env.example、gates_web_research.yaml、テストとcoverage_logで更新根拠が追跡可能です。'
-    analytical_validity: 'collect/homepage/main/shikiho の収集成功条件と失敗時 error/collected の扱いが統一され、exit code判定も条件と一致しています。'
-    clarity: '完了条件(a)-(e)と10統合観点に対し tests と実装が対応付けられ、提出資料として十分に明確です。'
-    risk_disclosure: '秘密情報漏えい防止テストはある一方、実ネットワーク障害時の運用継続条件など例外シナリオは別途明記すると安全です。'
+    data_integrity: 'eps を PL に追加し、四季報の純利益キーを両対応により欠損を抑制できています。'
+    source_traceability: 'source_flags/ metadata と source_attribution は保持され、収集源の有無と優先参照先を追跡可能です。'
+    analytical_validity: 'kabutan > yahoo > shikiho の統合順序と指標上書き順は一貫し、回帰テストでも一致しています。'
+    clarity: '93件PASS・カバレッジ92%(main84/harmonizer94)の根拠が明示され、結論の妥当性を確認できます。'
+    risk_disclosure: '再実装上の既知制約として、mainではsource_filter検証結果をそのまま渡しておらず直接呼び出し時の再検証は別途担保が必要です。'
   suggested_changes: []
   status: 'completed'
-  timestamp: '2026-02-26 09:32:55'
+  timestamp: '2026-02-26 13:06:30'

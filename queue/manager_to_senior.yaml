@@ -1,22 +1,18 @@
 queue:
-  - request_id: "req_033"
-    objective: "4サイト巡回型の株式情報収集スキル（web-researcher）を新規開発する"
+  - request_id: "req_035"
+    objective: "web-data-harmonizer テスト実行・カバレッジ測定 + manifest.json 作成 — req_034 成果物の統合検証とスキル登録完成"
     ticker: null
     universe: null
-    analysis_type: "skill_development"
+    analysis_type: "skill_verification"
     timeframe: null
-    output_format: ["skill"]
+    output_format: ["json", "tests"]
     priority: "high"
     due_date: "2026-02-26"
     constraints:
-      - "1スキルに統合（web-researcher）。--source オプションで対象サイトを選択可能にする"
-      - "対象4サイト: (1)会社公式HP、(2)会社四季報オンライン(shikiho.toyokeizai.net)、(3)Yahoo!ファイナンス(finance.yahoo.co.jp)、(4)株探(kabutan.jp)"
-      - "各サイトから取得可能な主要情報を網羅的に収集する（業績、指標、ニュース、株価、コンセンサス等）"
-      - "会社公式HPのURL特定はEDINETメタデータ（既存ticker-resolverスキル）を活用する"
-      - "会社四季報オンラインは有料会員認証あり。認証情報は環境変数またはconfig経由で管理する"
-      - "Yahoo!ファイナンス、株探は無料公開情報を収集する"
-      - "robots.txt を尊重し、適切なリクエスト間隔を設ける"
-      - "出力はJSON形式で統一し、既存パイプライン（disclosure-parser等）との接続を考慮する"
-      - "CLI エントリポイント: python -m skills.web_researcher.main --ticker XXXX --source all|homepage|shikiho|yahoo|kabutan"
-      - "既存スキルの設計パターン（tests/、defaults/、__init__.py）に準拠する"
-      - "テストカバレッジ 90%以上を目標とする"
+      - "タスクA: pytest で skills/web-data-harmonizer/tests/ の全93テストを実行し、全パスを確認する"
+      - "タスクA: テスト失敗があれば原因を特定し修正する（harmonizer.py, main.py, テストコード自体のいずれか）"
+      - "タスクA: pytest --cov で カバレッジを測定し、85%以上を達成する"
+      - "タスクA: カバレッジ不足箇所があれば追加テストを書く"
+      - "タスクB: skills/web-data-harmonizer/manifest.json を既存スキルと同じフォーマットで作成する"
+      - "タスクB: 既存スキル（例: skills/web-researcher/manifest.json）を参考にフォーマットを合わせる"
+      - "タスクA,B は別 Junior に並列割り当て可能"

@@ -1,0 +1,118 @@
+/Users/fumitotakahashi/.pyenv/versions/3.11.2/lib/python3.11/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform darwin -- Python 3.11.2, pytest-8.3.5, pluggy-1.5.0 -- /Users/fumitotakahashi/.pyenv/versions/3.11.2/bin/python3.11
+cachedir: .pytest_cache
+rootdir: /Users/fumitotakahashi/Dropbox/dev/bank
+configfile: pyproject.toml
+plugins: cov-6.0.0, asyncio-0.26.0, anyio-4.2.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 93 items
+
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestParseJapaneseNumber::test_comma_separated PASSED [  1%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestParseJapaneseNumber::test_hyakuman_en PASSED [  2%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestParseJapaneseNumber::test_oku PASSED [  3%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestParseJapaneseNumber::test_cho PASSED [  4%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestParseJapaneseNumber::test_man PASSED [  5%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestParseJapaneseNumber::test_negative_triangle PASSED [  6%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestParseJapaneseNumber::test_negative_filled_triangle PASSED [  7%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestParseJapaneseNumber::test_none_input PASSED [  8%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestParseJapaneseNumber::test_empty_string PASSED [  9%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestParseJapaneseNumber::test_dash PASSED [ 10%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestParseJapaneseNumber::test_na PASSED [ 11%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestParseJapaneseNumber::test_percent_strip PASSED [ 12%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestParseJapaneseNumber::test_numeric_passthrough_int PASSED [ 13%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestParseJapaneseNumber::test_numeric_passthrough_float PASSED [ 15%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestInferPeriodEnd::test_yahoo_format PASSED [ 16%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestInferPeriodEnd::test_kabutan_format PASSED [ 17%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestInferPeriodEnd::test_february_leap PASSED [ 18%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestInferPeriodEnd::test_february_non_leap PASSED [ 19%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestInferPeriodEnd::test_invalid_format PASSED [ 20%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestInferPeriodEnd::test_none_input PASSED [ 21%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestInferPeriodEnd::test_december PASSED [ 22%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestInferPeriodEnd::test_june PASSED [ 23%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestInferFiscalYear::test_normal PASSED [ 24%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestInferFiscalYear::test_none PASSED [ 25%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestInferFiscalYear::test_invalid PASSED [ 26%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestInferFiscalYear::test_december PASSED [ 27%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonizeYahoo::test_normal_data PASSED [ 29%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonizeYahoo::test_empty_financials PASSED [ 30%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonizeYahoo::test_null_data PASSED [ 31%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonizeYahoo::test_partial_missing PASSED [ 32%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonizeYahoo::test_bs_cf_are_null PASSED [ 33%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonizeKabutan::test_normal_data PASSED [ 34%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonizeKabutan::test_empty_financials PASSED [ 35%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonizeKabutan::test_null_data PASSED [ 36%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonizeKabutan::test_eps_value PASSED [ 37%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonizeKabutan::test_partial_missing PASSED [ 38%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonizeShikiho::test_string_to_number PASSED [ 39%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonizeShikiho::test_empty_forecast PASSED [ 40%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonizeShikiho::test_partial_forecast PASSED [ 41%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonizeShikiho::test_all_unparseable PASSED [ 43%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestExtractIndicators::test_merge_kabutan_priority PASSED [ 44%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestExtractIndicators::test_yahoo_only PASSED [ 45%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestExtractIndicators::test_both_null PASSED [ 46%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestExtractIndicators::test_shikiho_string_parse PASSED [ 47%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestExtractQualitative::test_full_sources PASSED [ 48%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestExtractQualitative::test_partial PASSED [ 49%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestExtractQualitative::test_none PASSED [ 50%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestMergePeriods::test_same_period_merge PASSED [ 51%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestMergePeriods::test_different_periods PASSED [ 52%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestMergePeriods::test_source_attribution PASSED [ 53%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestMergePeriods::test_sort_order PASSED [ 54%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonize::test_e2e_all_sources PASSED [ 55%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonize::test_source_filter_single PASSED [ 56%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonize::test_source_filter_multi PASSED [ 58%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonize::test_output_schema PASSED [ 59%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonize::test_financial_record_compatible PASSED [ 60%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonize::test_sources_skipped_in_metadata PASSED [ 61%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonize::test_source_priority_in_metadata PASSED [ 62%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonize::test_input_sources_booleans PASSED [ 63%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestHarmonize::test_input_sources_missing_source PASSED [ 64%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestCollectedFalse::test_yahoo_collected_false PASSED [ 65%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestCollectedFalse::test_kabutan_collected_false PASSED [ 66%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestCollectedFalse::test_shikiho_collected_false PASSED [ 67%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestCollectedFalse::test_homepage_collected_false PASSED [ 68%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestCollectedFalse::test_all_sources_collected_false PASSED [ 69%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestCollectedFalse::test_source_filter_excludes_uncollected PASSED [ 70%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestCollectedFalse::test_collected_false_skipped_in_metadata PASSED [ 72%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestMissingSourceKeys::test_only_yahoo PASSED [ 73%]
+skills/web-data-harmonizer/tests/test_harmonizer.py::TestMissingSourceKeys::test_empty_sources PASSED [ 74%]
+skills/web-data-harmonizer/tests/test_main.py::TestBuildParser::test_required_ticker PASSED [ 75%]
+skills/web-data-harmonizer/tests/test_main.py::TestBuildParser::test_default_source PASSED [ 76%]
+skills/web-data-harmonizer/tests/test_main.py::TestBuildParser::test_custom_paths PASSED [ 77%]
+skills/web-data-harmonizer/tests/test_main.py::TestBuildParser::test_no_command PASSED [ 78%]
+skills/web-data-harmonizer/tests/test_main.py::TestCmdHarmonize::test_normal PASSED [ 79%]
+skills/web-data-harmonizer/tests/test_main.py::TestCmdHarmonize::test_stdout PASSED [ 80%]
+skills/web-data-harmonizer/tests/test_main.py::TestCmdHarmonize::test_dir_creation PASSED [ 81%]
+skills/web-data-harmonizer/tests/test_main.py::TestCmdHarmonize::test_not_found PASSED [ 82%]
+skills/web-data-harmonizer/tests/test_main.py::TestCmdHarmonize::test_not_found_no_output_file PASSED [ 83%]
+skills/web-data-harmonizer/tests/test_main.py::TestCmdHarmonize::test_broken_json_input PASSED [ 84%]
+skills/web-data-harmonizer/tests/test_main.py::TestCmdHarmonize::test_custom_paths PASSED [ 86%]
+skills/web-data-harmonizer/tests/test_main.py::TestCmdHarmonize::test_source_option PASSED [ 87%]
+skills/web-data-harmonizer/tests/test_main.py::TestCmdHarmonize::test_invalid_source PASSED [ 88%]
+skills/web-data-harmonizer/tests/test_main.py::TestMain::test_no_args PASSED [ 89%]
+skills/web-data-harmonizer/tests/test_main.py::TestMain::test_harmonize PASSED [ 90%]
+skills/web-data-harmonizer/tests/test_main.py::TestMain::test_invalid PASSED [ 91%]
+skills/web-data-harmonizer/tests/test_main.py::TestMain::test_argv PASSED [ 92%]
+skills/web-data-harmonizer/tests/test_main.py::TestMain::test_help PASSED [ 93%]
+skills/web-data-harmonizer/tests/test_main.py::TestCliErrors::test_missing_input_file_subprocess PASSED [ 94%]
+skills/web-data-harmonizer/tests/test_main.py::TestCliErrors::test_broken_json_subprocess PASSED [ 95%]
+skills/web-data-harmonizer/tests/test_main.py::TestCliErrors::test_missing_ticker_subprocess PASSED [ 96%]
+skills/web-data-harmonizer/tests/test_main.py::TestCliErrors::test_no_subcommand_subprocess PASSED [ 97%]
+skills/web-data-harmonizer/tests/test_main.py::TestCliErrors::test_source_option_subprocess PASSED [ 98%]
+skills/web-data-harmonizer/tests/test_main.py::TestCliErrors::test_invalid_source_subprocess PASSED [100%]
+
+---------- coverage: platform darwin, python 3.11.2-final-0 ----------
+Name                                               Stmts   Miss  Cover   Missing
+--------------------------------------------------------------------------------
+skills/web-data-harmonizer/scripts/__init__.py         0      0   100%
+skills/web-data-harmonizer/scripts/harmonizer.py     251     14    94%   58-59, 64, 78-79, 85-88, 128, 130, 162, 290, 538
+skills/web-data-harmonizer/scripts/main.py            91     15    84%   18, 39, 52-57, 62, 66-72, 120, 144, 167
+--------------------------------------------------------------------------------
+TOTAL                                                342     29    92%
+
+
+============================== 93 passed in 5.27s ==============================

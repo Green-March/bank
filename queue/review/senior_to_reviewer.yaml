@@ -2,311 +2,197 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_req_033_web_researcher_v5"
-  request_id: "req_033"
-  timestamp: "2026-02-26T10:00:00+09:00"
-  revision_note: "Reviewer指摘v4反映: (1) quality gate は file_exists のみ、JSONキー検証はpytestに移管 (2) secret漏洩テストを環境変数値の直接不一致検証に修正"
+  plan_id: "plan_req034_web_data_harmonizer"
+  request_id: "req_034"
+  timestamp: "2026-02-26T12:30:00+09:00"
+  objective: "web-data-harmonizer スキル新規開発 — web-researcher出力を既存パイプラインスキーマに変換するアダプタースキル"
 
-  objective: "4サイト巡回型の株式情報収集スキル（web-researcher）を新規開発する"
+  background: |
+    web-researcher (req_033) は Yahoo/株探/四季報/公式HP から株式情報を収集するが、
+    出力形式がパイプライン（disclosure-parser → financial-integrator → financial-calculator）と
+    互換性がない。主な課題:
+    1. shikiho は文字列型（'1,234百万円'）— 数値型への変換が必要
+    2. 期間形式が不統一（yahoo: YYYY-MM, kabutan: YYYY.MM, shikiho: なし）
+    3. パイプラインの BS/PL/CF スキーマとフィールド名が異なる
+    4. source_attribution（出典追跡）が未対応
+    5. homepage は企業メタデータ特化で財務数値なし
 
-  overview: |
-    銘柄コード指定で4つの情報源（会社公式HP、四季報オンライン、Yahoo!ファイナンス、株探）から
-    株式関連情報を網羅的に収集し、統一JSONフォーマットで出力するスキルを開発する。
-    既存スキルの設計パターン（dual-run, argparse, JSON出力, _data_root/_repo_root）に完全準拠する。
+  output_schema: |
+    harmonized_financials.json:
+      ticker: str
+      company_name: str | null
+      generated_at: ISO datetime
+      harmonization_metadata:
+        input_file: str
+        sources_used: [str]
+        sources_skipped: [str]
+        source_priority: "kabutan > yahoo > shikiho (PL重複時)"
+      annual:
+        - period_end: "YYYY-MM-DD"
+          fiscal_year: int
+          quarter: "FY"
+          source: "web:kabutan" | "web:yahoo" | "web:shikiho"
+          statement_type: null
+          bs: {total_assets: null, ...}  # Web源はBS不提供
+          pl: {revenue: float|null, operating_income: float|null, ordinary_income: float|null, net_income: float|null}
+          cf: {operating_cf: null, ...}  # Web源はCF不提供
+      indicators:
+        per: float | null
+        pbr: float | null
+        dividend_yield: float | null
+        market_cap: float | null
+        eps: float | null
+        shares_outstanding: int | null
+      qualitative:
+        company_overview: dict | null
+        consensus: dict | null
+        shareholders: list | null
+        news: list | null
+        earnings_flash: dict | null
+        ir_links: list | null
 
-  cli_specification: |
-    実行形式: python3 skills/web-researcher/scripts/main.py collect --ticker 7203 --source all
-    サブコマンド: collect
-    引数: --ticker(required), --source(default:all), --output(optional), --merge(optional)
-    出力先: _data_root()/{ticker}/web_research/research.json
-    exit code: success_count>=1→0, 全失敗/引数エラー→1
-
-  architecture:
-    directory_structure: |
-      skills/web-researcher/
-      ├── scripts/
-      │   ├── __init__.py
-      │   ├── main.py
-      │   ├── collector_base.py
-      │   ├── homepage.py
-      │   ├── shikiho.py
-      │   ├── yahoo_finance.py
-      │   └── kabutan.py
-      ├── tests/
-      │   ├── __init__.py
-      │   ├── conftest.py
-      │   ├── test_collector_base.py
-      │   ├── test_homepage.py
-      │   ├── test_shikiho.py
-      │   ├── test_yahoo_finance.py
-      │   ├── test_kabutan.py
-      │   ├── test_main.py
-      │   └── evidence/
-      ├── references/
-      │   └── default_config.yaml
-      └── SKILL.md
-
-    data_output_contract: |
-      出力先: _data_root()/{ticker}/web_research/research.json
-      _data_root()/_repo_root(): 既存パターン完全コピー
-      quality gate 実行: --data-dir data/{ticker}
-      ゲート内パス: web_research/research.json（data_dir相対）
-
-    environment_variables: |
-      必須: なし
-      オプション: DATA_PATH, SHIKIHO_EMAIL, SHIKIHO_PASSWORD
-
-    retry_strategy: |
-      コレクター単位: backoff(max 3, base 2s, max 30s)
-      ソース単位: graceful degradation
-      部分再実行: --merge
-
-    quality_gate_integration: |
-      【Reviewer指摘v4対応: file_exists のみ使用】
-
-      新規ゲート: skills/quality-gate/references/gates_web_research.yaml
-
-      gates:
-        - id: web_research_file_check
-          type: file_exists
-          params:
-            required_files:
-              - "web_research/research.json"
-
-      これが唯一の quality gate。
-      ・file_exists は quality-gate の既存実装で確実に動作する。
-      ・data_dir 相対パス: {data_dir}/web_research/research.json
-      ・実行: python3 skills/quality-gate/scripts/main.py --gates .../gates_web_research.yaml --data-dir data/{ticker}
-
-      JSONスキーマ検証は quality gate ではなく pytest で実施（下記参照）。
-      source_coverage は main.py exit code で保証（下記参照）。
-
-    json_schema_validation_in_pytest: |
-      【Reviewer指摘v4対応: JSONキー検証をpytestに移管】
-
-      tests/test_main.py に以下のテストを実装:
-
-        def test_output_json_schema():
-            """出力JSONのトップレベルキーが正しいことを検証"""
-            result = run_collect(ticker="7203", source="yahoo")
-            output = json.loads(result.stdout)
-            required_keys = {"ticker", "collected_at", "sources", "metadata"}
-            assert required_keys.issubset(output.keys())
-
-        def test_output_sources_schema():
-            """sources 内の各ソースが url/collected/data キーを持つことを検証"""
-            result = run_collect(ticker="7203", source="yahoo")
-            output = json.loads(result.stdout)
-            for source_name, source_data in output["sources"].items():
-                assert "url" in source_data
-                assert "collected" in source_data
-                assert "data" in source_data
-
-        def test_output_metadata_schema():
-            """metadata が必須キーを持つことを検証"""
-            result = run_collect(ticker="7203", source="yahoo")
-            output = json.loads(result.stdout)
-            meta = output["metadata"]
-            assert "source_count" in meta
-            assert "success_count" in meta
-            assert "accessed_domains" in meta
-
-    secret_leak_testing: |
-      【Reviewer指摘v4対応: 環境変数値の直接不一致検証に修正】
-
-      tests/test_shikiho.py:
-
-        def test_no_secret_leak_in_output(monkeypatch):
-            """出力JSONにSHIKIHO認証情報が含まれないことを直接検証"""
-            test_email = "test-user@example.com"
-            test_password = "s3cret-P@ssw0rd!"
-            monkeypatch.setenv("SHIKIHO_EMAIL", test_email)
-            monkeypatch.setenv("SHIKIHO_PASSWORD", test_password)
-
-            collector = ShikihoCollector(config=default_config)
-            # モックHTTPで認証成功をシミュレート
-            result = collector.collect("7203")
-            output_str = json.dumps(result, ensure_ascii=False)
-
-            # 環境変数の値が出力に含まれないことを直接検証
-            assert test_email not in output_str, "メールアドレスが出力に漏洩"
-            assert test_password not in output_str, "パスワードが出力に漏洩"
-
-        def test_no_secret_leak_in_error(monkeypatch):
-            """認証失敗時のエラーメッセージにも認証情報が含まれないことを検証"""
-            test_email = "test-user@example.com"
-            test_password = "s3cret-P@ssw0rd!"
-            monkeypatch.setenv("SHIKIHO_EMAIL", test_email)
-            monkeypatch.setenv("SHIKIHO_PASSWORD", test_password)
-
-            collector = ShikihoCollector(config=default_config)
-            # モックHTTPで認証失敗をシミュレート
-            result = collector.collect("7203")
-            output_str = json.dumps(result, ensure_ascii=False)
-            error_str = result.get("error", "")
-
-            assert test_email not in output_str
-            assert test_password not in output_str
-            assert test_email not in error_str
-            assert test_password not in error_str
-
-        def test_sanitize_log_masks_credentials(monkeypatch):
-            """_sanitize_log が認証情報を確実にマスクすることを検証"""
-            test_email = "test-user@example.com"
-            test_password = "s3cret-P@ssw0rd!"
-
-            collector = ShikihoCollector(config=default_config)
-            raw = {"email": test_email, "password": test_password, "data": "safe"}
-            sanitized = collector._sanitize_log(raw)
-            sanitized_str = json.dumps(sanitized, ensure_ascii=False)
-
-            assert test_email not in sanitized_str
-            assert test_password not in sanitized_str
-            assert "***" in sanitized_str  # マスク文字列が含まれること
-
-      tests/test_main.py:
-
-        def test_cli_no_secret_leak(monkeypatch, tmp_path):
-            """CLI経由の全出力（stdout+file）に認証情報が含まれないことを検証"""
-            test_email = "integration-test@example.com"
-            test_password = "1nt3gr@tion-P@ss!"
-            monkeypatch.setenv("SHIKIHO_EMAIL", test_email)
-            monkeypatch.setenv("SHIKIHO_PASSWORD", test_password)
-
-            output_file = tmp_path / "research.json"
-            result = subprocess.run([...], capture_output=True, text=True)
-
-            # stdout + stderr + ファイル出力すべてをチェック
-            all_output = result.stdout + result.stderr + output_file.read_text()
-            assert test_email not in all_output, "CLI出力にメールアドレスが漏洩"
-            assert test_password not in all_output, "CLI出力にパスワードが漏洩"
-
-    base_collector_design: |
-      class BaseCollector:
-          robots.txt, rate-limit(2s), httpx, backoff(3,2s,30s),
-          UA "BANK-WebResearcher/1.0", _sanitize_log, _check_robots,
-          domain validation, collect(ticker)->dict abstract,
-          CollectorError > RobotsBlockedError / AuthenticationError / DomainNotAllowedError
-
-    domain_policy: |
-      (A) 静的: finance.yahoo.co.jp, kabutan.jp, shikiho.toyokeizai.net
-      (B) EDINET起点動的: 会社HP (HTTPS強制+robots.txt+ドメインログ)
-      (C) 未許可: DomainNotAllowedError
-
-    secret_management_policy: |
-      取得: env変数のみ。保護: _sanitize_log。テスト: 上記の直接不一致検証。
-
-    output_json_schema: |
-      { "ticker", "company_name", "collected_at", "sources": {...}, "metadata": {...} }
+  data_availability_analysis: |
+    Web源から取得可能なパイプライン対応データ:
+    - PL: revenue, operating_income (yahoo/kabutan), ordinary_income (kabutan), net_income (kabutan)
+    - BS: なし（Web源では未提供）
+    - CF: なし（Web源では未提供）
+    - Indicators: PER, PBR, dividend_yield, market_cap (yahoo/kabutan), EPS (kabutan)
+    - Qualitative: company_overview, consensus, shareholders (shikiho), news, earnings_flash (kabutan), ir_links (homepage)
+    → PLデータとマーケット指標の補完が主な価値。BS/CFはnullで出力。
 
   task_decomposition:
-    phase_1:
-      name: "Foundation"
-      tasks:
-        - task_id: "T1"
-          assignee: "junior1"
-          description: |
-            スキャフォールド + BaseCollector + CLI skeleton。
-            CLI: python3 skills/web-researcher/scripts/main.py collect --ticker --source --output --merge
-            _repo_root/_data_root既存コピー。出力: _data_root()/{ticker}/web_research/research.json
-            collector_base.py: robots.txt, rate-limit(2s), httpx, backoff(3,2s,30s), UA, _sanitize_log, _check_robots, domain validation, 例外階層
-            main.py: collect, dual-run, source routing, --merge, post-check(exit code)
-            references/default_config.yaml
-            tests: conftest.py, test_collector_base.py, test_main.py
-          output_path: "skills/web-researcher/"
-          priority: "high"
-          depends_on: []
-    phase_2:
-      name: "Free-source Collectors"
-      parallel: true
-      tasks:
-        - task_id: "T2"
-          assignee: "junior2"
-          description: |
-            Yahoo!ファイナンスコレクター。
-            YahooFinanceCollector(BaseCollector), finance.yahoo.co.jp/quote/{ticker}
-            株価, 業績, 指標(PER/PBR/配当利回り/時価総額), ニュース
-            BS4+CSSセレクタ, 日本語数値パース(億/万)
-            tests/test_yahoo_finance.py + evidence/サンプルHTML
-          output_path: "skills/web-researcher/scripts/yahoo_finance.py"
-          priority: "high"
-          depends_on: ["T1"]
-        - task_id: "T3"
-          assignee: "junior3"
-          description: |
-            株探コレクター。
-            KabutanCollector(BaseCollector), kabutan.jp/stock/?code={ticker}
-            株価, 業績推移, 財務指標, 決算速報, ニュース
-            BS4+テーブルパース, 数値フォーマット
-            tests/test_kabutan.py + evidence/サンプルHTML
-          output_path: "skills/web-researcher/scripts/kabutan.py"
-          priority: "high"
-          depends_on: ["T1"]
-    phase_3:
-      name: "Authenticated & Complex Collectors"
-      parallel: true
-      tasks:
-        - task_id: "T4"
-          assignee: "junior1"
-          description: |
-            四季報オンラインコレクター（認証付き）。
-            ShikihoCollector(BaseCollector), shikiho.toyokeizai.net/stocks/{ticker}
-            認証: SHIKIHO_EMAIL/PASSWORD env変数のみ。未設定→スキップ。
-            収集: 企業概要, 業績予想, コンセンサス, 株主構成, 指標
-            graceful degradation + _sanitize_log
-            tests/test_shikiho.py: 認証モック + パース + 秘密漏洩直接検証
-              - test_no_secret_leak_in_output (env値全文不一致)
-              - test_no_secret_leak_in_error (エラー時も検証)
-              - test_sanitize_log_masks_credentials (マスク検証)
-          output_path: "skills/web-researcher/scripts/shikiho.py"
-          priority: "medium"
-          depends_on: ["T1"]
-        - task_id: "T5"
-          assignee: "junior2"
-          description: |
-            会社公式HPコレクター。
-            HomepageCollector(BaseCollector), ticker-resolver→EDINET CSV→HP URL
-            HTTPS強制+robots.txt必須+accessed_domains記録
-            IR検出, 企業概要, ニュース
-            tests/test_homepage.py: フルチェーン再現テスト
-          output_path: "skills/web-researcher/scripts/homepage.py"
-          priority: "medium"
-          depends_on: ["T1"]
-    phase_4:
-      name: "Integration & Documentation"
-      tasks:
-        - task_id: "T6"
-          assignee: "junior3"
-          description: |
-            統合・ドキュメント・設定・品質ゲート。
-            ■ main.py完成: 全4コレクター統合, --merge
-            ■ SKILL.md
-            ■ permissions.yaml: shikiho.toyokeizai.net, kabutan.jp追加
-            ■ .env.example: SHIKIHO_EMAIL/PASSWORD追加
-            ■ quality gate: gates_web_research.yaml (file_existsのみ)
-              gates:
-                - id: web_research_file_check
-                  type: file_exists
-                  params:
-                    required_files: ["web_research/research.json"]
-            ■ tests/test_main.py:
-              - test_output_json_schema (トップレベルキー検証)
-              - test_output_sources_schema (sources内構造検証)
-              - test_output_metadata_schema (metadata検証)
-              - test_cli_no_secret_leak (全出力の秘密漏洩直接検証)
-            ■ pytest --cov 90%+, evidence/coverage_log.txt
-          output_path: "skills/web-researcher/"
-          priority: "high"
-          depends_on: ["T2", "T3", "T4", "T5"]
+    - task_id: "req_034_T1"
+      assigned_to: junior1
+      description: |
+        Core harmonizer module 開発
+        ファイル: skills/web-data-harmonizer/scripts/harmonizer.py
+
+        実装内容:
+        1. _parse_japanese_number(text: str) -> float | None
+           - '1,234百万円' → 1234000000.0, '△1,234' → -1234.0, '---' → None
+           - 兆/億/万の単位変換対応
+        2. _infer_period_end(period_str: str, source: str) -> str | None
+           - yahoo "2024-03" → "2024-03-31", kabutan "2024.03" → "2024-03-31"
+           - 月末日計算（2月は閏年考慮）
+        3. _infer_fiscal_year(period_end: str) -> int | None
+           - period_end から fiscal_year を導出
+        4. _harmonize_yahoo(data: dict) -> list[dict]
+           - yahoo.data.financials[] を annual エントリに変換
+        5. _harmonize_kabutan(data: dict) -> list[dict]
+           - kabutan.data.financials[] を annual エントリに変換
+        6. _harmonize_shikiho(data: dict) -> list[dict]
+           - shikiho.data.earnings_forecast を annual エントリに変換（文字列パース）
+        7. _extract_indicators(sources: dict) -> dict
+           - yahoo/kabutan の indicators をマージ（kabutan優先）
+        8. _extract_qualitative(sources: dict) -> dict
+           - shikiho: company_overview, consensus, shareholders
+           - kabutan: earnings_flash, news
+           - homepage: ir_links
+        9. _merge_periods(all_records: list[list[dict]]) -> list[dict]
+           - 同一 period_end のレコードをマージ（kabutan > yahoo > shikiho 優先）
+           - source_attribution に "web:source_name" 形式で記録
+        10. harmonize(web_research: dict, source_filter: str = "all") -> dict
+            - メインエントリポイント。source_filter で個別ソースまたは全統合選択可能
+            - 戻り値: harmonized_financials 辞書
+
+        品質基準:
+        - financial-calculator の FinancialRecord と互換の annual エントリ
+        - すべての数値フィールドは float | None（文字列不可）
+        - period_end は ISO YYYY-MM-DD 形式
+
+    - task_id: "req_034_T2"
+      assigned_to: junior2
+      description: |
+        CLI + スキル骨格 開発
+        ファイル:
+        - skills/web-data-harmonizer/scripts/__init__.py (空ファイル)
+        - skills/web-data-harmonizer/scripts/main.py
+        - skills/web-data-harmonizer/SKILL.md
+
+        main.py 実装内容:
+        1. build_parser() → argparse
+           - サブコマンド: harmonize
+           - --ticker (必須): 銘柄コード
+           - --source (デフォルト: all): all | yahoo | kabutan | shikiho | カンマ区切り
+           - --input (省略可): web-researcher出力JSONパス（デフォルト: data/{ticker}/web_research/research.json）
+           - --output (省略可): 出力パス（デフォルト: data/{ticker}/harmonized/harmonized_financials.json）
+        2. cmd_harmonize(args) → int
+           - 入力JSON読み込み → harmonize() 呼び出し → 結果JSON出力
+           - 出力先ディレクトリの自動作成
+           - stdout にもJSON出力
+        3. main(argv=None) → int
+           - エントリポイント
+        4. if __name__ == "__main__" でインポート分岐
+
+        harmonizer.py からのインポート:
+        - from harmonizer import harmonize (直接実行時)
+        - from .harmonizer import harmonize (パッケージ実行時)
+
+        SKILL.md: Usage, Output schema, Tests セクションを含む標準フォーマット
+
+    - task_id: "req_034_T3"
+      assigned_to: junior3
+      description: |
+        テストスイート開発
+        ファイル:
+        - skills/web-data-harmonizer/tests/__init__.py (空)
+        - skills/web-data-harmonizer/tests/conftest.py
+        - skills/web-data-harmonizer/tests/test_harmonizer.py
+        - skills/web-data-harmonizer/tests/test_main.py
+        - skills/web-data-harmonizer/tests/evidence/sample_web_research.json
+
+        conftest.py:
+        - sys.path 設定
+        - sample_web_research フィクスチャ（evidence/sample_web_research.json 読み込み）
+        - tmp_output_dir フィクスチャ
+
+        evidence/sample_web_research.json:
+        - web-researcher 出力形式のサンプルデータ（4ソース分）
+        - yahoo: financials 3期分（数値型）、indicators
+        - kabutan: financials 3期分（数値型）、indicators、earnings_flash
+        - shikiho: earnings_forecast（文字列型 '1,234百万円'）、company_overview、consensus、shareholders
+        - homepage: company_info、ir_page、ir_links
+
+        test_harmonizer.py (最低40テスト):
+        - TestParseJapaneseNumber: 正常系（カンマ区切り、百万円、億、兆、万、マイナス△/▲）、異常系（None、空文字、'---'、'N/A'）
+        - TestInferPeriodEnd: yahoo形式、kabutan形式、不正形式、月末日（2月閏年）
+        - TestInferFiscalYear: 正常系、None入力
+        - TestHarmonizeYahoo: 正常データ、空データ、部分欠損
+        - TestHarmonizeKabutan: 正常データ、空データ、部分欠損
+        - TestHarmonizeShikiho: 文字列→数値変換、空データ
+        - TestExtractIndicators: マージ動作、片方のみ、両方null
+        - TestExtractQualitative: 各ソースからの抽出
+        - TestMergePeriods: 同一期間の優先度マージ、異なる期間の結合
+        - TestHarmonize: E2E統合テスト（全ソース、個別ソース、source_filter）
+        - TestOutputSchema: 出力がパイプラインスキーマ準拠か（BS/PL/CF キー存在、数値型）
+
+        test_main.py (最低15テスト):
+        - TestBuildParser: 引数パース、デフォルト値
+        - TestCmdHarmonize: 正常実行、ファイル出力、stdout出力
+        - TestMain: エントリポイント、不正引数
+
+        目標: カバレッジ 85%以上
 
   quality_criteria:
-    - "CLI: python3 skills/web-researcher/scripts/main.py collect（既存パターン準拠）"
-    - "_repo_root/_data_root 既存コピー、出力先 _data_root()/{ticker}/web_research/research.json"
-    - "robots.txt 全コレクター必須、拒否→graceful degradation"
-    - "リクエスト間隔2秒以上"
-    - "graceful degradation + exit code(>=1成功→0, 全失敗→1)"
-    - "シークレット: env変数のみ、pytestで環境変数値の直接不一致検証"
-    - "テストカバレッジ90%以上"
-    - "quality gate: file_exists のみ（既存実装で確実動作）"
-    - "JSONスキーマ: pytestで検証（quality gateではない）"
-    - "--mergeで部分再実行対応"
+    - "出力 annual エントリが financial-calculator の FinancialRecord 入力形式に準拠"
+    - "すべての数値フィールドが float | None（文字列不可）"
+    - "period_end が ISO YYYY-MM-DD 形式"
+    - "source_attribution が 'web:yahoo' / 'web:kabutan' / 'web:shikiho' 形式"
+    - "BS/CF フィールドは null で出力（Web源では取得不可のため）"
+    - "テストカバレッジ 85%以上"
+    - "既存スキルと同じ構成パターン（scripts/, tests/, SKILL.md）"
+
+  parallelization:
+    round_1:
+      - "junior1: req_034_T1 (harmonizer.py)"
+      - "junior2: req_034_T2 (main.py + SKILL.md)"
+      - "junior3: req_034_T3 (tests/)"
+    note: "3タスクは異なるファイルを書くため並列実行可能。T2とT3はharmonizer.pyのAPIインターフェースを記述で共有。"
+
+  risk_assessment:
+    - risk: "shikiho の earnings_forecast フォーマットが不定形"
+      mitigation: "パース失敗時はフィールドを null で出力。ログ出力して続行。"
+    - risk: "テストが実コード未完成で書けない"
+      mitigation: "APIインターフェースを計画で明確化。テストはインターフェースに対して書く。"
+    - risk: "web-researcher出力のサンプルデータがdata/に存在しない"
+      mitigation: "テスト用のevidenceデータをJunior3が手動作成。"

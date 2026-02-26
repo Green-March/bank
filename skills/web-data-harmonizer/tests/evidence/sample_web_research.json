@@ -1,0 +1,68 @@
+{
+  "ticker": "2780",
+  "company_name": null,
+  "collected_at": "2026-02-26T12:00:00+09:00",
+  "sources": {
+    "yahoo": {
+      "url": "https://finance.yahoo.co.jp/quote/2780",
+      "collected": true,
+      "data": {
+        "stock_price": {"current": 3750.0, "change": 30.0, "change_percent": 0.81, "volume": 50000},
+        "financials": [
+          {"period": "2024-03", "revenue": 180000.0, "operating_income": 12000.0, "ordinary_income": null, "net_income": null},
+          {"period": "2023-03", "revenue": 160000.0, "operating_income": 10000.0, "ordinary_income": null, "net_income": null},
+          {"period": "2022-03", "revenue": 140000.0, "operating_income": 8000.0, "ordinary_income": null, "net_income": null}
+        ],
+        "indicators": {"per": 15.2, "pbr": 1.8, "dividend_yield": 2.1, "market_cap": 50000000000.0, "shares_outstanding": 13333333},
+        "news": []
+      },
+      "error": null
+    },
+    "kabutan": {
+      "url": "https://kabutan.jp/stock/?code=2780",
+      "collected": true,
+      "data": {
+        "stock_price": {"current": 3750, "change": 30, "prev_close": 3720, "open": 3730, "high": 3780, "low": 3710, "volume": 50000},
+        "financials": [
+          {"period": "2024.03", "revenue": 180000, "operating_income": 12000, "ordinary_income": 11500, "net_income": 7800, "eps": 585.0},
+          {"period": "2023.03", "revenue": 160000, "operating_income": 10000, "ordinary_income": 9500, "net_income": 6500, "eps": 487.5},
+          {"period": "2022.03", "revenue": 140000, "operating_income": 8000, "ordinary_income": 7500, "net_income": 5000, "eps": 375.0}
+        ],
+        "indicators": {"per": 15.0, "pbr": 1.7, "dividend_yield": 2.2, "market_cap": 48000000000.0},
+        "earnings_flash": {"title": "第3四半期決算", "date": "2026/02/05", "content": "増収増益"},
+        "news": [{"title": "業績好調", "date": "2026-02-20"}]
+      },
+      "error": null
+    },
+    "shikiho": {
+      "url": "https://shikiho.toyokeizai.net/stocks/2780",
+      "collected": true,
+      "data": {
+        "company_overview": {"name": "コメ兵ホールディングス", "industry": "小売業", "feature": "中古ブランド品買取販売"},
+        "earnings_forecast": {"売上高": "200,000百万円", "営業利益": "14,000百万円", "経常利益": "13,500百万円", "純利益": "9,000百万円"},
+        "consensus": {"レーティング": "やや強気", "目標株価": "4,500円"},
+        "shareholders": [
+          {"name": "創業家", "ratio": "25.0%"},
+          {"name": "日本マスタートラスト信託銀行", "ratio": "8.5%"}
+        ],
+        "indicators": {"PER": "14.8", "PBR": "1.6", "dividend_yield": "2.3%"}
+      },
+      "error": null
+    },
+    "homepage": {
+      "url": "https://www.komehyo.co.jp",
+      "collected": true,
+      "data": {
+        "company_info": {"title": "コメ兵ホールディングス", "description": "中古ブランド品のリユース", "company_name": "コメ兵ホールディングス"},
+        "ir_page": {"url": "https://www.komehyo.co.jp/ir/", "detected": true},
+        "ir_links": [
+          {"title": "決算短信", "url": "https://www.komehyo.co.jp/ir/tanshin.pdf", "type": "pdf"},
+          {"title": "有価証券報告書", "url": "https://www.komehyo.co.jp/ir/yuho.pdf", "type": "pdf"}
+        ],
+        "news": [{"title": "新店舗オープン", "url": "https://www.komehyo.co.jp/news/1", "date": "2026-02-15"}]
+      },
+      "error": null
+    }
+  },
+  "metadata": {"source_count": 4, "success_count": 4, "errors": [], "accessed_domains": [], "robots_checked": true}
+}

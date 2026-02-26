@@ -1,0 +1,49 @@
+{
+  "name": "web-data-harmonizer",
+  "description": "web-researcher出力を既存パイプラインスキーマ（BS/PL/CF数値型 + 期間情報 + source_attribution）に変換するアダプタースキル",
+  "version": "1.0.0",
+  "entry_point": "scripts/main.py",
+  "commands": {
+    "harmonize": {
+      "description": "Web データをパイプライン互換スキーマに正規化・変換",
+      "usage": "python skills/web-data-harmonizer/scripts/main.py harmonize --ticker <TICKER>",
+      "options": {
+        "--ticker": {
+          "required": true,
+          "description": "銘柄コード4桁（例: 2780）"
+        },
+        "--source": {
+          "required": false,
+          "default": "all",
+          "description": "ソース指定: all|yahoo|kabutan|shikiho（カンマ区切り対応）"
+        },
+        "--input": {
+          "required": false,
+          "default": "data/{ticker}/web_research/research.json",
+          "description": "web-researcher 出力 JSON パス"
+        },
+        "--output": {
+          "required": false,
+          "default": "data/{ticker}/harmonized/harmonized_financials.json",
+          "description": "出力パス"
+        }
+      }
+    }
+  },
+  "inputs": {
+    "web_research_json": {
+      "path": "data/{ticker}/web_research/research.json",
+      "description": "web-researcher が収集したソース別フラット構造の JSON",
+      "produced_by": "web-researcher"
+    }
+  },
+  "outputs": {
+    "harmonized_financials": {
+      "path": "data/{ticker}/harmonized/harmonized_financials.json",
+      "description": "パイプライン互換スキーマに正規化された財務 JSON（annual, indicators, qualitative）"
+    }
+  },
+  "dependencies": [],
+  "tags": ["adapter", "harmonizer", "pipeline", "web-data"],
+  "categories": ["data-transformation"]
+}
