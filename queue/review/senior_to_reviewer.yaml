@@ -2,75 +2,138 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_req_042_043"
-  request_id: "plan_req_042_043"
-  timestamp: "2026-02-27T21:10:00+09:00"
-  objective: "2件のシステム改善: (1) Reviewer ペインID誤指定の根本対策, (2) pipeline-runner 並列実行最適化"
-  context:
-    req_042_background: "S34でReviewerがreviewer_finalize.shの--senior-paneに%0(Manager)を誤指定し通知がManagerに届いた。instructions/reviewer.mdにペインID取得方法が未記載。go.shは.claude/runtime/agent-pane-map.tsvにランタイムマッピングを書いているが、テンプレートもinstructionsも参照していない。"
-    req_043_background: "pipeline-runnerは12ステップDAGを完全逐次実行。collect_jquants/collect/web_researchは独立だが1つずつ実行。diamond DAG (valuate/analyze_risk/inventory) も同様。concurrent.futuresで並列化すれば実行時間短縮可能。"
+  plan_id: "req_044_plan_002"
+  request_id: "req_044"
+  timestamp: "2026-02-27T22:15:00+09:00"
+  revision: 2
+  revision_note: "Reviewer指摘反映: Task3分割(T3a/T3b)、責務分離明確化、concurrency閾値定義"
+  objective: "4番目の銘柄（4971 メック）でフルパイプライン12ステップ E2E 検証。S35で導入した並列実行（ThreadPoolExecutor + 依存ベーススケジューラ）の実運用検証を含む。"
+  ticker: "4971"
+  analysis_type: "full_pipeline_e2e"
+
+  plan_summary: |
+    pipeline-runner の12ステップを 4971 メック に対して全実行する。
+    並列実行（--max-parallel 3）の実運用検証、失敗伝播（downstream skip）動作確認、最終レポート（md + html）生成を行う。
+
+  dag_structure: |
+    resolve
+    ├── collect_jquants (並列)
+    ├── collect (並列)
+    └── web_research (並列)
+         ├── parse ← collect
+         └── harmonize ← web_research
+              └── integrate ← [parse, harmonize]
+                   └── calculate
+                        ├── valuate (並列)
+                        ├── analyze_risk (並列)
+                        └── inventory (並列)
+                             └── report ← [valuate, analyze_risk, inventory]
+
   task_decomposition:
-    - task_id: "req_042_T1"
-      title: "Reviewer ペインID根本対策"
-      assignee: "junior1"
+    - task_id: "req_044_task_1"
+      title: "4971 メック フルパイプライン12ステップ実行"
+      assignee: junior1
+      priority: high
+      parallel_group: "A"
+      depends_on: []
       description: |
-        以下の4つの改修を実施する:
-        1. instructions/reviewer.md に「ペインID確認」セクションを追加
-           - agent-pane-map.tsv (.claude/runtime/agent-pane-map.tsv) の参照方法を明記
-           - Senior のペインIDは agent-pane-map.tsv で「senior」を検索して取得するルールを明記
-           - 使用例の <senior_pane_id> を具体的な取得手順に置き換える
-        2. reviewer_finalize.sh に --senior-pane のデフォルト自動取得機能を追加
-           - --senior-pane 未指定時に .claude/runtime/agent-pane-map.tsv から senior のペインIDを自動取得
-           - agent-pane-map.tsv が存在しない場合はエラー終了（従来通り必須）
-           - 取得したペインIDが tmux pane として存在するかバリデーション追加
-        3. senior_submit_plan.sh に --reviewer-pane のデフォルト自動取得機能を追加
-           - 同様に agent-pane-map.tsv から reviewer のペインIDを自動取得
-           - バリデーション追加
-        4. instructions/junior.md に「ペインID確認」セクションを追加
-           - Senior への send-keys 送信時に agent-pane-map.tsv を参照するルールを明記
-      output_path: "instructions/reviewer.md, instructions/junior.md, templates/reviewer_finalize.sh, templates/senior_submit_plan.sh"
-      quality_criteria:
-        - "reviewer_finalize.sh が --senior-pane 省略時に agent-pane-map.tsv から正しく取得できること"
-        - "senior_submit_plan.sh が --reviewer-pane 省略時に agent-pane-map.tsv から正しく取得できること"
-        - "agent-pane-map.tsv が存在しない場合に明確なエラーメッセージが出ること"
-        - "不正なペインIDを指定した場合にバリデーションエラーが出ること"
-        - "instructions/reviewer.md にペインID取得手順が明記されていること"
-        - "instructions/junior.md にペインID取得手順が明記されていること"
-    - task_id: "req_043_T2"
-      title: "pipeline-runner 並列実行最適化"
-      assignee: "junior2"
+        pipeline-runner で 4971 メック の12ステップを全実行する。
+        コマンド: skills/pipeline-runner/references/example_pipeline.yaml を使用し、ticker=4971, --max-parallel 3 で実行。ログは data/4971/logs/pipeline_run.json に出力。
+        検証項目:
+          - 12ステップ全て status: completed
+          - 全 quality gate pass (gate_result.overall_pass: true)
+          - 出力ディレクトリ・ファイルの生成確認（data/4971/ 配下）
+        成果物:
+          - data/4971/logs/pipeline_run.json
+          - data/4971/ 配下の全出力ファイル（resolved, raw, parsed, harmonized, integrated, valuation, risk, reports）
+      estimated_duration: "5-10分（EDINET収集が支配的）"
+      responsibility: "パイプライン実行と基本成功確認のみ。並列性分析はT3bが担当。"
+
+    - task_id: "req_044_task_2"
+      title: "E2E データ品質検証 + レポート品質確認"
+      assignee: junior2
+      priority: high
+      parallel_group: "B"
+      depends_on: ["req_044_task_1"]
       description: |
-        pipeline.py の PipelineRunner.run() メソッドを並列実行対応に改修する:
-        1. 逐次実行 (for step in steps) を依存ベーススケジューリングに変更
-           - 全依存が完了したステップを concurrent.futures.ThreadPoolExecutor で並列起動
-           - max_workers はデフォルト3（collect系3並列に対応）、--max-parallel オプションで変更可能
-        2. 並列実行時の失敗伝播
-           - 1ステップ失敗 → そのステップに依存する下流ステップを全スキップ
-           - 他の独立パスは継続実行（fail-fast ではなくベストエフォート）
-           - パイプライン全体のステータスは1つでも失敗があれば "failed"
-        3. ログ整合性
-           - 並列実行でもステップログが正しく記録される（スレッドセーフ）
-           - 各ステップの started_at/completed_at/duration_sec が正確に記録される
-        4. output_vars の伝播
-           - 依存先ステップの output_vars は、依存元ステップ実行前に確実に解決済みであること
-           - 並列ステップ間での variable 競合がないこと（各ステップの output_vars は独立）
-        5. Quality gate の実行
-           - gate は各ステップ完了直後に同一スレッドで実行（従来通り）
-           - gate 失敗時は当該ステップを failed 扱いにして下流をスキップ
-        6. ベンチマーク
-           - 逐次 vs 並列の所要時間比較をテストで記録
-           - 並列実行のログに concurrency_info (同時実行ステップ数) を追加
-        7. 既存テスト全パス確認
-           - 69テスト全パス + 新規並列テスト追加
-      output_path: "skills/pipeline-runner/scripts/pipeline.py, skills/pipeline-runner/tests/"
-      quality_criteria:
-        - "collect_jquants + collect + web_research が並列実行されること（テストで確認）"
-        - "valuate + analyze_risk + inventory が並列実行されること（テストで確認）"
-        - "1ステップ失敗時に依存下流のみスキップ、他パスは継続すること"
-        - "output_vars が並列実行でも正しく伝播すること"
-        - "既存テスト69件が全パスすること"
-        - "新規並列テストが追加されていること"
-  risk_mitigation:
-    - "req_042: agent-pane-map.tsv が存在しない環境（初回起動前）でのフォールバック — 明確なエラーメッセージ + 手動指定への誘導"
-    - "req_043: ThreadPoolExecutor の subprocess.run はGILの影響を受けないため並列性能は確保される"
-    - "req_043: 既存テストは逐次実行前提のモック — 並列対応のテストを追加して既存テストも維持"
+        Task 1 完了後、パイプライン出力の E2E データ整合性を検証する。
+        責務: データ品質・レポート品質の検証（並列性検証はT3bが担当）。
+        検証項目:
+          1. pipeline_run.json: 全12ステップの status が completed であること、duration と gate_result を確認
+          2. financials.json: ドキュメント数、期間カバレッジ、BS/PL/CF フィールド充足率
+          3. integrated_financials.json: マルチソース統合の source attribution 確認
+          4. metrics.json: ROE/ROA/マージン/成長率の算出確認
+          5. valuation/dcf.json: DCF・感度分析・マルチプルの妥当性
+          6. risk/risk_analysis.json: 5カテゴリリスク評価の完全性
+          7. reports/4971_report.md と .html: セクション完全性（概要、指標、推移表、バリュエーション、リスク、データソース）
+          8. データソース明記確認（source attribution に EDINET, J-Quants, Web のいずれかが含まれること）
+        成果物: 検証結果を report yaml に記載
+      responsibility: "データ品質・レポート品質の検証を一元担当。concurrency_info の分析はスコープ外（T3b担当）。"
+
+    - task_id: "req_044_task_3a"
+      title: "pipeline-runner テスト実行 + 失敗伝播検証"
+      assignee: junior3
+      priority: medium
+      parallel_group: "A"
+      depends_on: []
+      description: |
+        pipeline-runner の全テスト実行と失敗伝播動作の検証。Task 1 と並列実行可能（独立）。
+        実施内容:
+          1. pipeline-runner 全テスト実行（83テスト全パス確認）
+          2. 失敗伝播テスト結果の確認: test_parallel_execution.py 内の downstream skip テストが pass していることを確認
+          3. テスト結果サマリを report yaml に記載
+        成果物: テスト結果サマリ（全テスト数、pass/fail、失敗伝播テスト結果）
+      responsibility: "テスト実行のみ。実データの分析はスコープ外。"
+
+    - task_id: "req_044_task_3b"
+      title: "並列実行 concurrency_info 分析"
+      assignee: junior3
+      priority: high
+      parallel_group: "B"
+      depends_on: ["req_044_task_1"]
+      description: |
+        Task 1 完了後、data/4971/logs/pipeline_run.json の concurrency_info を分析する。
+        並列実行検証の唯一の結果所有者。
+        検証項目:
+          1. concurrency_info キーの存在確認（全12ステップIDがキーとして存在すること）
+          2. 並列パス1（resolve直後）: collect_jquants, collect, web_research のうち少なくとも2つの値が >= 2
+          3. 並列パス2（calculate直後）: valuate, analyze_risk, inventory のうち少なくとも2つの値が >= 2
+          4. 順次ステップ（resolve, integrate, calculate, report）の値が期待通りであること
+          5. pipeline_run.json の各ステップ started_at/completed_at から実際の時間重複を確認
+        受入条件:
+          - concurrency_info 内で max(values) >= 2（少なくとも1箇所で2並列以上が発生）
+          - 並列パス1・並列パス2 のそれぞれで concurrent value >= 2 のステップが1つ以上存在
+        成果物: concurrency 分析レポート（並列パスごとの実測値、時間重複の有無）を report yaml に記載
+      responsibility: "並列実行検証の結果所有者。Task 2 とは責務が分離されている。"
+
+  parallelization_plan: |
+    Phase A（並列）: Task 1 (junior1: パイプライン実行) + Task 3a (junior3: テスト実行)
+    Phase B（Task 1 完了後）: Task 2 (junior2: E2Eデータ検証) + Task 3b (junior3: concurrency分析)
+    ※ junior3 は T3a 完了後、Task 1 の完了を待って T3b に着手する
+
+  responsibility_matrix:
+    パイプライン実行: "Task 1 (junior1) — 唯一の実行者"
+    データ品質検証: "Task 2 (junior2) — データ整合性・レポート品質の唯一の検証者"
+    テスト実行: "Task 3a (junior3) — ユニットテストの唯一の実行者"
+    並列性検証: "Task 3b (junior3) — concurrency_info 分析の唯一の結果所有者"
+
+  quality_criteria:
+    - "12ステップ全て completed (status: completed)"
+    - "concurrency_info: max(values) >= 2（並列実行の証跡）"
+    - "concurrency_info 並列パス1: collect_jquants/collect/web_research のうち少なくとも2つで value >= 2"
+    - "concurrency_info 並列パス2: valuate/analyze_risk/inventory のうち少なくとも2つで value >= 2"
+    - "全 quality gate pass（gates_*.yaml 各ゲート overall_pass: true）"
+    - "レポート（md + html）にバリュエーション・リスクセクションあり"
+    - "データソース明記（source attribution に EDINET/J-Quants/Web のいずれかを含む）"
+    - "pipeline-runner テスト83件全パス"
+    - "失敗伝播テストで downstream skip が正しく機能（テスト結果で確認）"
+
+  risks_and_assumptions:
+    - risk: "EDINET API のレート制限やタイムアウト"
+      mitigation: "disclosure-collector の既存リトライ機構に依存。失敗時は collect ステップで gate_failed となりログに記録される"
+    - risk: "4971 メック の XBRL データ構造が既存パーサーと互換性がない"
+      mitigation: "disclosure-parser は汎用 XBRL パーサー。互換性問題があれば parse ステップで失敗し、downstream が skip される"
+    - risk: "J-Quants API にメックのデータがない"
+      mitigation: "collect_jquants は独立パスのため、失敗しても EDINET パスは継続。レポートには利用可能ソースのみ反映"
+    - assumption: "4971 は東証上場銘柄であり、EDINET・J-Quants に登録がある"
+    - assumption: "example_pipeline.yaml のコマンドテンプレートは 4971 に対しても有効"

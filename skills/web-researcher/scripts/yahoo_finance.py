@@ -97,7 +97,7 @@ def _parse_japanese_number(text: str) -> float | None:
 class YahooFinanceCollector(BaseCollector):
     """Yahoo ファイナンスから企業情報を収集する。"""
 
-    BASE_URL = "https://finance.yahoo.co.jp/quote/{ticker}"
+    BASE_URL = "https://finance.yahoo.co.jp/quote/{ticker}.T"
 
     def collect(self, ticker: str) -> dict:
         url = self.BASE_URL.format(ticker=ticker)

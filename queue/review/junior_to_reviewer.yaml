@@ -1,31 +1,25 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "review_req_043_T2"
-  task_id: "req_043_T2"
+  request_id: "rev_044_t2_002"
+  task_id: "req_044_task_2"
   junior_id: "junior2"
   status: pending
-  timestamp: "2026-02-27T22:02:00+09:00"
+  timestamp: "2026-02-27T23:11:00+09:00"
   payload:
-    summary: "pipeline-runner 並列実行最適化 — 依存ベーススケジューラ + ThreadPoolExecutor 並列化"
-    outputs:
-      - "skills/pipeline-runner/scripts/pipeline.py — run()を並列スケジューラに改修"
-      - "skills/pipeline-runner/scripts/main.py — --max-parallel CLIオプション追加"
-      - "skills/pipeline-runner/tests/test_parallel_execution.py — 新規14テスト"
-    validation:
-      - "total_tests=83 (既存69+新規14) 全パス"
-      - "max_parallel=1 で逐次動作維持（後方互換）"
-      - "collect_jquants/collect/web_research の並列実行確認"
-      - "valuate/analyze_risk/inventory の並列実行確認"
-      - "1ステップ失敗→下流スキップ+他パス継続の検証"
-      - "output_vars 並列環境での正確な伝播検証"
-    review_focus:
-      - "並列スケジューラのアルゴリズム正確性（依存解決の完全性）"
-      - "スレッドセーフ性（Lock使用箇所の適切性）"
-      - "失敗伝播ロジック（下流スキップの正確性）"
-      - "output_vars 競合検出の堅牢性"
-      - "既存テスト69件の後方互換性維持"
-      - "セキュリティ: subprocess.run の並列実行に伴うリスク"
+    title: "E2E データ品質検証 + レポート品質確認（修正版）"
+    report_path: "queue/reports/junior2_report.yaml"
+    revision: 2
+    revision_note: "Reviewer指摘反映: valuation検証詳細化(DCF感度5x5再計算+relative未生成の理由明記) + 全検証項目に再現コマンド追記"
+    summary: "全8検証項目パス。クロスファイル整合性確認済み。valuation は DCF のみ（relative 未実行はパイプライン設計上の制約として明記）。"
+    key_revisions:
+      - "検証5_dcf: 感度分析5x5マトリクスを assumptions から再計算しレポートと全25セル完全一致確認。relative.json 未生成はパイプライン設計上の制約として理由・影響を明記"
+      - "全検証項目: 再現コマンド（python3 -c / jq）と照合キーを追記し再現可能性を担保"
+      - "クロスファイル整合: revenue/FCF/ROE/ROA/OPM の具体値を明記し突合証跡を記録"
+    quality_criteria:
+      - "全8検証項目パス"
+      - "全検証項目に再現コマンド追記済み"
+      - "クロスファイル整合: 具体値による突合証跡あり"
 review_followup:
   request_id: null
   task_id: null

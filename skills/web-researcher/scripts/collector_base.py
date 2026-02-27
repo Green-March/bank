@@ -116,6 +116,7 @@ class BaseCollector(abc.ABC):
         self._client = httpx.Client(
             timeout=self._timeout,
             headers={"User-Agent": self._user_agent},
+            follow_redirects=True,
         )
         return self
 

@@ -1,18 +1,19 @@
 review_response:
   request_type: deliverable_review_response
   review_type: deliverable
-  request_id: 'review_req_043_T2'
-  task_id: 'req_043_T2'
+  request_id: 'rev_044_t2_002'
+  task_id: 'req_044_task_2'
   junior_id: 'junior2'
   verdict: 'ok'
   comments:
-    schema_conformance: '要求の3ファイルと14テスト更新はあり、仕様定義との不整合は見当たらない。'
-    data_integrity: '依存完了後のみ実行し、並列でもoutput_vars競合/下流skipが一貫して扱われている。'
-    source_traceability: '再現可能なテスト観点は明示されるが、実行ログ（83件総結果）は別途添付が望ましい。'
-    analytical_validity: '依存ベース起動とbest-effort失敗継承は要件どおりで、結論整合性は妥当。'
-    clarity: 'concurrency_infoとskipped_reason追加でログ可読性が高く、監査観点は十分。'
-    risk_disclosure: 'subprocess.shell実行を含むため、YAML由来コマンド入力時の権限リスクは残る。'
-  e2e_check: 'ステップ間スキーマ整合・欠損伝播・並列スキップ制御は想定どおり、数値ログ精度は維持'
-  suggested_changes: []
+    schema_conformance: '報告は request_id/task_id/junior_id/report_path が一致し、必要キー(結果・検証・証跡参照)を満たしており提出フォーマットは正常。'
+    data_integrity: 'pipeline_run, financials, integrated, metrics, dcf, risk, report, source_attribution を跨いだ突合が一貫しており、検証値は再現コマンドで確認できる。'
+    source_traceability: 'dcf/financials/integrated/risk の根拠は pipeline_run.json、parsed/integrated JSON、web_research/research.json、report.md の参照先が特定できる。'
+    analytical_validity: 'DCF 感度表は assumptions から再計算で再現され、レポート記載の全25セルと一致、cross-file 収束値（FCF/ROE/ROA/OPM）は整合。'
+    clarity: '各検証に再現コマンドと照合キーを添えており、監査再実行の導線が明確。'
+    risk_disclosure: 'per_share_value null、相対バリュエーション未実行、流動性リスク0件など制約は caveats に明記され、影響範囲が分かる。'
+  e2e_check: 'pipeline_run→parsed/integrated/metrics/valuation/risk/reports の順でスキーマ整合と欠損伝播なしを確認、5x5感度再計算も含め E2E 検証条件は成立。'
+  suggested_changes:
+    - 'valuation パイプラインに relative を追加する場合は report と併せて relative.json を追加し、検証項目8に相対バリュエーション整合を加えると将来の比較観点が補完される。'
   status: 'completed'
-  timestamp: '2026-02-27 21:25:30'
+  timestamp: '2026-02-27 22:24:36'

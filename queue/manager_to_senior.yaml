@@ -1,31 +1,17 @@
 queue:
-  - request_id: "req_042"
-    objective: "Reviewer ペインID 問題の根本対策 — instructions/reviewer.md および関連テンプレートに正しいペインIDを明示し、reviewer_finalize.sh の --senior-pane 誤指定を防止する"
-    ticker: null
+  - request_id: "req_044"
+    objective: "4番目の銘柄（4971 メック）でフルパイプライン12ステップ E2E 検証。S35で導入した並列実行（ThreadPoolExecutor + 依存ベーススケジューラ）の実運用検証を含む。"
+    ticker: "4971"
     universe: null
-    analysis_type: "system_improvement"
-    timeframe: null
-    output_format: ["md"]
+    analysis_type: "full_pipeline_e2e"
+    timeframe: "5y"
+    output_format: ["md", "html"]
     priority: "high"
     due_date: "2026-02-27"
     constraints:
-      - "tmux pane ID: %0=manager, %2=senior, %1=junior1, %4=junior2, %3=junior3, %5=reviewer"
-      - "instructions/reviewer.md の冒頭またはワークフローセクションに、Senior ペインID (%2) を明記する"
-      - "reviewer_finalize.sh のデフォルト --senior-pane を %2 に固定するか、引数バリデーションを追加する"
-      - "S34で発生した問題: Reviewer が --senior-pane に %0 (Manager) を誤指定し、通知が Manager に届いた"
-      - "Junior の send-keys 宛先ペインIDも instructions/junior.md に明記を検討する"
-  - request_id: "req_043"
-    objective: "pipeline-runner の並列実行最適化 — collect_jquants + collect + web_research の並列実行を実測し、パイプライン実行時間を短縮する"
-    ticker: null
-    universe: null
-    analysis_type: "system_improvement"
-    timeframe: null
-    output_format: ["md"]
-    priority: "medium"
-    due_date: "2026-02-27"
-    constraints:
-      - "現在の12ステップ DAG: resolve → {collect_jquants, collect, web_research} → parse → harmonize → integrate → calculate → {valuate, analyze_risk, inventory} → report"
-      - "collect_jquants, collect, web_research は独立しており並列実行可能なはず — 実際にsubprocess等で並列化されているか確認"
-      - "diamond DAG (calculate → {valuate, analyze_risk, inventory} → report) の並列実行も同様に確認"
-      - "並列実行のベンチマーク（逐次 vs 並列の所要時間比較）を記録する"
-      - "既存テスト (pipeline-runner 69テスト) が全パスすることを確認する"
+      - "pipeline-runner の12ステップ全実行（resolve → {collect_jquants, collect, web_research} → parse → harmonize → integrate → calculate → {valuate, analyze_risk, inventory} → report）"
+      - "並列実行（--max-parallel 3）を使用し、concurrency_info を確認"
+      - "失敗伝播（downstream skip）の動作も確認"
+      - "利用データソースを明記する"
+      - "前提とリスクを明示する"
+      - "最終レポート（md + html）を生成する"
