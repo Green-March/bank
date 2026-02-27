@@ -1,35 +1,31 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_040_02"
-  task_id: "task_040"
+  request_id: "review_req_043_T2"
+  task_id: "req_043_T2"
   junior_id: "junior2"
   status: pending
-  timestamp: "2026-02-27T21:46:00+09:00"
+  timestamp: "2026-02-27T22:02:00+09:00"
   payload:
-    summary: |
-      financial-reporter valuation/risk セクション追加（修正版）。
-      前回レビュー指摘2点 + 関連6点を修正:
-      - リスクカテゴリを要件定義5カテゴリに一致 (market/credit/liquidity/operational/regulatory)
-      - liquidity_risk 欠落時は「(該当データなし)」行を表示、other_risk は存在時のみ追加表示
-      - valuation/risk セクション末尾に出典情報追加 (doc_id, data_sources, analyzed_at)
-      - 感度分析テーブル軸名を「永久成長率」に明確化
-      - データ未指定時の再実行警告追加
-      - テスト8件追加 (計113件全パス)
+    summary: "pipeline-runner 並列実行最適化 — 依存ベーススケジューラ + ThreadPoolExecutor 並列化"
     outputs:
-      - "skills/financial-reporter/scripts/main.py"
-      - "skills/financial-reporter/scripts/render.py"
-      - "skills/financial-reporter/tests/test_reporter.py"
-      - "skills/financial-reporter/SKILL.md"
+      - "skills/pipeline-runner/scripts/pipeline.py — run()を並列スケジューラに改修"
+      - "skills/pipeline-runner/scripts/main.py — --max-parallel CLIオプション追加"
+      - "skills/pipeline-runner/tests/test_parallel_execution.py — 新規14テスト"
     validation:
-      - "total_tests=113 (既存70 + 新規43)"
-      - "all_tests_passed=true"
-      - "backward_compat=true"
-    acceptance_criteria:
-      - "前回レビュー指摘2点すべて対応済み"
-      - "リスクカテゴリ名が要件定義と一致"
-      - "valuation/risk に出典情報 (source_documents) が含まれる"
-      - "既存テスト全パス + 新規テスト追加"
+      - "total_tests=83 (既存69+新規14) 全パス"
+      - "max_parallel=1 で逐次動作維持（後方互換）"
+      - "collect_jquants/collect/web_research の並列実行確認"
+      - "valuate/analyze_risk/inventory の並列実行確認"
+      - "1ステップ失敗→下流スキップ+他パス継続の検証"
+      - "output_vars 並列環境での正確な伝播検証"
+    review_focus:
+      - "並列スケジューラのアルゴリズム正確性（依存解決の完全性）"
+      - "スレッドセーフ性（Lock使用箇所の適切性）"
+      - "失敗伝播ロジック（下流スキップの正確性）"
+      - "output_vars 競合検出の堅牢性"
+      - "既存テスト69件の後方互換性維持"
+      - "セキュリティ: subprocess.run の並列実行に伴うリスク"
 review_followup:
   request_id: null
   task_id: null

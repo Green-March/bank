@@ -33,7 +33,8 @@ def cmd_run(args: argparse.Namespace) -> None:
 
     runner = PipelineRunner()
     try:
-        log = runner.run(config, vars_dict, log_path=args.log)
+        log = runner.run(config, vars_dict, log_path=args.log,
+                         max_parallel=args.max_parallel)
     except PipelineError as e:
         print(f"Pipeline error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -90,6 +91,8 @@ def main() -> None:
     run_parser.add_argument("--pipeline", required=True, help="Path to pipeline.yaml")
     run_parser.add_argument("--vars", default=None, help="Variables as key=val,key=val")
     run_parser.add_argument("--log", default=None, help="Path to write execution log JSON")
+    run_parser.add_argument("--max-parallel", type=int, default=3,
+                            help="Max parallel step execution (default: 3)")
 
     # validate
     val_parser = subparsers.add_parser("validate", help="Validate a pipeline definition")

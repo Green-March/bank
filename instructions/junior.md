@@ -99,6 +99,17 @@ result:
 quality_check_required: true
 ```
 
+## ペインID確認（必須）
+Senior への send-keys 送信時に `.claude/runtime/agent-pane-map.tsv` を参照して Senior のペインIDを取得すること。
+
+```bash
+cat .claude/runtime/agent-pane-map.tsv | grep senior
+```
+
+出力例: `%2 senior` → Senior のペインIDは `%2`
+
+- **注意**: ペインIDはセッションごとに変わるため、ハードコードせず必ず `agent-pane-map.tsv` を参照すること。
+
 ## 連絡ルール
 - Senior のみへ send-keys 通知する
 - Reviewer / Manager / User へ直接連絡しない

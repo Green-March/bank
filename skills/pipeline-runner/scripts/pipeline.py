@@ -6,6 +6,8 @@ import json
 import re
 import subprocess
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -100,9 +102,10 @@ class StepLog:
     duration_sec: float | None = None
     gate_result: dict | None = None
     error: str | None = None
+    skipped_reason: str | None = None
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "id": self.id,
             "skill": self.skill,
             "status": self.status,
@@ -112,6 +115,9 @@ class StepLog:
             "gate_result": self.gate_result,
             "error": self.error,
         }
+        if self.skipped_reason is not None:
+            d["skipped_reason"] = self.skipped_reason
+        return d
 
 
 class PipelineConfig:
@@ -284,18 +290,27 @@ class PipelineConfig:
 
 
 class PipelineRunner:
-    """Execute pipeline steps sequentially."""
+    """Execute pipeline steps with optional parallelism."""
 
     def __init__(self, working_dir: str | Path | None = None) -> None:
         self.working_dir = str(working_dir) if working_dir else None
 
     def run(self, config: PipelineConfig, vars_dict: dict[str, str],
-            log_path: str | Path | None = None) -> dict[str, Any]:
+            log_path: str | Path | None = None,
+            max_parallel: int = 1) -> dict[str, Any]:
         errors = config.validate_dag()
         if errors:
             raise PipelineError(f"DAG validation failed: {'; '.join(errors)}")
 
         config.validate_vars(vars_dict)
+
+        if max_parallel <= 1:
+            return self._run_sequential(config, vars_dict, log_path)
+        return self._run_parallel(config, vars_dict, log_path, max_parallel)
+
+    def _run_sequential(self, config: PipelineConfig, vars_dict: dict[str, str],
+                        log_path: str | Path | None) -> dict[str, Any]:
+        """Sequential execution (original fail-fast behavior)."""
         steps = config.execution_order()
         runtime_vars = dict(vars_dict)
 
@@ -319,11 +334,9 @@ class PipelineRunner:
                 self._write_log(pipeline_log, log_path)
                 return pipeline_log
 
-            # Process output_vars
             if step.output_vars and step_log.status == "completed":
                 self._process_output_vars(step, stdout, runtime_vars, vars_dict)
 
-            # Quality gate
             if step.gates and step_log.status == "completed":
                 gate_log = self._run_gate(step)
                 step_log_dict = pipeline_log["steps"][-1]
@@ -337,6 +350,135 @@ class PipelineRunner:
                     return pipeline_log
 
         pipeline_log["status"] = "completed"
+        pipeline_log["completed_at"] = datetime.now(JST).isoformat()
+        self._write_log(pipeline_log, log_path)
+        return pipeline_log
+
+    def _run_parallel(self, config: PipelineConfig, vars_dict: dict[str, str],
+                      log_path: str | Path | None,
+                      max_parallel: int) -> dict[str, Any]:
+        """Parallel execution with dependency-based scheduling."""
+        runtime_vars = dict(vars_dict)
+        step_map = config._step_map
+
+        # Build reverse dependency map
+        dependents: dict[str, list[str]] = {s.id: [] for s in config.steps}
+        for step in config.steps:
+            for dep in step.depends_on:
+                dependents[dep].append(step.id)
+
+        # State tracking (main thread only, except active_count)
+        finished: dict[str, str] = {}  # step_id -> status
+        step_results: dict[str, dict] = {}
+        concurrency_info: dict[str, int] = {}
+
+        active_lock = threading.Lock()
+        active_count = 0
+
+        pipeline_log: dict[str, Any] = {
+            "pipeline_name": config.name,
+            "started_at": datetime.now(JST).isoformat(),
+            "completed_at": None,
+            "status": "running",
+            "vars": vars_dict,
+            "steps": [],
+            "concurrency_info": {},
+        }
+
+        def mark_downstream_skipped(failed_id: str) -> None:
+            """BFS to mark all transitive dependents as skipped."""
+            queue = list(dependents[failed_id])
+            while queue:
+                sid = queue.pop(0)
+                if sid in finished:
+                    continue
+                finished[sid] = "skipped"
+                step_results[sid] = StepLog(
+                    id=sid, skill=step_map[sid].skill,
+                    status="skipped",
+                    skipped_reason=f"dependency {failed_id} failed",
+                ).to_dict()
+                queue.extend(dependents[sid])
+
+        def execute_step(step: PipelineStep) -> tuple:
+            nonlocal active_count
+            with active_lock:
+                active_count += 1
+                concurrency = active_count
+            try:
+                step_log, stdout = self._run_step(step)
+                gate_log = None
+                if step.gates and step_log.status == "completed":
+                    gate_log = self._run_gate(step)
+                    if gate_log and not gate_log.get("overall_pass", True):
+                        step_log.status = "gate_failed"
+                return step.id, step_log, stdout, gate_log, concurrency
+            finally:
+                with active_lock:
+                    active_count -= 1
+
+        submitted: set[str] = set()
+
+        with ThreadPoolExecutor(max_workers=max_parallel) as executor:
+            futures: dict = {}
+
+            while len(finished) < len(config.steps):
+                # Find and submit ready steps (main thread only)
+                for step in config.steps:
+                    if step.id in finished or step.id in submitted:
+                        continue
+                    if all(d in finished for d in step.depends_on):
+                        if all(finished.get(d) == "completed"
+                               for d in step.depends_on):
+                            config._resolve_step(step, runtime_vars)
+                            future = executor.submit(execute_step, step)
+                            futures[future] = step.id
+                            submitted.add(step.id)
+
+                if not futures:
+                    break
+
+                done, _ = wait(set(futures.keys()),
+                               return_when=FIRST_COMPLETED)
+
+                for f in done:
+                    futures.pop(f)
+                    step_id, step_log, stdout, gate_log, concurrency = \
+                        f.result()
+
+                    step_dict = step_log.to_dict()
+                    if gate_log:
+                        step_dict["gate_result"] = gate_log
+
+                    step_results[step_id] = step_dict
+                    concurrency_info[step_id] = concurrency
+
+                    if step_log.status in ("failed", "gate_failed"):
+                        finished[step_id] = step_log.status
+                        mark_downstream_skipped(step_id)
+                    else:
+                        finished[step_id] = "completed"
+                        step = step_map[step_id]
+                        if step.output_vars:
+                            for var_name in step.output_vars:
+                                if (var_name in runtime_vars
+                                        and var_name not in vars_dict):
+                                    raise PipelineError(
+                                        f"output_var conflict: '{var_name}' "
+                                        f"already set by another step"
+                                    )
+                            self._process_output_vars(
+                                step, stdout, runtime_vars, vars_dict
+                            )
+
+        # Build final log in topological order
+        for step in config.execution_order():
+            if step.id in step_results:
+                pipeline_log["steps"].append(step_results[step.id])
+
+        pipeline_log["concurrency_info"] = concurrency_info
+        has_failure = any(v != "completed" for v in finished.values())
+        pipeline_log["status"] = "failed" if has_failure else "completed"
         pipeline_log["completed_at"] = datetime.now(JST).isoformat()
         self._write_log(pipeline_log, log_path)
         return pipeline_log
@@ -467,4 +609,6 @@ def format_status(log: dict) -> str:
         lines.append(f"  {s['id']}: {s['status']} ({duration}){gate}")
         if s.get("error"):
             lines.append(f"    error: {s['error']}")
+        if s.get("skipped_reason"):
+            lines.append(f"    skipped_reason: {s['skipped_reason']}")
     return "\n".join(lines)

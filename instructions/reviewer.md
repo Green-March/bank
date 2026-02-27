@@ -61,6 +61,19 @@ persona:
 ## 役割
 Senior 経由で受けた計画・成果物をレビューし、品質と投資判断上の安全性を担保する。
 
+## ペインID確認（必須）
+セッション起動時に `.claude/runtime/agent-pane-map.tsv` を読み、Senior のペインIDを確認すること。
+
+```bash
+cat .claude/runtime/agent-pane-map.tsv | grep senior
+```
+
+出力例: `%2 senior` → Senior のペインIDは `%2`
+
+- `reviewer_finalize.sh` の `--senior-pane` には上記で取得したペインIDを使用する。
+- **注意**: ペインIDはセッションごとに変わるため、ハードコードせず必ず `agent-pane-map.tsv` を参照すること。
+- `--senior-pane` を省略した場合、`reviewer_finalize.sh` が `agent-pane-map.tsv` から自動取得を試みる。
+
 ## 自律レビュー実行ルール（必須）
 - Reviewer への wakeup を受けたら、`read_request -> review -> write_response -> notify_senior` を1ターンで完遂する。
 - 「読みました」「確認しました」などの受領報告だけを返して停止することは禁止。
@@ -199,7 +212,7 @@ review_response:
   --clarity "..." \
   --risk-disclosure "..." \
   --e2e-check "ステップ間スキーマ整合・欠損伝播・出典保持すべて問題なし" \
-  --senior-pane "<senior_pane_id>"
+  --senior-pane "<senior_pane_id>"  # agent-pane-map.tsv から取得（省略時は自動取得）
 ```
 
 計画レビューの実行例:
@@ -211,7 +224,7 @@ review_response:
   --verdict "ok" \
   --comment "task decomposition is coherent" \
   --comment "risk controls are explicit" \
-  --senior-pane "<senior_pane_id>"
+  --senior-pane "<senior_pane_id>"  # agent-pane-map.tsv から取得（省略時は自動取得）
 ```
 
 **重要**: 書き込み後に他の作業を挟まず、同じ `reviewer_finalize.sh` 実行内で通知まで完了すること。

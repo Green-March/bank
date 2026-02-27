@@ -30,7 +30,7 @@ YAML source (one of):
   stdin                 If --plan-file is not given, reads from stdin
 
 Options:
-  --reviewer-pane <id>  (required) Reviewer tmux pane ID
+  --reviewer-pane <id>  Reviewer tmux pane ID (auto-detected from agent-pane-map.tsv if omitted)
   --notify-message <t>  Override notification message
   -h, --help            Show this help
 USAGE
@@ -67,8 +67,24 @@ while [[ "$#" -gt 0 ]]; do
   esac
 done
 
+# Auto-retrieve --reviewer-pane from agent-pane-map.tsv if not specified
+PANE_MAP=".claude/runtime/agent-pane-map.tsv"
 if [[ -z "${reviewer_pane}" ]]; then
-  echo "ERROR: --reviewer-pane is required." >&2
+  if [[ -f "${PANE_MAP}" ]]; then
+    reviewer_pane="$(grep reviewer "${PANE_MAP}" | awk '{print $1}')"
+    if [[ -n "${reviewer_pane}" ]]; then
+      echo "senior_submit_plan: auto-detected reviewer pane: ${reviewer_pane}" >&2
+    fi
+  fi
+  if [[ -z "${reviewer_pane}" ]]; then
+    echo "ERROR: --reviewer-pane is required and agent-pane-map.tsv not found." >&2
+    exit 2
+  fi
+fi
+
+# Validate that the pane exists in the multiagent session
+if ! tmux list-panes -t multiagent:0 -F '#{pane_id}' 2>/dev/null | grep -qF "${reviewer_pane}"; then
+  echo "ERROR: pane ${reviewer_pane} does not exist in multiagent session." >&2
   exit 2
 fi
 

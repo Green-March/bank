@@ -2,112 +2,75 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_s34_039_041_v2"
-  timestamp: "2026-02-27T20:40:00+09:00"
-  status: pending
-  revision_note: "Reviewer 指摘2点を修正: (1) skill_registry コマンド名を実際のCLIと一致 (2) financial-integrator に --harmonized-dir を追加し harmonize→integrate 経路を確保"
-
-  overview: |
-    Manager から3件の依頼 (req_039, req_040, req_041) を受領。
-    3名の Junior に1件ずつ並行委任し、最大並列度で処理する。
-    【v2 修正】req_039 のスコープを拡大し、financial-integrator 側の
-    入力仕様変更を含め、web データが下流評価に反映されるE2Eテストを追加。
-
-  tasks:
-    - task_id: "task_039"
-      request_id: "req_039"
-      assigned_to: junior1
-      title: "pipeline-runner に web-researcher / web-data-harmonizer ステップ統合 + financial-integrator 入力拡張"
+  plan_id: "plan_req_042_043"
+  request_id: "plan_req_042_043"
+  timestamp: "2026-02-27T21:10:00+09:00"
+  objective: "2件のシステム改善: (1) Reviewer ペインID誤指定の根本対策, (2) pipeline-runner 並列実行最適化"
+  context:
+    req_042_background: "S34でReviewerがreviewer_finalize.shの--senior-paneに%0(Manager)を誤指定し通知がManagerに届いた。instructions/reviewer.mdにペインID取得方法が未記載。go.shは.claude/runtime/agent-pane-map.tsvにランタイムマッピングを書いているが、テンプレートもinstructionsも参照していない。"
+    req_043_background: "pipeline-runnerは12ステップDAGを完全逐次実行。collect_jquants/collect/web_researchは独立だが1つずつ実行。diamond DAG (valuate/analyze_risk/inventory) も同様。concurrent.futuresで並列化すれば実行時間短縮可能。"
+  task_decomposition:
+    - task_id: "req_042_T1"
+      title: "Reviewer ペインID根本対策"
+      assignee: "junior1"
       description: |
-        1. pipeline-runner の skill_registry に web_research / harmonize ステップを追加。
-           コマンドは実際のスキルCLIを正確に参照:
-           - web_research: "python3 skills/web-researcher/scripts/main.py collect --ticker {ticker} --source all --output data/{ticker}/web_research/research.json"
-           - harmonize: "python3 skills/web-data-harmonizer/scripts/main.py harmonize --ticker {ticker} --source all --input data/{ticker}/web_research/research.json --output data/{ticker}/harmonized/harmonized_financials.json"
-        2. financial-integrator に --harmonized-dir オプションを追加。
-           - integrator.py: harmonized_financials.json をオプショナル第3ソースとして読み込み
-           - マージ優先順位: EDINET (primary) → Web (secondary) → J-Quants (tertiary)
-           - harmonized_dir 未指定時は既存動作と完全互換
-        3. integrate ステップの depends_on を [parse, harmonize] に更新。
-        4. example_pipeline.yaml を12ステップ構成に更新。
-      pipeline_structure: |
-        resolve → {collect_jquants, collect, web_research} (3並列)
-                   collect → parse ─────────────────────┐
-                   web_research → harmonize ─────────────┤
-                                                         ↓
-                   integrate (EDINET+Web+JQuants) → calculate
-                        ↓
-                   {valuate, analyze_risk, inventory} (3並列)
-                        ↓
-                      report
-      deliverables:
-        - "skills/pipeline-runner/scripts/pipeline.py: skill_registry に web_research / harmonize 追加（実CLI参照）"
-        - "skills/pipeline-runner/references/example_pipeline.yaml: 12ステップ構成に更新"
-        - "skills/financial-integrator/scripts/main.py: --harmonized-dir CLIオプション追加"
-        - "skills/financial-integrator/scripts/integrator.py: web データ第3ソースマージ実装"
-        - "E2Eテスト: web データが integrate → calculate → 下流に反映されることを検証"
-        - "既存テスト全パス確認 (pipeline-runner 53件, financial-integrator 既存テスト)"
-      acceptance_criteria:
-        - "skill_registry コマンドが実際のスキルCLI (main.py collect / main.py harmonize) と一致"
-        - "financial-integrator --harmonized-dir 指定時に web データが統合される"
-        - "financial-integrator --harmonized-dir 未指定時に既存動作と完全互換"
-        - "integrate ステップが parse + harmonize 両方の完了を待ってから実行"
-        - "example_pipeline.yaml が DAG 検証を通過"
-        - "E2Eテスト: web source データが integrated_financials.json に反映"
-        - "既存テスト全パス"
-
-    - task_id: "task_040"
-      request_id: "req_040"
-      assigned_to: junior2
-      title: "financial-reporter に valuation/risk セクション追加"
+        以下の4つの改修を実施する:
+        1. instructions/reviewer.md に「ペインID確認」セクションを追加
+           - agent-pane-map.tsv (.claude/runtime/agent-pane-map.tsv) の参照方法を明記
+           - Senior のペインIDは agent-pane-map.tsv で「senior」を検索して取得するルールを明記
+           - 使用例の <senior_pane_id> を具体的な取得手順に置き換える
+        2. reviewer_finalize.sh に --senior-pane のデフォルト自動取得機能を追加
+           - --senior-pane 未指定時に .claude/runtime/agent-pane-map.tsv から senior のペインIDを自動取得
+           - agent-pane-map.tsv が存在しない場合はエラー終了（従来通り必須）
+           - 取得したペインIDが tmux pane として存在するかバリデーション追加
+        3. senior_submit_plan.sh に --reviewer-pane のデフォルト自動取得機能を追加
+           - 同様に agent-pane-map.tsv から reviewer のペインIDを自動取得
+           - バリデーション追加
+        4. instructions/junior.md に「ペインID確認」セクションを追加
+           - Senior への send-keys 送信時に agent-pane-map.tsv を参照するルールを明記
+      output_path: "instructions/reviewer.md, instructions/junior.md, templates/reviewer_finalize.sh, templates/senior_submit_plan.sh"
+      quality_criteria:
+        - "reviewer_finalize.sh が --senior-pane 省略時に agent-pane-map.tsv から正しく取得できること"
+        - "senior_submit_plan.sh が --reviewer-pane 省略時に agent-pane-map.tsv から正しく取得できること"
+        - "agent-pane-map.tsv が存在しない場合に明確なエラーメッセージが出ること"
+        - "不正なペインIDを指定した場合にバリデーションエラーが出ること"
+        - "instructions/reviewer.md にペインID取得手順が明記されていること"
+        - "instructions/junior.md にペインID取得手順が明記されていること"
+    - task_id: "req_043_T2"
+      title: "pipeline-runner 並列実行最適化"
+      assignee: "junior2"
       description: |
-        financial-reporter の render.py に valuation-calculator と risk-analyzer の
-        出力データを表示するセクションを追加する。
-        データがない場合は graceful degradation でセクションを省略する。
-      deliverables:
-        - "main.py に --valuation / --risk CLI オプション追加"
-        - "render.py に valuation セクション (DCF結果, 感度分析テーブル, PER/PBR/EV-EBITDA比較)"
-        - "render.py に risk セクション (5カテゴリ: market/credit/liquidity/operational/regulatory)"
-        - "新規テスト追加"
-        - "既存テスト全パス確認"
-      acceptance_criteria:
-        - "valuation データ入力時に DCF/相対バリュエーション セクションが出力される"
-        - "risk データ入力時に5カテゴリリスクサマリーが出力される"
-        - "valuation/risk データなし時にセクション省略 (graceful degradation)"
-        - "既存テスト全パス"
-        - "新規テスト追加"
-
-    - task_id: "task_041"
-      request_id: "req_041"
-      assigned_to: junior3
-      title: "Reviewer E2E 検証観点追加"
-      description: |
-        Reviewer の instructions に E2E (End-to-End) パイプライン検証の
-        補足チェックリストを追加する。既存6観点レビューは変更せず、
-        E2E 検証は補足的なチェックリストとして追加する。
-      deliverables:
-        - "instructions/reviewer.md に E2E チェックリスト追加"
-        - "templates/reviewer_finalize.sh に --e2e-check オプション追加"
-        - "CLAUDE.md の関連セクション同期更新"
-      e2e_checklist:
-        - "ステップ間データ整合性 (出力スキーマ → 次ステップ入力スキーマ一致)"
-        - "欠損伝播 (null/N/A が下流で適切に処理されているか)"
-        - "source_attribution 一貫性 (全ステップで出典情報が保持されているか)"
-        - "数値精度保持 (丸め・単位変換で精度が失われていないか)"
-      acceptance_criteria:
-        - "instructions/reviewer.md に E2E セクション追加"
-        - "reviewer_finalize.sh --e2e-check オプション動作"
-        - "CLAUDE.md との整合性"
-        - "既存6観点レビュー体系に変更なし"
-
-  quality_criteria:
-    - "全既存テストパス"
-    - "新規テスト追加 (各タスクで最低5件)"
-    - "既存機能への破壊的変更なし"
-    - "CLAUDE.md との整合性維持"
-
-  parallelization:
-    strategy: "3 Junior 完全並列"
-    junior1: "task_039 (pipeline-runner web統合 + financial-integrator 入力拡張)"
-    junior2: "task_040 (financial-reporter valuation/risk)"
-    junior3: "task_041 (reviewer E2E)"
-    dependencies: "3タスクは独立。並列実行可能。"
+        pipeline.py の PipelineRunner.run() メソッドを並列実行対応に改修する:
+        1. 逐次実行 (for step in steps) を依存ベーススケジューリングに変更
+           - 全依存が完了したステップを concurrent.futures.ThreadPoolExecutor で並列起動
+           - max_workers はデフォルト3（collect系3並列に対応）、--max-parallel オプションで変更可能
+        2. 並列実行時の失敗伝播
+           - 1ステップ失敗 → そのステップに依存する下流ステップを全スキップ
+           - 他の独立パスは継続実行（fail-fast ではなくベストエフォート）
+           - パイプライン全体のステータスは1つでも失敗があれば "failed"
+        3. ログ整合性
+           - 並列実行でもステップログが正しく記録される（スレッドセーフ）
+           - 各ステップの started_at/completed_at/duration_sec が正確に記録される
+        4. output_vars の伝播
+           - 依存先ステップの output_vars は、依存元ステップ実行前に確実に解決済みであること
+           - 並列ステップ間での variable 競合がないこと（各ステップの output_vars は独立）
+        5. Quality gate の実行
+           - gate は各ステップ完了直後に同一スレッドで実行（従来通り）
+           - gate 失敗時は当該ステップを failed 扱いにして下流をスキップ
+        6. ベンチマーク
+           - 逐次 vs 並列の所要時間比較をテストで記録
+           - 並列実行のログに concurrency_info (同時実行ステップ数) を追加
+        7. 既存テスト全パス確認
+           - 69テスト全パス + 新規並列テスト追加
+      output_path: "skills/pipeline-runner/scripts/pipeline.py, skills/pipeline-runner/tests/"
+      quality_criteria:
+        - "collect_jquants + collect + web_research が並列実行されること（テストで確認）"
+        - "valuate + analyze_risk + inventory が並列実行されること（テストで確認）"
+        - "1ステップ失敗時に依存下流のみスキップ、他パスは継続すること"
+        - "output_vars が並列実行でも正しく伝播すること"
+        - "既存テスト69件が全パスすること"
+        - "新規並列テストが追加されていること"
+  risk_mitigation:
+    - "req_042: agent-pane-map.tsv が存在しない環境（初回起動前）でのフォールバック — 明確なエラーメッセージ + 手動指定への誘導"
+    - "req_043: ThreadPoolExecutor の subprocess.run はGILの影響を受けないため並列性能は確保される"
+    - "req_043: 既存テストは逐次実行前提のモック — 並列対応のテストを追加して既存テストも維持"

@@ -4,7 +4,9 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  reviewer_finalize.sh --mode plan|deliverable --output <yaml_path> --verdict <ok|revise> --senior-pane <pane_id> [options]
+  reviewer_finalize.sh --mode plan|deliverable --output <yaml_path> --verdict <ok|revise> [--senior-pane <pane_id>] [options]
+
+  --senior-pane is optional: auto-detected from .claude/runtime/agent-pane-map.tsv if omitted.
 
 Plan review options:
   --request-id <id>
@@ -176,7 +178,27 @@ done
 require_value "--mode" "${mode}"
 require_value "--output" "${output}"
 require_value "--verdict" "${verdict}"
-require_value "--senior-pane" "${senior_pane}"
+
+# Auto-retrieve --senior-pane from agent-pane-map.tsv if not specified
+PANE_MAP=".claude/runtime/agent-pane-map.tsv"
+if [[ -z "${senior_pane}" ]]; then
+  if [[ -f "${PANE_MAP}" ]]; then
+    senior_pane="$(grep senior "${PANE_MAP}" | awk '{print $1}')"
+    if [[ -n "${senior_pane}" ]]; then
+      echo "reviewer_finalize: auto-detected senior pane: ${senior_pane}" >&2
+    fi
+  fi
+  if [[ -z "${senior_pane}" ]]; then
+    echo "ERROR: --senior-pane is required and agent-pane-map.tsv not found." >&2
+    exit 2
+  fi
+fi
+
+# Validate that the pane exists in the multiagent session
+if ! tmux list-panes -t multiagent:0 -F '#{pane_id}' 2>/dev/null | grep -qF "${senior_pane}"; then
+  echo "ERROR: pane ${senior_pane} does not exist in multiagent session." >&2
+  exit 2
+fi
 
 if [[ "${mode}" != "plan" && "${mode}" != "deliverable" ]]; then
   echo "ERROR: --mode must be plan or deliverable." >&2

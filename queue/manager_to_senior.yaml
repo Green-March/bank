@@ -1,48 +1,31 @@
 queue:
-  - request_id: "req_039"
-    objective: "web-researcher / web-data-harmonizer をパイプラインステップとして pipeline-runner に追加する。resolve 後に web データ収集・変換フェーズを挟み、EDINET/J-Quants と並行して web ソースからもデータを取得できるようにする。"
+  - request_id: "req_042"
+    objective: "Reviewer ペインID 問題の根本対策 — instructions/reviewer.md および関連テンプレートに正しいペインIDを明示し、reviewer_finalize.sh の --senior-pane 誤指定を防止する"
     ticker: null
     universe: null
-    analysis_type: "skill_enhancement"
+    analysis_type: "system_improvement"
     timeframe: null
-    output_format: ["py", "yaml"]
+    output_format: ["md"]
     priority: "high"
     due_date: "2026-02-27"
     constraints:
-      - "既存の10ステップパイプライン構造を維持しつつ拡張する"
-      - "web-researcher (4サイト: Yahoo/Kabutan/Shikiho/Homepage) と web-data-harmonizer の既存スキルを活用"
-      - "pipeline-runner の skill_registry に web_research / harmonize ステップを追加"
-      - "example_pipeline.yaml を更新してフル構成を示す"
-      - "テストを追加し既存テストが壊れないことを確認"
-
-  - request_id: "req_040"
-    objective: "financial-reporter に valuation-calculator と risk-analyzer の出力セクションを追加する。レポートに DCF 評価結果、相対バリュエーション (PER/PBR/EV-EBITDA)、リスク分析 (5カテゴリ) を含める。"
+      - "tmux pane ID: %0=manager, %2=senior, %1=junior1, %4=junior2, %3=junior3, %5=reviewer"
+      - "instructions/reviewer.md の冒頭またはワークフローセクションに、Senior ペインID (%2) を明記する"
+      - "reviewer_finalize.sh のデフォルト --senior-pane を %2 に固定するか、引数バリデーションを追加する"
+      - "S34で発生した問題: Reviewer が --senior-pane に %0 (Manager) を誤指定し、通知が Manager に届いた"
+      - "Junior の send-keys 宛先ペインIDも instructions/junior.md に明記を検討する"
+  - request_id: "req_043"
+    objective: "pipeline-runner の並列実行最適化 — collect_jquants + collect + web_research の並列実行を実測し、パイプライン実行時間を短縮する"
     ticker: null
     universe: null
-    analysis_type: "skill_enhancement"
+    analysis_type: "system_improvement"
     timeframe: null
-    output_format: ["py", "md", "html"]
-    priority: "high"
-    due_date: "2026-02-27"
-    constraints:
-      - "既存の financial-reporter テンプレートを拡張する形で実装"
-      - "valuation セクション: DCF結果、感度分析テーブル、PER/PBR/EV-EBITDA 比較"
-      - "risk セクション: 5カテゴリ (market/credit/liquidity/operational/regulatory) のサマリー"
-      - "valuation/risk データが無い場合はセクションを省略する (graceful degradation)"
-      - "テストを追加し既存テストが壊れないことを確認"
-
-  - request_id: "req_041"
-    objective: "Reviewer の instructions にパイプライン全体の E2E (End-to-End) 検証観点を追加する。個別成果物レビューに加え、パイプライン出力間の整合性をチェックできるようにする。"
-    ticker: null
-    universe: null
-    analysis_type: "process_improvement"
-    timeframe: null
-    output_format: ["md", "yaml"]
+    output_format: ["md"]
     priority: "medium"
     due_date: "2026-02-27"
     constraints:
-      - "既存の6観点レビュー体系に E2E 観点を追加する (7観点化ではなく、E2E は補足チェックリスト)"
-      - "チェック項目: ステップ間データ整合性、欠損伝播、source_attribution 一貫性、数値精度保持"
-      - "reviewer_finalize.sh に E2E オプションを追加"
-      - "instructions/reviewer.md を更新"
-      - "CLAUDE.md の関連セクションも同期更新"
+      - "現在の12ステップ DAG: resolve → {collect_jquants, collect, web_research} → parse → harmonize → integrate → calculate → {valuate, analyze_risk, inventory} → report"
+      - "collect_jquants, collect, web_research は独立しており並列実行可能なはず — 実際にsubprocess等で並列化されているか確認"
+      - "diamond DAG (calculate → {valuate, analyze_risk, inventory} → report) の並列実行も同様に確認"
+      - "並列実行のベンチマーク（逐次 vs 並列の所要時間比較）を記録する"
+      - "既存テスト (pipeline-runner 69テスト) が全パスすることを確認する"
