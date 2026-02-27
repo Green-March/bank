@@ -61,9 +61,9 @@ class TestWebStepsDAG:
         errors = config.validate_dag()
         assert errors == [], f"DAG errors: {errors}"
 
-    def test_12_steps_present(self) -> None:
+    def test_13_steps_present(self) -> None:
         config = PipelineConfig.load(EXAMPLE_PIPELINE)
-        assert len(config.steps) == 12
+        assert len(config.steps) == 13
 
     def test_web_research_depends_on_resolve(self) -> None:
         config = PipelineConfig.load(EXAMPLE_PIPELINE)
@@ -117,13 +117,18 @@ class TestWebStepsDAG:
 
 class TestWebStepsMockExecution:
 
-    def test_12_step_mock_run_completes(self) -> None:
+    def test_13_step_mock_run_completes(self) -> None:
         config = PipelineConfig.load(EXAMPLE_PIPELINE)
 
         resolve_stdout = json.dumps({
             "fye_month": 3,
             "edinet_code": "E99999",
             "company_name": "テスト株式会社",
+        })
+        jquants_stdout = json.dumps({
+            "saved_path": "/tmp/test/statements.json",
+            "record_count": 8,
+            "shares_outstanding": "18260731",
         })
         call_commands: list[str] = []
 
@@ -132,7 +137,12 @@ class TestWebStepsMockExecution:
             result = MagicMock()
             result.returncode = 0
             result.stderr = ""
-            result.stdout = resolve_stdout if len(call_commands) == 1 else "{}"
+            if "ticker-resolver" in cmd:
+                result.stdout = resolve_stdout
+            elif "--extract-shares" in cmd:
+                result.stdout = jquants_stdout
+            else:
+                result.stdout = "{}"
             return result
 
         with patch("pipeline.subprocess.run", side_effect=mock_run):
@@ -140,7 +150,7 @@ class TestWebStepsMockExecution:
             log = runner.run(config, {"ticker": "TEST"})
 
         assert log["status"] == "completed"
-        assert len(log["steps"]) == 12
+        assert len(log["steps"]) == 13
 
         web_cmds = [c for c in call_commands if "web-researcher" in c]
         assert len(web_cmds) == 1

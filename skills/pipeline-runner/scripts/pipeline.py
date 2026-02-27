@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -293,11 +294,15 @@ class PipelineRunner:
     """Execute pipeline steps with optional parallelism."""
 
     def __init__(self, working_dir: str | Path | None = None) -> None:
-        self.working_dir = str(working_dir) if working_dir else None
+        if working_dir:
+            self.working_dir = str(working_dir)
+        else:
+            self.working_dir = str(Path(__file__).resolve().parent.parent.parent.parent)
 
     def run(self, config: PipelineConfig, vars_dict: dict[str, str],
             log_path: str | Path | None = None,
             max_parallel: int = 1) -> dict[str, Any]:
+        sys.stderr.write(f"[pipeline] working_dir={self.working_dir}\n")
         errors = config.validate_dag()
         if errors:
             raise PipelineError(f"DAG validation failed: {'; '.join(errors)}")
@@ -489,6 +494,14 @@ class PipelineRunner:
         stdout = ""
 
         try:
+            env = os.environ.copy()
+            project_root = self.working_dir
+            existing = env.get("PYTHONPATH", "")
+            if existing:
+                env["PYTHONPATH"] = project_root + os.pathsep + existing
+            else:
+                env["PYTHONPATH"] = project_root
+
             result = subprocess.run(
                 step.command,
                 shell=True,
@@ -496,6 +509,7 @@ class PipelineRunner:
                 text=True,
                 cwd=self.working_dir,
                 timeout=600,
+                env=env,
             )
             log.completed_at = datetime.now(JST).isoformat()
             started = datetime.fromisoformat(log.started_at)

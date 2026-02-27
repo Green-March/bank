@@ -1,17 +1,43 @@
 queue:
-  - request_id: "req_044"
-    objective: "4番目の銘柄（4971 メック）でフルパイプライン12ステップ E2E 検証。S35で導入した並列実行（ThreadPoolExecutor + 依存ベーススケジューラ）の実運用検証を含む。"
-    ticker: "4971"
+  - request_id: "req_045"
+    objective: "pipeline-runner の PYTHONPATH 自動解決。_run_step() でサブプロセス起動時に skills ディレクトリを含む PYTHONPATH を env に自動継承させ、毎セッション手動 export を不要にする。既存テスト (83件) が全て pass すること。"
+    ticker: null
     universe: null
-    analysis_type: "full_pipeline_e2e"
-    timeframe: "5y"
-    output_format: ["md", "html"]
+    analysis_type: "infrastructure"
+    timeframe: null
+    output_format: ["code"]
     priority: "high"
     due_date: "2026-02-27"
     constraints:
-      - "pipeline-runner の12ステップ全実行（resolve → {collect_jquants, collect, web_research} → parse → harmonize → integrate → calculate → {valuate, analyze_risk, inventory} → report）"
-      - "並列実行（--max-parallel 3）を使用し、concurrency_info を確認"
-      - "失敗伝播（downstream skip）の動作も確認"
-      - "利用データソースを明記する"
-      - "前提とリスクを明示する"
-      - "最終レポート（md + html）を生成する"
+      - "skills/ 配下の全スキルが import 可能であること"
+      - "既存テスト 83件が全て pass すること"
+      - "ハードコードパスではなく、プロジェクトルートから動的に解決すること"
+
+  - request_id: "req_046"
+    objective: "パイプラインに relative valuation ステップと shares_outstanding 取得を追加。(1) J-Quants or EDINET から発行済株式数を取得し per_share_value を算出可能にする。(2) valuation-calculator の cmd_relative() をパイプライン定義に組み込み、PER/PBR/EV-EBITDA の業界比較を実行する。"
+    ticker: null
+    universe: null
+    analysis_type: "feature_development"
+    timeframe: null
+    output_format: ["code"]
+    priority: "high"
+    due_date: "2026-02-27"
+    constraints:
+      - "既存の12ステップ DAG との整合性を維持すること"
+      - "shares_outstanding は J-Quants listed-info API または EDINET メタデータから取得"
+      - "relative valuation 結果は financial-reporter の valuation セクションに反映"
+      - "新規・変更テストが全て pass すること"
+
+  - request_id: "req_047"
+    objective: "go.sh に agent-pane-map.tsv 自動生成を組み込む。tmux セッション作成後、各ペインの pane_id と agent_role を agent-pane-map.tsv に自動出力し、reviewer_finalize.sh・senior_submit_plan.sh が参照できるようにする。"
+    ticker: null
+    universe: null
+    analysis_type: "infrastructure"
+    timeframe: null
+    output_format: ["code"]
+    priority: "medium"
+    due_date: "2026-02-27"
+    constraints:
+      - "既存の go.sh 起動シーケンスを壊さないこと"
+      - "agent-pane-map.tsv のフォーマットは既存と同一 (pane_id<TAB>agent_role)"
+      - "reviewer_finalize.sh・senior_submit_plan.sh の動作に影響がないこと"

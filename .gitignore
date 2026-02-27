@@ -88,3 +88,6 @@ dist/
 # Coverage
 .coverage
 htmlcov/
+
+# Gate results (temporary pipeline output)
+*_gate_results.json

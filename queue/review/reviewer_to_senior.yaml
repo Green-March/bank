@@ -1,9 +1,10 @@
 plan_review_response:
-  request_id: 'req_044'
+  request_id: 'req_045_046_047'
   verdict: 'ok'
   comments:
-    - '依存関係・担当分離が明確化され、同一工程の責務衝突リスクが低減した。'
-    - 'parallelization_plan と quality_criteria の整合性は一貫しており、実行順序が再現しやすい。'
-    - 'concurrency判定の閾値定義が具体化され、E2E判定の再現性が向上している。'
+    - '依存関係と分解は明確で、3タスクはファイル分離が高く並列実行しやすい'
+    - 'データ入出力の妥当性は課題定義に沿うが、shares_outstanding の受け渡し仕様は明文化されていると再現性が上がる'
+    - '品質基準（既存回帰テスト+新規追加）とリスク対策（検証・バリデーション）が概ね揃っている'
   suggested_changes:
-    - 'pipeline-runnerテスト件数の受け入れ基準は固定値83ではなく"83件以上/全件"の表現にすると将来差分に強い。'
+    - 'req_046 で listed_info の shares_outstanding キー名/型・欠損時フォールバックを事前に定義しておく'
+    - 'req_047 の map 生成で検証失敗時は起動継続と明記しつつ、障害時の可視化（fatal ではなく warning+self-heal）方針を明文化する'

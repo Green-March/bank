@@ -30,7 +30,7 @@ def test_validate_example_pipeline() -> None:
     errors = config.validate_dag()
     assert errors == [], f"DAG errors: {errors}"
 
-    assert len(config.steps) == 12
+    assert len(config.steps) == 13
 
     # validate_vars should pass with only ticker
     config.validate_vars({"ticker": "TEST"})
@@ -41,14 +41,19 @@ def test_validate_example_pipeline() -> None:
 # ---------------------------------------------------------------------------
 
 def test_mock_run_example_pipeline() -> None:
-    """Full 12-step mock run: resolve outputs JSON vars, subsequent steps
-    receive expanded fye_month. No real API calls."""
+    """Full 13-step mock run: resolve outputs JSON vars, collect_jquants
+    outputs shares_outstanding. No real API calls."""
     config = PipelineConfig.load(EXAMPLE_PIPELINE)
 
     resolve_stdout = json.dumps({
         "fye_month": 3,
         "edinet_code": "E99999",
         "company_name": "テスト株式会社",
+    })
+    jquants_stdout = json.dumps({
+        "saved_path": "/tmp/test/statements.json",
+        "record_count": 8,
+        "shares_outstanding": "18260731",
     })
 
     call_commands: list[str] = []
@@ -58,9 +63,10 @@ def test_mock_run_example_pipeline() -> None:
         result = MagicMock()
         result.returncode = 0
         result.stderr = ""
-        # First call is resolve step
-        if len(call_commands) == 1:
+        if "ticker-resolver" in cmd:
             result.stdout = resolve_stdout
+        elif "--extract-shares" in cmd:
+            result.stdout = jquants_stdout
         else:
             result.stdout = "{}"
         return result
@@ -69,9 +75,9 @@ def test_mock_run_example_pipeline() -> None:
         runner = PipelineRunner()
         log = runner.run(config, {"ticker": "TEST"})
 
-    # All 12 steps completed
+    # All 13 steps completed
     assert log["status"] == "completed"
-    assert len(log["steps"]) == 12
+    assert len(log["steps"]) == 13
     for step_log in log["steps"]:
         assert step_log["status"] == "completed"
 

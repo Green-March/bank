@@ -13,10 +13,12 @@ pipeline:
         company_name: company_name
     - id: collect_jquants
       skill: disclosure-collector
-      command: "python3 skills/disclosure-collector/scripts/main.py jquants {ticker} --output-dir data/{ticker}/raw/jquants"
+      command: "python3 skills/disclosure-collector/scripts/main.py jquants {ticker} --output-dir data/{ticker}/raw/jquants --extract-shares"
       output_dir: "data/{ticker}/raw/jquants"
       depends_on: [resolve]
       gates: "skills/quality-gate/references/gates_collect_jquants.yaml"
+      output_vars:
+        shares_outstanding: shares_outstanding
     - id: collect
       skill: disclosure-collector
       command: "python3 skills/disclosure-collector/scripts/main.py edinet {edinet_code} --ticker {ticker} --start-date $(python3 -c 'import datetime as d;print((d.date.today()-d.timedelta(days=1095)).isoformat())') --end-date $(python3 -c 'import datetime as d;print(d.date.today().isoformat())')"
@@ -59,10 +61,16 @@ pipeline:
       gates: "skills/quality-gate/references/gates_inventory.yaml"
     - id: valuate
       skill: valuation-calculator
-      command: "python3 skills/valuation-calculator/scripts/main.py dcf --metrics data/{ticker}/parsed/metrics.json --output data/{ticker}/valuation/dcf.json"
+      command: "python3 skills/valuation-calculator/scripts/main.py dcf --metrics data/{ticker}/parsed/metrics.json --output data/{ticker}/valuation/dcf.json $([ -n \"{shares_outstanding}\" ] && echo \"--shares {shares_outstanding}\")"
       output_dir: "data/{ticker}/valuation"
       depends_on: [calculate]
       gates: "skills/quality-gate/references/gates_valuation.yaml"
+    - id: valuate_relative
+      skill: valuation-calculator
+      command: "python3 skills/valuation-calculator/scripts/main.py relative --metrics data/{ticker}/parsed/metrics.json --output data/{ticker}/valuation/relative.json"
+      output_dir: "data/{ticker}/valuation"
+      depends_on: [calculate]
+      gates: "skills/quality-gate/references/gates_valuation_relative.yaml"
     - id: analyze_risk
       skill: risk-analyzer
       command: "python3 skills/risk-analyzer/scripts/main.py analyze --ticker {ticker} --input-dir data/{ticker}/raw/edinet --output data/{ticker}/risk/risk_analysis.json"
@@ -73,5 +81,5 @@ pipeline:
       skill: financial-reporter
       command: "python3 skills/financial-reporter/scripts/main.py --ticker {ticker} --metrics data/{ticker}/parsed/metrics.json --output-md data/{ticker}/reports/{ticker}_report.md --output-html data/{ticker}/reports/{ticker}_report.html"
       output_dir: "data/{ticker}/reports"
-      depends_on: [valuate, analyze_risk, inventory]
+      depends_on: [valuate, valuate_relative, analyze_risk, inventory]
       gates: "skills/quality-gate/references/gates_report.yaml"

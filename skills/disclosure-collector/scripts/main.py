@@ -16,9 +16,11 @@ from skills.common.auth import JQuantsAuth, JQuantsAuthError
 # スクリプト直接実行とパッケージインポートの両方に対応
 if __name__ == "__main__":
     from edinet import EdinetError, collect_edinet_pdfs, collect_edinet_reports
+    from shares import extract_shares_outstanding
     from statements import StatementsClient, StatementsError
 else:
     from .edinet import EdinetError, collect_edinet_pdfs, collect_edinet_reports
+    from .shares import extract_shares_outstanding
     from .statements import StatementsClient, StatementsError
 
 load_dotenv()
@@ -75,6 +77,9 @@ def collect_jquants(code: str, output_dir: str | None = None) -> dict:
     return {
         "saved_path": str(save_path),
         "record_count": len(statements) if isinstance(statements, list) else 0,
+        "shares_outstanding": extract_shares_outstanding(
+            statements if isinstance(statements, list) else []
+        ),
     }
 
 
@@ -176,6 +181,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="出力先ディレクトリ（省略時: data/{code}/raw/jquants/）",
     )
+    parser_jq.add_argument(
+        "--extract-shares",
+        action="store_true",
+        default=False,
+        help="stdout に shares_outstanding を含む JSON を出力（パイプライン output_vars 用）",
+    )
 
     parser_ed = subparsers.add_parser(
         "edinet",
@@ -269,8 +280,15 @@ def main() -> int:
     try:
         if args.command == "jquants":
             result = collect_jquants(args.code, args.output_dir)
-            print(f"保存完了: {result['saved_path']}")
-            print(f"レコード数: {result['record_count']}")
+            if args.extract_shares:
+                print(json.dumps({
+                    "saved_path": result["saved_path"],
+                    "record_count": result["record_count"],
+                    "shares_outstanding": result["shares_outstanding"],
+                }, ensure_ascii=False))
+            else:
+                print(f"保存完了: {result['saved_path']}")
+                print(f"レコード数: {result['record_count']}")
             return 0
 
         if args.command == "edinet":

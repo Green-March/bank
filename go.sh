@@ -325,14 +325,48 @@ set_pane "$reviewer_pane" "reviewer" "yellow"
 map_dir="${TARGET_DIR}/.claude/runtime"
 map_file="${map_dir}/agent-pane-map.tsv"
 mkdir -p "${map_dir}"
-cat > "${map_file}" <<EOF_PANE_MAP
-${manager_pane} manager
-${senior_pane} senior
-${junior1_pane} junior1
-${junior2_pane} junior2
-${junior3_pane} junior3
-${reviewer_pane} reviewer
-EOF_PANE_MAP
+
+# Dynamic generation from @agent_role tmux user options
+tmux list-panes -t multiagent:0 -F '#{pane_id}	#{@agent_role}' > "${map_file}"
+
+# Validate: 6 lines, all required roles present exactly once
+_pane_map_valid=true
+_required_roles="manager senior junior1 junior2 junior3 reviewer"
+_line_count="$(wc -l < "${map_file}" | tr -d ' ')"
+if [[ "${_line_count}" -ne 6 ]]; then
+    log_warn "agent-pane-map.tsv: expected 6 lines, got ${_line_count}"
+    _pane_map_valid=false
+fi
+if [[ "${_pane_map_valid}" == "true" ]]; then
+    for _role in ${_required_roles}; do
+        _role_count="$(awk -F'\t' -v r="${_role}" '$2 == r' "${map_file}" | wc -l | tr -d ' ')"
+        if [[ "${_role_count}" -ne 1 ]]; then
+            log_warn "agent-pane-map.tsv: role '${_role}' found ${_role_count} times (expected 1)"
+            _pane_map_valid=false
+            break
+        fi
+    done
+fi
+
+# Self-heal: fallback to variable-based generation if dynamic failed
+if [[ "${_pane_map_valid}" == "false" ]]; then
+    log_warn "agent-pane-map.tsv: dynamic generation failed, falling back to variable-based heredoc"
+    cat > "${map_file}" <<-EOF_PANE_MAP
+	${manager_pane}	manager
+	${senior_pane}	senior
+	${junior1_pane}	junior1
+	${junior2_pane}	junior2
+	${junior3_pane}	junior3
+	${reviewer_pane}	reviewer
+	EOF_PANE_MAP
+    # Re-validate fallback
+    _fb_line_count="$(wc -l < "${map_file}" | tr -d ' ')"
+    if [[ "${_fb_line_count}" -ne 6 ]]; then
+        log_warn "agent-pane-map.tsv: fallback also produced ${_fb_line_count} lines (expected 6). Continuing without valid pane map."
+    else
+        log_success "agent-pane-map.tsv: fallback generation succeeded"
+    fi
+fi
 
 log_success "Tmux session ready"
 

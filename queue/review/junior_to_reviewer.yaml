@@ -1,25 +1,38 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_044_t2_002"
-  task_id: "req_044_task_2"
-  junior_id: "junior2"
-  status: pending
-  timestamp: "2026-02-27T23:11:00+09:00"
+  request_id: rev_req_046_001
+  task_id: req_046
+  junior_id: junior2
+  status: pending_review
+  timestamp: "2026-02-28T00:00:00+09:00"
   payload:
-    title: "E2E データ品質検証 + レポート品質確認（修正版）"
-    report_path: "queue/reports/junior2_report.yaml"
-    revision: 2
-    revision_note: "Reviewer指摘反映: valuation検証詳細化(DCF感度5x5再計算+relative未生成の理由明記) + 全検証項目に再現コマンド追記"
-    summary: "全8検証項目パス。クロスファイル整合性確認済み。valuation は DCF のみ（relative 未実行はパイプライン設計上の制約として明記）。"
-    key_revisions:
-      - "検証5_dcf: 感度分析5x5マトリクスを assumptions から再計算しレポートと全25セル完全一致確認。relative.json 未生成はパイプライン設計上の制約として理由・影響を明記"
-      - "全検証項目: 再現コマンド（python3 -c / jq）と照合キーを追記し再現可能性を担保"
-      - "クロスファイル整合: revenue/FCF/ROE/ROA/OPM の具体値を明記し突合証跡を記録"
-    quality_criteria:
-      - "全8検証項目パス"
-      - "全検証項目に再現コマンド追記済み"
-      - "クロスファイル整合: 具体値による突合証跡あり"
+    title: "relative valuation + shares_outstanding パイプライン統合"
+    description: |
+      12→13ステップ DAG 拡張:
+      1. shares_outstanding 取得: J-Quants statements から発行済株式数（自己株式除く）を抽出
+         - 新規 shares.py (純関数), main.py に --extract-shares フラグ追加
+         - collect_jquants の output_vars で後続ステップに伝搬
+      2. valuate_relative ステップ新規追加: depends_on=[calculate], relative.json 出力
+         - ピアなしモード（単体 PER/PBR/EV-EBITDA）で初期実装
+      3. valuate ステップに --shares shell条件分岐追加（空文字時は省略）
+      4. report の depends_on に valuate_relative 追加
+      5. 品質ゲート gates_valuation_relative.yaml 新規作成
+      全118テスト パス（既存93 + 新規25）
+    outputs:
+      - "skills/pipeline-runner/references/example_pipeline.yaml"
+      - "skills/disclosure-collector/scripts/shares.py (新規)"
+      - "skills/disclosure-collector/scripts/main.py"
+      - "skills/quality-gate/references/gates_valuation_relative.yaml (新規)"
+      - "skills/pipeline-runner/tests/test_relative_valuation_step.py (新規16テスト)"
+      - "skills/disclosure-collector/tests/test_shares_outstanding.py (新規9テスト)"
+    review_focus:
+      - "13ステップ DAG の整合性（既存12ステップとの互換性）"
+      - "shares_outstanding 取得ロジック（発行済-自己株式=net shares）"
+      - "shares_outstanding 欠損時フォールバック（null→--shares 省略、エラーにしない）"
+      - "valuate_relative ステップの DAG 配置（diamond パターン維持）"
+      - "全118テスト パスの確認"
+      - "shell 条件分岐の bash/zsh 互換性"
 review_followup:
   request_id: null
   task_id: null

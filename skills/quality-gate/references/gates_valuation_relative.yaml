@@ -1,0 +1,33 @@
+# Gate for valuate_relative step: relative.json exists with required keys and sane value ranges.
+# Output path: data/{ticker}/valuation/relative.json
+#
+# RelativeMetrics schema (valuation-calculator):
+#   valuation_type: "relative"
+#   per: float | null
+#   pbr: float | null
+#   ev_ebitda: float | null
+gates:
+  - id: relative_file_check
+    type: file_exists
+    params:
+      required_files:
+        - "relative.json"
+
+  - id: relative_schema
+    type: json_file_schema
+    params:
+      file: "relative.json"
+      required_keys:
+        - "valuation_type"
+
+  - id: relative_valuation_type
+    type: json_file_value_range
+    params:
+      file: "relative.json"
+      rules:
+        per:
+          min: 0
+        pbr:
+          min: 0
+        ev_ebitda:
+          min: 0
