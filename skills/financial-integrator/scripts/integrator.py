@@ -76,29 +76,99 @@ def classify_period(
 # Merge
 # ------------------------------------------------------------------
 
+def _merge_two(
+    primary: dict | None, secondary: dict | None
+) -> dict | None:
+    """primary 優先で secondary の null フィールドを補完する（内部ヘルパー）。
+
+    source ラベルの決定は呼び出し側が行う。この関数は bs/pl/cf の
+    フィールド補完のみを担当する。
+    """
+    if primary is None:
+        if secondary:
+            return dict(secondary)
+        return None
+    if secondary is None:
+        return dict(primary)
+
+    merged = dict(primary)
+    for section in ["bs", "pl", "cf"]:
+        p_sec = merged.get(section, {})
+        s_sec = secondary.get(section, {})
+        for k, v in s_sec.items():
+            if v is not None and p_sec.get(k) is None:
+                p_sec[k] = v
+        merged[section] = p_sec
+
+    return merged
+
+
 def merge_entry(
     edinet_entry: dict | None, jquants_entry: dict | None
 ) -> dict | None:
-    """EDINET 優先、J-Quants で null フィールドを補完。"""
-    if edinet_entry is None:
-        if jquants_entry:
-            jquants_entry["source"] = "jquants"
-            return jquants_entry
+    """EDINET 優先、J-Quants で null フィールドを補完。
+
+    source ラベル規則（後方互換）:
+      - EDINET + J-Quants → "both"
+      - EDINET のみ       → "edinet"
+      - J-Quants のみ     → "jquants"
+    """
+    merged = _merge_two(edinet_entry, jquants_entry)
+    if merged is None:
         return None
-    if jquants_entry is None:
-        return edinet_entry
+    if edinet_entry is not None and jquants_entry is not None:
+        merged["source"] = "both"
+        merged["jquants_disclosed_date"] = jquants_entry.get("disclosed_date")
+    elif edinet_entry is not None:
+        merged["source"] = "edinet"
+    else:
+        merged["source"] = "jquants"
+    return merged
 
-    merged = dict(edinet_entry)
-    merged["source"] = "both"
-    merged["jquants_disclosed_date"] = jquants_entry.get("disclosed_date")
 
-    for section in ["bs", "pl", "cf"]:
-        e_sec = merged.get(section, {})
-        j_sec = jquants_entry.get(section, {})
-        for k, v in j_sec.items():
-            if v is not None and e_sec.get(k) is None:
-                e_sec[k] = v
-        merged[section] = e_sec
+def merge_three_entries(
+    edinet_entry: dict | None,
+    web_entry: dict | None,
+    jquants_entry: dict | None,
+) -> dict | None:
+    """EDINET > Web > J-Quants の優先順位で3ソースをマージ。
+
+    3ソース統合条件:
+      - harmonized_dir が指定され、かつ harmonized_financials.json が存在し、
+        かつ該当 FY の web エントリーがある場合にのみ web_entry が非 None になる。
+      - web_entry が None の場合は merge_entry() と同等（source: "both" 互換）。
+
+    source ラベル規則:
+      - web 関与なし: "both" / "edinet" / "jquants" (merge_entry 互換)
+      - web 関与あり: "edinet+web+jquants" 等の複合ラベル。
+        web 部分は元の出典ラベル（例: "web:kabutan+yahoo"）を web_source に保持。
+    """
+    # web 関与なしは merge_entry に委譲（"both" 後方互換）
+    if web_entry is None:
+        return merge_entry(edinet_entry, jquants_entry)
+
+    # web 出典ラベルを保持（web:kabutan+yahoo 等）
+    web_source_detail = web_entry.get("source", "web")
+
+    sources = []
+    if edinet_entry is not None:
+        sources.append("edinet")
+    sources.append("web")
+    if jquants_entry is not None:
+        sources.append("jquants")
+
+    # Stage 1: EDINET + Web
+    merged = _merge_two(edinet_entry, web_entry)
+    # Stage 2: result + J-Quants
+    merged = _merge_two(merged, jquants_entry)
+
+    if merged is None:
+        return None
+
+    merged["source"] = "+".join(sources)
+    merged["web_source"] = web_source_detail
+    if jquants_entry is not None:
+        merged["jquants_disclosed_date"] = jquants_entry.get("disclosed_date")
 
     return merged
 
@@ -259,6 +329,68 @@ def _extract_jquants(
 
 
 # ------------------------------------------------------------------
+# Web (harmonized) extraction
+# ------------------------------------------------------------------
+
+def _extract_web(
+    web_data: dict, fye_month: int
+) -> dict[int, dict]:
+    """web-data-harmonizer 出力から annual entries を抽出。
+
+    Web ソースは annual のみ（quarterly は提供されない）。
+
+    フェイルセーフ:
+      - period_end が None のレコードはスキップ（coverage_matrix ソートで
+        TypeError を防ぐ）。
+      - fiscal_year が None かつ period_end から決定不能な場合はスキップ。
+      - 不正なレコード（dict 以外）はスキップ。
+    """
+    web_annual: dict[int, dict] = {}
+
+    for rec in web_data.get("annual", []):
+        if not isinstance(rec, dict):
+            logger.warning("web annual entry is not dict, skipping: %s", type(rec))
+            continue
+
+        pe = rec.get("period_end")
+        fy = rec.get("fiscal_year")
+
+        # period_end 必須: None だと _build_coverage_matrix のソートで TypeError
+        if not pe:
+            if fy is not None:
+                logger.warning(
+                    "web annual FY%s: period_end is None, skipping", fy
+                )
+            continue
+
+        if fy is None:
+            try:
+                fy = determine_fiscal_year(pe, fye_month)
+            except (ValueError, IndexError):
+                logger.warning(
+                    "web annual: period_end '%s' から fiscal_year を決定できません, skipping", pe
+                )
+                continue
+
+        entry = {
+            "period_end": pe,
+            "period_start": None,
+            "fiscal_year": fy,
+            "quarter": "FY",
+            "source": rec.get("source", "web"),
+            "statement_type": rec.get("statement_type"),
+            "bs": rec.get("bs", {}),
+            "pl": rec.get("pl", {}),
+            "cf": rec.get("cf", {}),
+        }
+
+        if fy not in web_annual:
+            web_annual[fy] = entry
+
+    return web_annual
+
+
+# ------------------------------------------------------------------
 # Coverage helpers
 # ------------------------------------------------------------------
 
@@ -293,7 +425,8 @@ def _build_coverage_matrix(
 ) -> list[dict]:
     matrix = []
     for entry in sorted(
-        annual_list + quarterly_list, key=lambda x: x["period_end"]
+        annual_list + quarterly_list,
+        key=lambda x: x.get("period_end") or "",
     ):
         cm: dict = {
             "period_end": entry["period_end"],
@@ -337,8 +470,9 @@ def integrate(
     output_path: Path,
     *,
     company_name: str | None = None,
+    harmonized_dir: Path | None = None,
 ) -> dict:
-    """EDINET + J-Quants 統合メイン関数。
+    """EDINET + (Web) + J-Quants 統合メイン関数。
 
     Args:
         ticker: 銘柄コード
@@ -346,6 +480,7 @@ def integrate(
         parsed_dir: パーサー出力ディレクトリ
         output_path: 出力 JSON パス
         company_name: 会社名（省略時は ticker を使用）
+        harmonized_dir: web-data-harmonizer 出力ディレクトリ（省略時: web データなし）
 
     Returns:
         出力 JSON dict
@@ -392,6 +527,41 @@ def integrate(
             stacklevel=2,
         )
 
+    # --- Load Web / harmonized (optional) ---
+    # 3ソース統合条件:
+    #   1. harmonized_dir が CLI で指定されている (not None)
+    #   2. harmonized_financials.json が存在する
+    #   3. JSON が正常にパースできる
+    # いずれかの条件が満たされない場合、web データなしで統合する（既存動作互換）。
+    web_data: dict = {"annual": []}
+    web_sha: str | None = None
+    web_annual_count = 0
+
+    if harmonized_dir is not None:
+        harmonized_path = Path(harmonized_dir) / "harmonized_financials.json"
+        if harmonized_path.exists():
+            try:
+                web_data = json.loads(
+                    harmonized_path.read_text(encoding="utf-8")
+                )
+                web_sha = hashlib.sha256(
+                    harmonized_path.read_bytes()
+                ).hexdigest()
+                web_annual_count = len(web_data.get("annual", []))
+            except json.JSONDecodeError as e:
+                warnings.warn(
+                    f"Harmonized JSON が不正です: {harmonized_path}: {e}  "
+                    "Web データなしで統合します。",
+                    stacklevel=2,
+                )
+                web_data = {"annual": []}
+        else:
+            warnings.warn(
+                f"Harmonized ファイルが見つかりません: {harmonized_path}  "
+                "Web データなしで統合します。",
+                stacklevel=2,
+            )
+
     # --- Extract ---
     annual_entries, quarterly_entries = _extract_edinet(
         edinet_data, fye_month
@@ -399,16 +569,37 @@ def integrate(
     jquants_annual, jquants_quarterly = _extract_jquants(
         jquants_data, fye_month
     )
+    web_annual = _extract_web(web_data, fye_month) if web_sha else {}
 
     # --- Merge ---
+    # マージ戦略:
+    #   web_annual が空（harmonized_dir 未指定 or ファイル不在 or 抽出0件）
+    #     → merge_entry (2ソース) を使用。source: "both"/"edinet"/"jquants" 後方互換。
+    #   web_annual が非空
+    #     → merge_three_entries (3ソース) を使用。
+    #       web 関与なしの FY は内部で merge_entry に委譲し "both" 互換を維持。
+    #       web 関与ありの FY は "edinet+web+jquants" 等の複合ラベル + web_source 保持。
+    use_three_way = bool(web_annual)
+
     all_annual_fys = sorted(
-        set(list(annual_entries.keys()) + list(jquants_annual.keys()))
+        set(
+            list(annual_entries.keys())
+            + list(web_annual.keys())
+            + list(jquants_annual.keys())
+        )
     )
     annual_list = []
     for fy in all_annual_fys:
-        merged = merge_entry(
-            annual_entries.get(fy), jquants_annual.get(fy)
-        )
+        if use_three_way:
+            merged = merge_three_entries(
+                annual_entries.get(fy),
+                web_annual.get(fy),
+                jquants_annual.get(fy),
+            )
+        else:
+            merged = merge_entry(
+                annual_entries.get(fy), jquants_annual.get(fy)
+            )
         if merged:
             annual_list.append(merged)
 
@@ -436,6 +627,13 @@ def integrate(
             "document_count": edinet_data.get("document_count", len(edinet_data.get("documents", []))),
         },
     }
+    if web_sha is not None:
+        harmonized_path = Path(harmonized_dir) / "harmonized_financials.json"
+        input_files["web"] = {
+            "path": str(harmonized_path),
+            "sha256": web_sha,
+            "annual_count": web_annual_count,
+        }
     if jquants_sha is not None:
         input_files["jquants"] = {
             "path": str(jquants_path),

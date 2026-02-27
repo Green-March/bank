@@ -21,6 +21,7 @@ Deliverable review options:
   --analytical-validity <text>  (required)
   --clarity <text>              (required)
   --risk-disclosure <text>      (required)
+  --e2e-check <text>            (optional, E2E pipeline verification summary)
   --suggestion <text>           (repeatable)
   --status <value>              (default: completed)
   --timestamp <value>           (default: current local time)
@@ -75,6 +76,7 @@ source_traceability=""
 analytical_validity=""
 clarity=""
 risk_disclosure=""
+e2e_check=""
 status="completed"
 timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
 
@@ -145,6 +147,10 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     --risk-disclosure)
       risk_disclosure="${2-}"
+      shift 2
+      ;;
+    --e2e-check)
+      e2e_check="${2-}"
       shift 2
       ;;
     --status)
@@ -251,6 +257,10 @@ tmp_file="$(mktemp "${output_dir}/.$(basename "${output}").tmp.XXXXXX")"
     printf '    analytical_validity: %s\n' "$(yaml_quote "${analytical_validity}")"
     printf '    clarity: %s\n' "$(yaml_quote "${clarity}")"
     printf '    risk_disclosure: %s\n' "$(yaml_quote "${risk_disclosure}")"
+
+    if [[ -n "${e2e_check}" ]]; then
+      printf '  e2e_check: %s\n' "$(yaml_quote "${e2e_check}")"
+    fi
 
     if [[ "${#suggestions[@]}" -eq 0 ]]; then
       echo "  suggested_changes: []"

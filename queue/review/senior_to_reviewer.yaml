@@ -2,119 +2,112 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_s33_001"
-  timestamp: "2026-02-26T18:00:00+09:00"
-  requests:
-    - req_036 (HIGH): pipeline-runner に valuation-calculator / risk-analyzer ステップ統合
-    - req_037 (MED): Reviewer instructions にスキーマ整合性チェック観点追加
-    - req_038 (LOW): EDINET FY2019 リトライ (9743 丹青社)
+  plan_id: "plan_s34_039_041_v2"
+  timestamp: "2026-02-27T20:40:00+09:00"
+  status: pending
+  revision_note: "Reviewer 指摘2点を修正: (1) skill_registry コマンド名を実際のCLIと一致 (2) financial-integrator に --harmonized-dir を追加し harmonize→integrate 経路を確保"
 
-  plan_overview: |
-    3件の依頼を優先度順に処理する。req_036 と req_037 は独立しており Phase 1 で並列実行。
-    req_038 は低優先で Phase 2 で実行。Junior 3名を最大限並列活用する。
+  overview: |
+    Manager から3件の依頼 (req_039, req_040, req_041) を受領。
+    3名の Junior に1件ずつ並行委任し、最大並列度で処理する。
+    【v2 修正】req_039 のスコープを拡大し、financial-integrator 側の
+    入力仕様変更を含め、web データが下流評価に反映されるE2Eテストを追加。
 
-  task_decomposition:
-    phase_1_parallel:
-      - task_id: T1
-        request: req_036
-        assignee: junior1
-        description: |
-          pipeline-runner の example_pipeline.yaml に valuation と risk-analysis の2ステップを追加する。
-          - valuate ステップ: depends_on=[calculate], valuation-calculator dcf コマンド実行
-          - analyze_risk ステップ: depends_on=[calculate], risk-analyzer analyze コマンド実行
-          - report ステップの depends_on に valuate と analyze_risk を追加（ダイアモンド依存パターン）
-          - SKILL.md のステップ一覧を更新
-          - 既存テスト31件が全パスすることを確認
-        output_path: skills/pipeline-runner/
-        acceptance_criteria:
-          - example_pipeline.yaml に valuate, analyze_risk ステップが正しく定義されている
-          - report ステップの depends_on が [valuate, analyze_risk, inventory] になっている
-          - 既存テスト31件が全パス
-          - SKILL.md のステップ一覧が更新されている
+  tasks:
+    - task_id: "task_039"
+      request_id: "req_039"
+      assigned_to: junior1
+      title: "pipeline-runner に web-researcher / web-data-harmonizer ステップ統合 + financial-integrator 入力拡張"
+      description: |
+        1. pipeline-runner の skill_registry に web_research / harmonize ステップを追加。
+           コマンドは実際のスキルCLIを正確に参照:
+           - web_research: "python3 skills/web-researcher/scripts/main.py collect --ticker {ticker} --source all --output data/{ticker}/web_research/research.json"
+           - harmonize: "python3 skills/web-data-harmonizer/scripts/main.py harmonize --ticker {ticker} --source all --input data/{ticker}/web_research/research.json --output data/{ticker}/harmonized/harmonized_financials.json"
+        2. financial-integrator に --harmonized-dir オプションを追加。
+           - integrator.py: harmonized_financials.json をオプショナル第3ソースとして読み込み
+           - マージ優先順位: EDINET (primary) → Web (secondary) → J-Quants (tertiary)
+           - harmonized_dir 未指定時は既存動作と完全互換
+        3. integrate ステップの depends_on を [parse, harmonize] に更新。
+        4. example_pipeline.yaml を12ステップ構成に更新。
+      pipeline_structure: |
+        resolve → {collect_jquants, collect, web_research} (3並列)
+                   collect → parse ─────────────────────┐
+                   web_research → harmonize ─────────────┤
+                                                         ↓
+                   integrate (EDINET+Web+JQuants) → calculate
+                        ↓
+                   {valuate, analyze_risk, inventory} (3並列)
+                        ↓
+                      report
+      deliverables:
+        - "skills/pipeline-runner/scripts/pipeline.py: skill_registry に web_research / harmonize 追加（実CLI参照）"
+        - "skills/pipeline-runner/references/example_pipeline.yaml: 12ステップ構成に更新"
+        - "skills/financial-integrator/scripts/main.py: --harmonized-dir CLIオプション追加"
+        - "skills/financial-integrator/scripts/integrator.py: web データ第3ソースマージ実装"
+        - "E2Eテスト: web データが integrate → calculate → 下流に反映されることを検証"
+        - "既存テスト全パス確認 (pipeline-runner 53件, financial-integrator 既存テスト)"
+      acceptance_criteria:
+        - "skill_registry コマンドが実際のスキルCLI (main.py collect / main.py harmonize) と一致"
+        - "financial-integrator --harmonized-dir 指定時に web データが統合される"
+        - "financial-integrator --harmonized-dir 未指定時に既存動作と完全互換"
+        - "integrate ステップが parse + harmonize 両方の完了を待ってから実行"
+        - "example_pipeline.yaml が DAG 検証を通過"
+        - "E2Eテスト: web source データが integrated_financials.json に反映"
+        - "既存テスト全パス"
 
-      - task_id: T2
-        request: req_036
-        assignee: junior2
-        description: |
-          pipeline-runner 統合のための新規テストと quality-gate YAML を作成する。
-          - skills/quality-gate/references/ に gates_valuation.yaml を作成
-            (valuation 出力の enterprise_value, equity_value, per_share_value の値域チェック)
-          - skills/quality-gate/references/ に gates_risk.yaml を作成
-            (risk_analysis 出力の total_risks >= 0, by_category 存在チェック)
-          - skills/pipeline-runner/tests/ に test_valuation_risk_steps.py を作成
-            (新ステップの DAG 検証、依存関係テスト、変数伝搬テスト)
-        output_path: skills/quality-gate/references/, skills/pipeline-runner/tests/
-        acceptance_criteria:
-          - gates_valuation.yaml が valuation-calculator 出力スキーマに適合
-          - gates_risk.yaml が risk-analyzer 出力スキーマに適合
-          - 新テストが全パス
-          - 既存テスト (valuation-calculator 30件, risk-analyzer 44件) が壊れない
+    - task_id: "task_040"
+      request_id: "req_040"
+      assigned_to: junior2
+      title: "financial-reporter に valuation/risk セクション追加"
+      description: |
+        financial-reporter の render.py に valuation-calculator と risk-analyzer の
+        出力データを表示するセクションを追加する。
+        データがない場合は graceful degradation でセクションを省略する。
+      deliverables:
+        - "main.py に --valuation / --risk CLI オプション追加"
+        - "render.py に valuation セクション (DCF結果, 感度分析テーブル, PER/PBR/EV-EBITDA比較)"
+        - "render.py に risk セクション (5カテゴリ: market/credit/liquidity/operational/regulatory)"
+        - "新規テスト追加"
+        - "既存テスト全パス確認"
+      acceptance_criteria:
+        - "valuation データ入力時に DCF/相対バリュエーション セクションが出力される"
+        - "risk データ入力時に5カテゴリリスクサマリーが出力される"
+        - "valuation/risk データなし時にセクション省略 (graceful degradation)"
+        - "既存テスト全パス"
+        - "新規テスト追加"
 
-      - task_id: T3
-        request: req_037
-        assignee: junior3
-        description: |
-          instructions/reviewer.md に Schema Conformance（スキーマ整合性）観点を追加する。
-          - 成果物レビュー観点を5観点→6観点に拡張
-          - 第1観点として Schema Conformance を追加:
-            「出力JSON が下流スキルの入力スキーマ要件を満たし、nested field の型・必須性・
-             cross-field dependency が確保されているか」
-          - 既存5観点 (data_integrity, source_traceability, analytical_validity,
-            clarity, risk_disclosure) は番号2-6として維持
-          - 出力テンプレートの comments に schema_conformance フィールドを追加
-          - Reviewer の簡潔出力ルール（各1文、suggested_changes 最大2件）は変更しない
-          - 各スキル manifest.json の input/output を参照基準として記載
-        output_path: instructions/reviewer.md
-        acceptance_criteria:
-          - Schema Conformance 観点が成果物レビュー観点の第1項目に追加されている
-          - 既存5観点が維持されている
-          - 出力テンプレートに schema_conformance フィールドがある
-          - 簡潔出力ルールが変更されていない
-
-    phase_2_sequential:
-      - task_id: T4
-        request: req_036
-        assignee: junior1 (T1完了後)
-        depends_on: [T1, T2]
-        description: |
-          pipeline-runner 統合の最終検証。
-          - 全テスト実行: pipeline-runner (既存31件 + 新規テスト)
-          - valuation-calculator テスト確認 (30件)
-          - risk-analyzer テスト確認 (44件)
-          - スキーマ整合性の確認: financial-calculator 出力 → valuation-calculator 入力の
-            フィールド対応 (metrics_series, latest_snapshot の必須フィールド)
-        output_path: skills/pipeline-runner/tests/evidence/
-        acceptance_criteria:
-          - 全テスト (31+新規+30+44) がパス
-          - スキーマ整合性に問題がないことを確認
-
-      - task_id: T5
-        request: req_038
-        assignee: junior3 (T3完了後)
-        depends_on: [T3]
-        description: |
-          EDINET API FY2019 リトライ (9743 丹青社)。
-          - Step 1: EDINET API 疎通確認 (curl で documents.json エンドポイント確認)
-          - Step 2A (API復旧時): disclosure-collector で FY2019-2022 データ取得
-            edinet_code=E00208, start_date=2019-01-01, end_date=2023-02-25
-          - Step 2B (API停止継続時): 代替データソースの調査・報告
-            - J-Quants API で FY2019 決算短信データ取得可否確認
-            - web-researcher で Yahoo/Kabutan/四季報 の過去データ取得可否確認
-          - Step 3: 結果をレポートにまとめる
-        output_path: data/9743/
-        acceptance_criteria:
-          - EDINET API 状態が確認されている
-          - 取得可能なら FY2019 データが data/9743/raw/edinet/ に保存されている
-          - 取得不可なら代替手段の調査結果がレポートされている
+    - task_id: "task_041"
+      request_id: "req_041"
+      assigned_to: junior3
+      title: "Reviewer E2E 検証観点追加"
+      description: |
+        Reviewer の instructions に E2E (End-to-End) パイプライン検証の
+        補足チェックリストを追加する。既存6観点レビューは変更せず、
+        E2E 検証は補足的なチェックリストとして追加する。
+      deliverables:
+        - "instructions/reviewer.md に E2E チェックリスト追加"
+        - "templates/reviewer_finalize.sh に --e2e-check オプション追加"
+        - "CLAUDE.md の関連セクション同期更新"
+      e2e_checklist:
+        - "ステップ間データ整合性 (出力スキーマ → 次ステップ入力スキーマ一致)"
+        - "欠損伝播 (null/N/A が下流で適切に処理されているか)"
+        - "source_attribution 一貫性 (全ステップで出典情報が保持されているか)"
+        - "数値精度保持 (丸め・単位変換で精度が失われていないか)"
+      acceptance_criteria:
+        - "instructions/reviewer.md に E2E セクション追加"
+        - "reviewer_finalize.sh --e2e-check オプション動作"
+        - "CLAUDE.md との整合性"
+        - "既存6観点レビュー体系に変更なし"
 
   quality_criteria:
-    - 既存テスト全パス (pipeline-runner 31, valuation-calculator 30, risk-analyzer 44)
-    - 新規テストも全パス
-    - スキーマ整合性 — financial-calculator → valuation-calculator のデータフロー検証
-    - SKILL.md とコードの一致
-    - race condition なし (各 Junior の出力パスが重複しない)
+    - "全既存テストパス"
+    - "新規テスト追加 (各タスクで最低5件)"
+    - "既存機能への破壊的変更なし"
+    - "CLAUDE.md との整合性維持"
 
-  risk_mitigation:
-    - T1 と T2 で同一ファイルを編集しない (T1=example_pipeline.yaml/SKILL.md, T2=tests/+gates/)
-    - EDINET API 停止継続のリスク → 代替手段調査を計画に含めている
-    - ダイアモンド依存パターン (valuate + analyze_risk → report) は pipeline-runner の既存 DAG 検証で対応済み
+  parallelization:
+    strategy: "3 Junior 完全並列"
+    junior1: "task_039 (pipeline-runner web統合 + financial-integrator 入力拡張)"
+    junior2: "task_040 (financial-reporter valuation/risk)"
+    junior3: "task_041 (reviewer E2E)"
+    dependencies: "3タスクは独立。並列実行可能。"

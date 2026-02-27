@@ -246,6 +246,352 @@ def _append_source_details(
             lines.append(f"- 期末 {pe} (開示日: {jquants_dates[pe]})")
 
 
+# -- Valuation / Risk rendering helpers --
+
+# Required 5 categories per task specification
+_REQUIRED_RISK_CATEGORIES: list[tuple[str, str]] = [
+    ("market_risk", "市場リスク"),
+    ("credit_risk", "信用リスク"),
+    ("liquidity_risk", "流動性リスク"),
+    ("operational_risk", "オペレーショナルリスク"),
+    ("regulatory_risk", "規制リスク"),
+]
+
+_EXTRA_RISK_CATEGORIES: list[tuple[str, str]] = [
+    ("other_risk", "その他リスク"),
+]
+
+# Combined lookup for labels
+_RISK_CATEGORY_LABELS: dict[str, str] = dict(
+    _REQUIRED_RISK_CATEGORIES + _EXTRA_RISK_CATEGORIES
+)
+
+_SEVERITY_LABELS: dict[str, str] = {
+    "high": "高",
+    "medium": "中",
+    "low": "低",
+}
+
+
+def _max_severity(items: list[dict[str, Any]]) -> str:
+    """Return the highest severity among risk items."""
+    order = {"high": 3, "medium": 2, "low": 1}
+    best = "low"
+    for item in items:
+        sev = item.get("severity", "medium")
+        if order.get(sev, 0) > order.get(best, 0):
+            best = sev
+    return best
+
+
+def _compute_dcf_equity(
+    base_fcf: float,
+    growth: float,
+    wacc: float,
+    terminal_growth: float,
+    years: int,
+    net_debt: float,
+) -> float | None:
+    """Compute equity value via DCF. Returns None if wacc <= terminal_growth."""
+    if wacc <= terminal_growth:
+        return None
+    pv = 0.0
+    for t in range(1, years + 1):
+        pv += base_fcf * (1 + growth) ** t / (1 + wacc) ** t
+    terminal_fcf = base_fcf * (1 + growth) ** years
+    tv = terminal_fcf * (1 + terminal_growth) / (wacc - terminal_growth)
+    pv += tv / (1 + wacc) ** years
+    return pv - net_debt
+
+
+def _render_valuation_section(
+    lines: list[str],
+    valuation_data: dict[str, Any],
+) -> None:
+    """Append valuation analysis section to lines."""
+    dcf = valuation_data.get("dcf")
+    relative = valuation_data.get("relative")
+    if not dcf and not relative:
+        return
+
+    lines.append("## バリュエーション分析")
+    lines.append("")
+
+    if dcf:
+        _render_dcf_subsection(lines, dcf)
+    if relative:
+        _render_relative_subsection(lines, relative)
+
+    # Source traceability for valuation
+    _render_valuation_sources(lines, dcf, relative)
+
+
+def _render_valuation_sources(
+    lines: list[str],
+    dcf: dict[str, Any] | None,
+    relative: dict[str, Any] | None,
+) -> None:
+    """Append valuation source information."""
+    source_items: list[str] = []
+    if dcf:
+        ticker = dcf.get("ticker", "")
+        source_items.append(f"DCF: valuation-calculator 出力 (対象: {ticker})")
+    if relative:
+        ds = relative.get("data_sources")
+        if isinstance(ds, dict) and ds:
+            sources_str = ", ".join(
+                f"{k}={v}" for k, v in sorted(ds.items())
+            )
+            source_items.append(f"相対バリュエーション: {sources_str}")
+        elif relative.get("target") and isinstance(
+            relative["target"].get("data_sources"), dict
+        ):
+            ds = relative["target"]["data_sources"]
+            sources_str = ", ".join(
+                f"{k}={v}" for k, v in sorted(ds.items())
+            )
+            source_items.append(f"相対バリュエーション: {sources_str}")
+        else:
+            source_items.append("相対バリュエーション: valuation-calculator 出力")
+    if source_items:
+        lines.append("**出典情報**")
+        lines.append("")
+        for item in source_items:
+            lines.append(f"- {item}")
+        lines.append("")
+
+
+def _render_dcf_subsection(lines: list[str], dcf: dict[str, Any]) -> None:
+    """Render DCF valuation subsection."""
+    ev = dcf.get("enterprise_value")
+    eq = dcf.get("equity_value")
+    ps = dcf.get("per_share_value")
+    assumptions = dcf.get("assumptions", {})
+
+    lines.append("### DCF 評価")
+    lines.append("")
+    lines.append(
+        f"- 企業価値: {ev / 1e8:,.1f} 億円"
+        if isinstance(ev, (int, float))
+        else "- 企業価値: N/A"
+    )
+    lines.append(
+        f"- 株式価値: {eq / 1e8:,.1f} 億円"
+        if isinstance(eq, (int, float))
+        else "- 株式価値: N/A"
+    )
+    lines.append(
+        f"- 理論株価: {ps:,.0f} 円"
+        if isinstance(ps, (int, float))
+        else "- 理論株価: N/A"
+    )
+    lines.append("")
+
+    wacc = assumptions.get("wacc")
+    tg = assumptions.get("terminal_growth_rate")
+    years = assumptions.get("projection_years")
+    base_fcf = assumptions.get("base_fcf")
+    growth = assumptions.get("estimated_growth_rate")
+    net_debt = assumptions.get("net_debt")
+    shares = assumptions.get("shares_outstanding")
+
+    lines.append("**前提条件**")
+    lines.append("")
+    if isinstance(wacc, (int, float)):
+        lines.append(f"- WACC: {wacc * 100:.1f}%")
+    if isinstance(tg, (int, float)):
+        lines.append(f"- 永久成長率: {tg * 100:.1f}%")
+    if years is not None:
+        lines.append(f"- 予測期間: {years}年")
+    if isinstance(base_fcf, (int, float)):
+        lines.append(f"- ベースFCF: {base_fcf / 1e8:,.1f} 億円")
+    if isinstance(growth, (int, float)):
+        lines.append(f"- 推定FCF成長率: {growth * 100:.1f}%")
+    if isinstance(net_debt, (int, float)):
+        lines.append(f"- 純有利子負債: {net_debt / 1e8:,.1f} 億円")
+    if isinstance(shares, (int, float)):
+        lines.append(f"- 発行済株式数: {shares / 1e6:,.1f} 百万株")
+    lines.append("")
+
+    if all(
+        isinstance(assumptions.get(k), (int, float))
+        for k in (
+            "wacc",
+            "terminal_growth_rate",
+            "base_fcf",
+            "estimated_growth_rate",
+            "net_debt",
+        )
+    ) and assumptions.get("projection_years") is not None:
+        _render_sensitivity_table(
+            lines, wacc, tg, years, base_fcf, growth, net_debt, shares
+        )
+
+
+def _render_sensitivity_table(
+    lines: list[str],
+    wacc: float,
+    tg: float,
+    years: int,
+    base_fcf: float,
+    growth: float,
+    net_debt: float,
+    shares: float | None,
+) -> None:
+    """Render WACC x terminal growth rate sensitivity matrix."""
+    wacc_steps = [wacc + d for d in (-0.02, -0.01, 0, 0.01, 0.02)]
+    g_steps = [max(0.0, tg + d) for d in (-0.01, -0.005, 0, 0.005, 0.01)]
+    use_ps = isinstance(shares, (int, float)) and shares > 0
+
+    title = (
+        "**感度分析（理論株価 円）**" if use_ps else "**感度分析（株式価値 億円）**"
+    )
+    lines.append(title)
+    lines.append("")
+
+    header = "| WACC＼永久成長率 |"
+    for g in g_steps:
+        header += f" {g * 100:.1f}% |"
+    lines.append(header)
+    lines.append("|---|" + "---:|" * len(g_steps))
+
+    for w in wacc_steps:
+        row = f"| {w * 100:.1f}% |"
+        for g in g_steps:
+            eq = _compute_dcf_equity(base_fcf, growth, w, g, years, net_debt)
+            if eq is None:
+                row += " - |"
+            elif use_ps:
+                row += f" {eq / shares:,.0f} |"
+            else:
+                row += f" {eq / 1e8:,.1f} |"
+        lines.append(row)
+    lines.append("")
+
+
+def _render_relative_subsection(
+    lines: list[str], rel: dict[str, Any]
+) -> None:
+    """Render relative valuation subsection."""
+    lines.append("### 相対バリュエーション")
+    lines.append("")
+
+    if "comparison" in rel:
+        comparison = rel["comparison"]
+        lines.append(
+            "| 指標 | 現在値 | ピア中央値 | ピア平均 | vs 中央値 |"
+        )
+        lines.append("|---|---:|---:|---:|---:|")
+        for key, label in (
+            ("per", "PER"),
+            ("pbr", "PBR"),
+            ("ev_ebitda", "EV/EBITDA"),
+        ):
+            c = comparison.get(key, {})
+            tv = c.get("target")
+            med = c.get("peer_median")
+            avg = c.get("peer_average")
+            vs = c.get("vs_median")
+            lines.append(
+                "| {label} | {t} | {m} | {a} | {v} |".format(
+                    label=label,
+                    t=f"{tv:.2f}" if isinstance(tv, (int, float)) else "N/A",
+                    m=f"{med:.2f}"
+                    if isinstance(med, (int, float))
+                    else "N/A",
+                    a=f"{avg:.2f}"
+                    if isinstance(avg, (int, float))
+                    else "N/A",
+                    v=f"{vs:+.2f}"
+                    if isinstance(vs, (int, float))
+                    else "N/A",
+                )
+            )
+    else:
+        lines.append("| 指標 | 値 |")
+        lines.append("|---|---:|")
+        for key, label in (
+            ("per", "PER"),
+            ("pbr", "PBR"),
+            ("ev_ebitda", "EV/EBITDA"),
+        ):
+            v = rel.get(key)
+            lines.append(
+                f"| {label} | {v:.2f} |"
+                if isinstance(v, (int, float))
+                else f"| {label} | N/A |"
+            )
+    lines.append("")
+
+
+def _render_risk_section(
+    lines: list[str], risk_data: dict[str, Any]
+) -> None:
+    """Append risk analysis section to lines."""
+    categories = risk_data.get("risk_categories", {})
+    summary = risk_data.get("summary", {})
+
+    lines.append("## リスク分析")
+    lines.append("")
+
+    total = summary.get("total_risks", 0)
+    by_sev = summary.get("by_severity", {})
+    lines.append(
+        f"**リスク総数**: {total}件"
+        f" (高: {by_sev.get('high', 0)},"
+        f" 中: {by_sev.get('medium', 0)},"
+        f" 低: {by_sev.get('low', 0)})"
+    )
+    lines.append("")
+
+    lines.append("| カテゴリ | リスクレベル | 件数 | 主要リスク要因 |")
+    lines.append("|---|---|---:|---|")
+
+    # Required 5 categories: always shown (even if 0 items)
+    for cat_key, label in _REQUIRED_RISK_CATEGORIES:
+        items = categories.get(cat_key, [])
+        if items:
+            sev = _max_severity(items)
+            sev_label = _SEVERITY_LABELS.get(sev, sev)
+            text = items[0].get("text", "").replace("\n", " ").strip()
+            if len(text) > 80:
+                text = text[:77] + "..."
+            lines.append(
+                f"| {label} | {sev_label} | {len(items)} | {text} |"
+            )
+        else:
+            lines.append(f"| {label} | - | 0 | (該当データなし) |")
+
+    # Extra categories: shown only if items exist
+    for cat_key, label in _EXTRA_RISK_CATEGORIES:
+        items = categories.get(cat_key, [])
+        if not items:
+            continue
+        sev = _max_severity(items)
+        sev_label = _SEVERITY_LABELS.get(sev, sev)
+        text = items[0].get("text", "").replace("\n", " ").strip()
+        if len(text) > 80:
+            text = text[:77] + "..."
+        lines.append(
+            f"| {label} | {sev_label} | {len(items)} | {text} |"
+        )
+    lines.append("")
+
+    # Source traceability
+    analyzed_at = risk_data.get("analyzed_at")
+    source_docs = risk_data.get("source_documents", [])
+    if analyzed_at or source_docs:
+        lines.append("**出典情報**")
+        lines.append("")
+        if analyzed_at:
+            lines.append(f"- 分析日時: {analyzed_at}")
+        if source_docs:
+            lines.append(
+                f"- 参照文書: {', '.join(str(d) for d in source_docs)}"
+            )
+        lines.append("")
+
+
 def render_markdown(
     metrics_payload: dict[str, Any],
     ticker: str,
@@ -253,6 +599,8 @@ def render_markdown(
     number_format: str = "raw",
     absence_map: AbsenceMap | None = None,
     fy_end_month: int = 12,
+    valuation_data: dict[str, Any] | None = None,
+    risk_data: dict[str, Any] | None = None,
 ) -> str:
     company_name = str(metrics_payload.get("company_name") or "不明")
     generated_at = str(metrics_payload.get("generated_at") or _now_iso())
@@ -337,6 +685,10 @@ def render_markdown(
     lines.append(f"- フリーキャッシュフロー{latest_suffix}: {fmt(latest.get('free_cash_flow'), field='free_cash_flow', row_abs=latest_abs)}{unit_label}{prov_tag}")
     lines.append("")
 
+    # Valuation section (after 主要指標, before 通期推移表)
+    if valuation_data:
+        _render_valuation_section(lines, valuation_data)
+
     # Annual table
     lines.append("## 通期推移表")
     lines.append("| 会計年度 | 区分 | 売上高 | 営業利益 | 当期純利益 | ROE(%) | ROA(%) | 営業利益率(%) | 自己資本比率(%) | FCF |")
@@ -390,6 +742,10 @@ def render_markdown(
             )
         lines.append("")
 
+    # Risk section (before データソース)
+    if risk_data:
+        _render_risk_section(lines, risk_data)
+
     # Data sources section
     lines.append("## データソース")
     _append_source_details(lines, series, quarterly)
@@ -419,6 +775,10 @@ def render_markdown(
     st_types = [(row.get("fiscal_year"), row.get("statement_type")) for row in series if row.get("statement_type")]
     if any(st == "standalone" for _, st in st_types) and any(st == "consolidated" for _, st in st_types):
         lines.append("- 財務諸表の種類が変更されています（単体→連結）。前年比較時は注意が必要です。")
+    if not valuation_data:
+        lines.append("- バリュエーション分析データが未指定のため、バリュエーションセクションは省略されています。`--valuation` オプションで valuation-calculator 出力を指定して再実行してください。")
+    if not risk_data:
+        lines.append("- リスク分析データが未指定のため、リスク分析セクションは省略されています。`--risk` オプションで risk-analyzer 出力を指定して再実行してください。")
     lines.append("")
 
     # Data Quality Notes (only when absence_map has entries)

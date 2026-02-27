@@ -18,6 +18,62 @@ JST = timezone(timedelta(hours=9))
 
 QUALITY_GATE_CMD = "python3 skills/quality-gate/scripts/main.py"
 
+# Known skill commands — used for validation and as documentation.
+# Pipeline YAML steps reference these skill names; commands are inline in YAML.
+SKILL_REGISTRY: dict[str, str] = {
+    "ticker-resolver": (
+        "python3 skills/ticker-resolver/scripts/main.py resolve {ticker}"
+    ),
+    "disclosure-collector": (
+        "python3 skills/disclosure-collector/scripts/main.py"
+    ),
+    "disclosure-parser": (
+        "python3 skills/disclosure-parser/scripts/main.py"
+    ),
+    "financial-integrator": (
+        "python3 skills/financial-integrator/scripts/main.py"
+        " --ticker {ticker} --fye-month {fye_month}"
+        " --parsed-dir data/{ticker}/parsed"
+        " --output data/{ticker}/integrated/integrated_financials.json"
+    ),
+    "financial-calculator": (
+        "python3 skills/financial-calculator/scripts/main.py calculate"
+        " --ticker {ticker} --parsed-dir data/{ticker}/parsed"
+        " --output data/{ticker}/parsed/metrics.json"
+    ),
+    "valuation-calculator": (
+        "python3 skills/valuation-calculator/scripts/main.py dcf"
+        " --metrics data/{ticker}/parsed/metrics.json"
+        " --output data/{ticker}/valuation/dcf.json"
+    ),
+    "risk-analyzer": (
+        "python3 skills/risk-analyzer/scripts/main.py analyze"
+        " --ticker {ticker} --input-dir data/{ticker}/raw/edinet"
+        " --output data/{ticker}/risk/risk_analysis.json"
+    ),
+    "inventory-builder": (
+        "python3 skills/inventory-builder/scripts/main.py"
+        " --ticker {ticker} --fye-month {fye_month}"
+    ),
+    "financial-reporter": (
+        "python3 skills/financial-reporter/scripts/main.py"
+        " --ticker {ticker} --metrics data/{ticker}/parsed/metrics.json"
+        " --output-md data/{ticker}/reports/{ticker}_report.md"
+        " --output-html data/{ticker}/reports/{ticker}_report.html"
+    ),
+    "web-researcher": (
+        "python3 skills/web-researcher/scripts/main.py collect"
+        " --ticker {ticker} --source all"
+        " --output data/{ticker}/web_research/research.json"
+    ),
+    "web-data-harmonizer": (
+        "python3 skills/web-data-harmonizer/scripts/main.py harmonize"
+        " --ticker {ticker} --source all"
+        " --input data/{ticker}/web_research/research.json"
+        " --output data/{ticker}/harmonized/harmonized_financials.json"
+    ),
+}
+
 
 class PipelineError(Exception):
     """Pipeline configuration or execution error."""

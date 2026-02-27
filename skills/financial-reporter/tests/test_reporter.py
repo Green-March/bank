@@ -10,13 +10,16 @@ import tempfile
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from render import (
     _MONETARY_FIELDS,
+    _compute_dcf_equity,
     _fiscal_year_display,
     _fmt_value,
+    _max_severity,
     _period_in_fiscal_year,
     _period_label,
     _row_absence,
     build_absence_map,
     infer_fy_end_month,
+    render_html,
     render_markdown,
 )
 
@@ -1025,3 +1028,736 @@ class TestMonetaryFieldsBoundary:
         assert "5.67%" in md
         assert "10.00%" in md
         assert "45.50%" in md
+
+
+# ===================================================================
+# Valuation section tests
+# ===================================================================
+
+_BASE_METRICS_PAYLOAD = {
+    "ticker": "9743",
+    "company_name": "丹青社",
+    "generated_at": "2026-02-27T00:00:00+00:00",
+    "metrics_series": [
+        {
+            "fiscal_year": 2025,
+            "revenue": 80000000000.0,
+            "operating_income": 6000000000.0,
+            "net_income": 4000000000.0,
+            "roe_percent": 14.0,
+            "roa_percent": 6.2,
+            "operating_margin_percent": 7.5,
+            "equity_ratio_percent": 40.0,
+            "free_cash_flow": 4500000000.0,
+        }
+    ],
+}
+
+_DCF_DATA = {
+    "ticker": "9743",
+    "valuation_type": "dcf",
+    "enterprise_value": 102115349771.21,
+    "equity_value": 97115349771.21,
+    "per_share_value": 1942.31,
+    "assumptions": {
+        "wacc": 0.08,
+        "terminal_growth_rate": 0.02,
+        "projection_years": 5,
+        "base_fcf": 4500000000.0,
+        "estimated_growth_rate": 0.08738,
+        "net_debt": 5000000000.0,
+        "shares_outstanding": 50000000.0,
+    },
+}
+
+_RELATIVE_SIMPLE = {
+    "ticker": "9743",
+    "valuation_type": "relative",
+    "per": 12.5,
+    "pbr": 1.67,
+    "ev_ebitda": 7.86,
+}
+
+_RELATIVE_WITH_PEERS = {
+    "ticker": "9743",
+    "valuation_type": "relative",
+    "target": {"ticker": "9743", "per": 10.0, "pbr": 1.67, "ev_ebitda": 6.88},
+    "peers": [
+        {"ticker": "4680", "per": 8.0, "pbr": 1.6, "ev_ebitda": 5.5},
+        {"ticker": "2327", "per": 15.0, "pbr": 3.0, "ev_ebitda": 9.2},
+    ],
+    "comparison": {
+        "per": {
+            "target": 10.0,
+            "peer_median": 11.5,
+            "peer_average": 11.5,
+            "vs_median": -1.5,
+            "vs_average": -1.5,
+        },
+        "pbr": {
+            "target": 1.67,
+            "peer_median": 2.3,
+            "peer_average": 2.3,
+            "vs_median": -0.63,
+            "vs_average": -0.63,
+        },
+        "ev_ebitda": {
+            "target": 6.88,
+            "peer_median": 7.35,
+            "peer_average": 7.35,
+            "vs_median": -0.47,
+            "vs_average": -0.47,
+        },
+    },
+}
+
+_RISK_DATA = {
+    "ticker": "9743",
+    "analyzed_at": "2026-02-27T14:30:00+00:00",
+    "source_documents": ["S100TEST"],
+    "risk_categories": {
+        "market_risk": [
+            {
+                "text": "為替リスクについて\n当社は海外事業を展開しており影響を受ける可能性があります。",
+                "source": "S100TEST",
+                "severity": "high",
+            }
+        ],
+        "credit_risk": [
+            {
+                "text": "取引先の信用リスクにより売掛金回収が困難になる可能性があります。",
+                "source": "S100TEST",
+                "severity": "medium",
+            }
+        ],
+        "operational_risk": [
+            {
+                "text": "情報セキュリティリスクにより事業運営に限定的な影響が生じる可能性。",
+                "source": "S100TEST",
+                "severity": "low",
+            }
+        ],
+        "regulatory_risk": [
+            {
+                "text": "法令改正に伴いコンプライアンス体制の強化が求められる可能性があります。",
+                "source": "S100TEST",
+                "severity": "medium",
+            }
+        ],
+        "other_risk": [],
+    },
+    "summary": {
+        "total_risks": 4,
+        "by_category": {
+            "market_risk": 1,
+            "credit_risk": 1,
+            "operational_risk": 1,
+            "regulatory_risk": 1,
+            "other_risk": 0,
+        },
+        "by_severity": {"high": 1, "medium": 2, "low": 1},
+    },
+}
+
+
+class TestValuationDcfSection:
+    """DCF バリュエーションセクションのレンダリングテスト."""
+
+    def test_dcf_section_rendered(self):
+        """DCF データ指定時にバリュエーション分析セクションが出力される."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            valuation_data={"dcf": _DCF_DATA, "relative": None},
+        )
+        assert "## バリュエーション分析" in md
+        assert "### DCF 評価" in md
+        assert "1,021.2" in md  # enterprise_value in 億円
+        assert "971.2" in md    # equity_value in 億円
+        assert "1,942" in md    # per_share_value
+
+    def test_dcf_assumptions_rendered(self):
+        """DCF 前提条件が出力される."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            valuation_data={"dcf": _DCF_DATA, "relative": None},
+        )
+        assert "WACC: 8.0%" in md
+        assert "永久成長率: 2.0%" in md
+        assert "予測期間: 5年" in md
+        assert "ベースFCF:" in md
+        assert "推定FCF成長率:" in md
+
+    def test_sensitivity_table_rendered(self):
+        """感度分析テーブルが出力される."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            valuation_data={"dcf": _DCF_DATA, "relative": None},
+        )
+        assert "感度分析" in md
+        assert "WACC＼永久成長率" in md
+        # Check WACC steps appear: 6.0%, 7.0%, 8.0%, 9.0%, 10.0%
+        assert "6.0%" in md
+        assert "10.0%" in md
+
+    def test_per_share_value_null_shows_na(self):
+        """per_share_value が null の場合 N/A 表示."""
+        dcf_no_shares = {**_DCF_DATA, "per_share_value": None}
+        dcf_no_shares["assumptions"] = {
+            **_DCF_DATA["assumptions"],
+            "shares_outstanding": None,
+        }
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            valuation_data={"dcf": dcf_no_shares, "relative": None},
+        )
+        assert "理論株価: N/A" in md
+        # Sensitivity uses 億円 instead of per-share
+        assert "株式価値 億円" in md
+
+    def test_valuation_section_before_annual_table(self):
+        """バリュエーション分析セクションが主要指標の後、通期推移表の前に配置される."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            valuation_data={"dcf": _DCF_DATA, "relative": None},
+        )
+        idx_key_metrics = md.index("## 主要指標")
+        idx_valuation = md.index("## バリュエーション分析")
+        idx_annual = md.index("## 通期推移表")
+        assert idx_key_metrics < idx_valuation < idx_annual
+
+
+class TestValuationRelativeSection:
+    """相対バリュエーションセクションのレンダリングテスト."""
+
+    def test_simple_relative_rendered(self):
+        """ピアなし相対バリュエーションが表示される."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            valuation_data={"dcf": None, "relative": _RELATIVE_SIMPLE},
+        )
+        assert "### 相対バリュエーション" in md
+        assert "PER" in md
+        assert "12.50" in md
+        assert "PBR" in md
+        assert "1.67" in md
+        assert "EV/EBITDA" in md
+        assert "7.86" in md
+
+    def test_peer_comparison_rendered(self):
+        """ピアありの相対バリュエーション比較テーブルが表示される."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            valuation_data={"dcf": None, "relative": _RELATIVE_WITH_PEERS},
+        )
+        assert "ピア中央値" in md
+        assert "ピア平均" in md
+        assert "vs 中央値" in md
+        assert "-1.50" in md  # PER vs_median
+
+    def test_both_dcf_and_relative(self):
+        """DCF と相対バリュエーション両方が表示される."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            valuation_data={"dcf": _DCF_DATA, "relative": _RELATIVE_SIMPLE},
+        )
+        assert "### DCF 評価" in md
+        assert "### 相対バリュエーション" in md
+
+    def test_valuation_source_traceability(self):
+        """バリュエーションセクションに出典情報が表示される."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            valuation_data={"dcf": _DCF_DATA, "relative": None},
+        )
+        assert "出典情報" in md
+        assert "DCF: valuation-calculator 出力" in md
+
+
+class TestValuationGracefulDegradation:
+    """バリュエーションデータなし時の graceful degradation テスト."""
+
+    def test_no_valuation_data_omits_section(self):
+        """valuation_data=None ではバリュエーション分析セクション見出し省略."""
+        md = render_markdown(_BASE_METRICS_PAYLOAD, "9743")
+        assert "## バリュエーション分析" not in md
+        # 警告文は表示される
+        assert "バリュエーション分析データが未指定" in md
+
+    def test_empty_valuation_dict_omits_section(self):
+        """dcf=None, relative=None ではセクション見出し省略."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            valuation_data={"dcf": None, "relative": None},
+        )
+        assert "## バリュエーション分析" not in md
+
+    def test_backward_compat_no_valuation(self):
+        """valuation_data 未指定の既存呼び出しが正常動作."""
+        md_old = render_markdown(_BASE_METRICS_PAYLOAD, "9743")
+        assert "## 主要指標" in md_old
+        assert "## 通期推移表" in md_old
+
+
+# ===================================================================
+# Risk section tests
+# ===================================================================
+
+class TestRiskSection:
+    """リスク分析セクションのレンダリングテスト."""
+
+    def test_risk_section_rendered(self):
+        """risk_data 指定時にリスク分析セクションが出力される."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743", risk_data=_RISK_DATA,
+        )
+        assert "## リスク分析" in md
+
+    def test_risk_summary_counts(self):
+        """リスク総数と severity 内訳が表示される."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743", risk_data=_RISK_DATA,
+        )
+        assert "4件" in md
+        assert "高: 1" in md
+        assert "中: 2" in md
+        assert "低: 1" in md
+
+    def test_risk_categories_in_table(self):
+        """カテゴリ別テーブルが表示される."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743", risk_data=_RISK_DATA,
+        )
+        assert "市場リスク" in md
+        assert "信用リスク" in md
+        assert "オペレーショナルリスク" in md
+        assert "規制リスク" in md
+
+    def test_required_5_categories_always_shown(self):
+        """要件定義の5カテゴリが必ず表示される (liquidity含む)."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743", risk_data=_RISK_DATA,
+        )
+        assert "流動性リスク" in md
+        # liquidity_risk has no data → shows (該当データなし)
+        lines = md.split("\n")
+        liq_line = [l for l in lines if "流動性リスク" in l][0]
+        assert "該当データなし" in liq_line
+        assert "| 0 |" in liq_line
+
+    def test_empty_extra_category_skipped(self):
+        """件数0の追加カテゴリ (other_risk) はテーブルに含まれない."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743", risk_data=_RISK_DATA,
+        )
+        assert "その他リスク" not in md
+
+    def test_other_risk_shown_when_items_exist(self):
+        """other_risk にアイテムがある場合は表示される."""
+        risk_with_other = {
+            **_RISK_DATA,
+            "risk_categories": {
+                **_RISK_DATA["risk_categories"],
+                "other_risk": [
+                    {"text": "その他のリスク要因", "source": "S100", "severity": "medium"}
+                ],
+            },
+        }
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743", risk_data=risk_with_other,
+        )
+        assert "その他リスク" in md
+
+    def test_risk_section_before_data_sources(self):
+        """リスク分析セクションがデータソースの前に配置される."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743", risk_data=_RISK_DATA,
+        )
+        idx_risk = md.index("## リスク分析")
+        idx_datasrc = md.index("## データソース")
+        assert idx_risk < idx_datasrc
+
+    def test_severity_level_per_category(self):
+        """各カテゴリの最大 severity がテーブルに表示される."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743", risk_data=_RISK_DATA,
+        )
+        lines = md.split("\n")
+        market_line = [l for l in lines if "市場リスク" in l][0]
+        assert "高" in market_line
+        op_line = [l for l in lines if "オペレーショナルリスク" in l][0]
+        assert "低" in op_line
+
+    def test_risk_source_traceability(self):
+        """リスク分析セクションに出典情報が表示される."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743", risk_data=_RISK_DATA,
+        )
+        assert "出典情報" in md
+        assert "分析日時:" in md
+        assert "2026-02-27T14:30:00+00:00" in md
+        assert "参照文書:" in md
+        assert "S100TEST" in md
+
+
+class TestRiskGracefulDegradation:
+    """リスクデータなし時の graceful degradation テスト."""
+
+    def test_no_risk_data_omits_section(self):
+        """risk_data=None ではリスク分析セクション省略."""
+        md = render_markdown(_BASE_METRICS_PAYLOAD, "9743")
+        assert "## リスク分析" not in md
+        # 警告文は表示される
+        assert "リスク分析データが未指定" in md
+
+    def test_backward_compat_no_risk(self):
+        """risk_data 未指定の既存呼び出しが正常動作."""
+        md = render_markdown(_BASE_METRICS_PAYLOAD, "9743")
+        assert "## データソース" in md
+
+
+# ===================================================================
+# Valuation + Risk integration tests
+# ===================================================================
+
+class TestDataAbsenceWarnings:
+    """データ未指定時の警告表示テスト."""
+
+    def test_both_absent_warnings(self):
+        """valuation/risk 未指定で両方の警告が出る."""
+        md = render_markdown(_BASE_METRICS_PAYLOAD, "9743")
+        assert "バリュエーション分析データが未指定" in md
+        assert "リスク分析データが未指定" in md
+        assert "--valuation" in md
+        assert "--risk" in md
+
+    def test_valuation_present_no_warning(self):
+        """valuation 指定時はバリュエーション警告が出ない."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            valuation_data={"dcf": _DCF_DATA, "relative": None},
+        )
+        assert "バリュエーション分析データが未指定" not in md
+        # risk 警告は出る
+        assert "リスク分析データが未指定" in md
+
+    def test_risk_present_no_warning(self):
+        """risk 指定時はリスク警告が出ない."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            risk_data=_RISK_DATA,
+        )
+        assert "リスク分析データが未指定" not in md
+        # valuation 警告は出る
+        assert "バリュエーション分析データが未指定" in md
+
+    def test_both_present_no_warnings(self):
+        """valuation/risk 両方指定で警告が出ない."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            valuation_data={"dcf": _DCF_DATA, "relative": None},
+            risk_data=_RISK_DATA,
+        )
+        assert "バリュエーション分析データが未指定" not in md
+        assert "リスク分析データが未指定" not in md
+
+
+class TestValuationRiskIntegration:
+    """valuation + risk 両方指定時の統合テスト."""
+
+    def test_both_sections_present(self):
+        """valuation と risk 両方のセクションが出力される."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            valuation_data={"dcf": _DCF_DATA, "relative": _RELATIVE_SIMPLE},
+            risk_data=_RISK_DATA,
+        )
+        assert "## バリュエーション分析" in md
+        assert "## リスク分析" in md
+
+    def test_section_order(self):
+        """セクション順序: 主要指標 → バリュエーション → 通期推移表 → リスク → データソース."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            valuation_data={"dcf": _DCF_DATA, "relative": _RELATIVE_SIMPLE},
+            risk_data=_RISK_DATA,
+        )
+        idx = [
+            md.index("## 主要指標"),
+            md.index("## バリュエーション分析"),
+            md.index("## 通期推移表"),
+            md.index("## リスク分析"),
+            md.index("## データソース"),
+        ]
+        assert idx == sorted(idx)
+
+    def test_html_output_with_both(self):
+        """HTML 出力でも valuation/risk セクションが正しくレンダリングされる."""
+        md = render_markdown(
+            _BASE_METRICS_PAYLOAD, "9743",
+            valuation_data={"dcf": _DCF_DATA, "relative": _RELATIVE_SIMPLE},
+            risk_data=_RISK_DATA,
+        )
+        html = render_html(md, "9743 分析レポート")
+        assert "<table>" in html
+        assert "バリュエーション分析" in html
+        assert "リスク分析" in html
+        assert "DCF 評価" in html
+
+
+# ===================================================================
+# Valuation/Risk helper unit tests
+# ===================================================================
+
+class TestComputeDcfEquity:
+    """_compute_dcf_equity の単体テスト."""
+
+    def test_basic_computation(self):
+        """基本的なDCF計算が正の値を返す."""
+        eq = _compute_dcf_equity(
+            base_fcf=4500000000.0,
+            growth=0.08738,
+            wacc=0.08,
+            terminal_growth=0.02,
+            years=5,
+            net_debt=5000000000.0,
+        )
+        assert eq is not None
+        assert eq > 0
+
+    def test_wacc_equals_growth_returns_none(self):
+        """WACC == terminal_growth では None を返す."""
+        eq = _compute_dcf_equity(
+            base_fcf=1e9, growth=0.05, wacc=0.05,
+            terminal_growth=0.05, years=5, net_debt=0,
+        )
+        assert eq is None
+
+    def test_wacc_less_than_growth_returns_none(self):
+        """WACC < terminal_growth では None を返す."""
+        eq = _compute_dcf_equity(
+            base_fcf=1e9, growth=0.05, wacc=0.03,
+            terminal_growth=0.05, years=5, net_debt=0,
+        )
+        assert eq is None
+
+    def test_higher_wacc_lower_value(self):
+        """WACC が高いほど株式価値が下がる."""
+        eq_low = _compute_dcf_equity(
+            base_fcf=1e9, growth=0.05, wacc=0.06,
+            terminal_growth=0.02, years=5, net_debt=0,
+        )
+        eq_high = _compute_dcf_equity(
+            base_fcf=1e9, growth=0.05, wacc=0.10,
+            terminal_growth=0.02, years=5, net_debt=0,
+        )
+        assert eq_low > eq_high
+
+
+class TestMaxSeverity:
+    """_max_severity の単体テスト."""
+
+    def test_high_wins(self):
+        items = [
+            {"severity": "low"},
+            {"severity": "high"},
+            {"severity": "medium"},
+        ]
+        assert _max_severity(items) == "high"
+
+    def test_all_low(self):
+        items = [{"severity": "low"}, {"severity": "low"}]
+        assert _max_severity(items) == "low"
+
+    def test_default_medium(self):
+        """severity フィールドがない場合は medium 扱い."""
+        items = [{"text": "something"}]
+        assert _max_severity(items) == "medium"
+
+    def test_empty_list(self):
+        assert _max_severity([]) == "low"
+
+
+# ===================================================================
+# CLI integration tests for --valuation and --risk
+# ===================================================================
+
+class TestValuationRiskCli:
+    """CLI --valuation / --risk の統合テスト."""
+
+    def test_valuation_via_cli(self):
+        script = Path(__file__).resolve().parents[1] / "scripts" / "main.py"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            metrics_path = tmp_path / "metrics.json"
+            valuation_dir = tmp_path / "valuation"
+            valuation_dir.mkdir()
+            dcf_path = valuation_dir / "dcf.json"
+            output_md = tmp_path / "out.md"
+            output_html = tmp_path / "out.html"
+
+            metrics_path.write_text(
+                json.dumps(_BASE_METRICS_PAYLOAD), encoding="utf-8"
+            )
+            dcf_path.write_text(json.dumps(_DCF_DATA), encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable, str(script),
+                    "--ticker", "9743",
+                    "--metrics", str(metrics_path),
+                    "--valuation", str(dcf_path),
+                    "--output-md", str(output_md),
+                    "--output-html", str(output_html),
+                ],
+                check=False, capture_output=True, text=True,
+            )
+
+            assert result.returncode == 0, result.stderr
+            md_text = output_md.read_text(encoding="utf-8")
+            assert "バリュエーション分析" in md_text
+            assert "DCF 評価" in md_text
+
+    def test_risk_via_cli(self):
+        script = Path(__file__).resolve().parents[1] / "scripts" / "main.py"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            metrics_path = tmp_path / "metrics.json"
+            risk_path = tmp_path / "risk_analysis.json"
+            output_md = tmp_path / "out.md"
+            output_html = tmp_path / "out.html"
+
+            metrics_path.write_text(
+                json.dumps(_BASE_METRICS_PAYLOAD), encoding="utf-8"
+            )
+            risk_path.write_text(json.dumps(_RISK_DATA), encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable, str(script),
+                    "--ticker", "9743",
+                    "--metrics", str(metrics_path),
+                    "--risk", str(risk_path),
+                    "--output-md", str(output_md),
+                    "--output-html", str(output_html),
+                ],
+                check=False, capture_output=True, text=True,
+            )
+
+            assert result.returncode == 0, result.stderr
+            md_text = output_md.read_text(encoding="utf-8")
+            assert "リスク分析" in md_text
+            assert "市場リスク" in md_text
+
+    def test_valuation_auto_discovers_relative(self):
+        """--valuation で dcf.json を指定すると同ディレクトリの relative.json も自動検出."""
+        script = Path(__file__).resolve().parents[1] / "scripts" / "main.py"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            metrics_path = tmp_path / "metrics.json"
+            valuation_dir = tmp_path / "valuation"
+            valuation_dir.mkdir()
+            output_md = tmp_path / "out.md"
+            output_html = tmp_path / "out.html"
+
+            metrics_path.write_text(
+                json.dumps(_BASE_METRICS_PAYLOAD), encoding="utf-8"
+            )
+            (valuation_dir / "dcf.json").write_text(
+                json.dumps(_DCF_DATA), encoding="utf-8"
+            )
+            (valuation_dir / "relative.json").write_text(
+                json.dumps(_RELATIVE_SIMPLE), encoding="utf-8"
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable, str(script),
+                    "--ticker", "9743",
+                    "--metrics", str(metrics_path),
+                    "--valuation", str(valuation_dir / "dcf.json"),
+                    "--output-md", str(output_md),
+                    "--output-html", str(output_html),
+                ],
+                check=False, capture_output=True, text=True,
+            )
+
+            assert result.returncode == 0, result.stderr
+            md_text = output_md.read_text(encoding="utf-8")
+            assert "DCF 評価" in md_text
+            assert "相対バリュエーション" in md_text
+
+    def test_no_valuation_no_risk_backward_compat(self):
+        """--valuation/--risk 未指定で既存動作が保持される."""
+        script = Path(__file__).resolve().parents[1] / "scripts" / "main.py"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            metrics_path = tmp_path / "metrics.json"
+            output_md = tmp_path / "out.md"
+            output_html = tmp_path / "out.html"
+
+            metrics_path.write_text(
+                json.dumps(_BASE_METRICS_PAYLOAD), encoding="utf-8"
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable, str(script),
+                    "--ticker", "9743",
+                    "--metrics", str(metrics_path),
+                    "--output-md", str(output_md),
+                    "--output-html", str(output_html),
+                ],
+                check=False, capture_output=True, text=True,
+            )
+
+            assert result.returncode == 0, result.stderr
+            md_text = output_md.read_text(encoding="utf-8")
+            assert "## バリュエーション分析" not in md_text
+            assert "## リスク分析" not in md_text
+            assert "主要指標" in md_text
+            # 警告文は表示される
+            assert "バリュエーション分析データが未指定" in md_text
+            assert "リスク分析データが未指定" in md_text
+
+    def test_both_valuation_and_risk_via_cli(self):
+        """--valuation + --risk 同時指定の統合テスト."""
+        script = Path(__file__).resolve().parents[1] / "scripts" / "main.py"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            metrics_path = tmp_path / "metrics.json"
+            dcf_path = tmp_path / "dcf.json"
+            risk_path = tmp_path / "risk.json"
+            output_md = tmp_path / "out.md"
+            output_html = tmp_path / "out.html"
+
+            metrics_path.write_text(
+                json.dumps(_BASE_METRICS_PAYLOAD), encoding="utf-8"
+            )
+            dcf_path.write_text(json.dumps(_DCF_DATA), encoding="utf-8")
+            risk_path.write_text(json.dumps(_RISK_DATA), encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable, str(script),
+                    "--ticker", "9743",
+                    "--metrics", str(metrics_path),
+                    "--valuation", str(dcf_path),
+                    "--risk", str(risk_path),
+                    "--output-md", str(output_md),
+                    "--output-html", str(output_html),
+                ],
+                check=False, capture_output=True, text=True,
+            )
+
+            assert result.returncode == 0, result.stderr
+            md_text = output_md.read_text(encoding="utf-8")
+            assert "バリュエーション分析" in md_text
+            assert "リスク分析" in md_text
+            html_text = output_html.read_text(encoding="utf-8")
+            assert "<table>" in html_text
+            assert "バリュエーション分析" in html_text

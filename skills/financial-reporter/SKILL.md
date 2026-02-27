@@ -46,6 +46,8 @@ python3 skills/financial-reporter/scripts/main.py \
 | `--output-html` | auto | HTML 出力先パス |
 | `--number-format` | `raw` | 数値表示形式: `raw` (デフォルト・生数値), `man_yen` (百万円), `oku_yen` (億円) |
 | `--reconciliation` | auto | source_reconciliation.json パス (省略時は自動検出) |
+| `--valuation` | auto | valuation-calculator 出力JSONパス (省略時: `data/{ticker}/valuation/dcf.json`) |
+| `--risk` | auto | risk-analyzer 出力JSONパス (省略時: `data/{ticker}/risk/risk_analysis.json`) |
 
 ## 出力
 
@@ -117,6 +119,28 @@ null 値の表示理由を区別する:
 | `raw` | `59973669000.00` | `19.30%` |
 | `man_yen` | `59,974 (百万円)` | `19.30%` |
 | `oku_yen` | `599.7 (億円)` | `19.30%` |
+
+### バリュエーション分析セクション
+
+`--valuation` で `valuation-calculator` の出力 JSON を指定すると、
+「主要指標」の後に **バリュエーション分析** セクションを追加する。
+
+- **DCF 評価**: 企業価値、株式価値、理論株価、前提条件、感度分析テーブル (WACC × 永久成長率)
+- **相対バリュエーション**: PER/PBR/EV-EBITDA (ピアありの場合は比較テーブル)
+
+`--valuation` で dcf.json を指定すると、同ディレクトリの `relative.json` も自動検出する。
+データ未指定時はセクション全体を省略 (graceful degradation)。
+
+### リスク分析セクション
+
+`--risk` で `risk-analyzer` の出力 JSON を指定すると、
+「データソース」の前に **リスク分析** セクションを追加する。
+
+- リスク総数 (severity 別内訳)
+- カテゴリ別テーブル: 市場リスク / 信用リスク / オペレーショナルリスク / 規制リスク / その他
+- 各カテゴリ: リスクレベル (高/中/低) + 件数 + 主要リスク要因
+
+データ未指定時はセクション全体を省略 (graceful degradation)。
 
 ## 含まれるスクリプト
 

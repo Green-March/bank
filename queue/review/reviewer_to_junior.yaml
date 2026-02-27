@@ -1,17 +1,18 @@
 review_response:
   request_type: deliverable_review_response
   review_type: deliverable
-  request_id: 'rev_s33_T5'
-  task_id: 'T5'
-  junior_id: 'junior3'
+  request_id: 'rev_040_02'
+  task_id: 'task_040'
+  junior_id: 'junior2'
   verdict: 'ok'
   comments:
-    schema_conformance: 'financials.json は period_index/documents を保ち、financials schema の主要キーと数値型を満たしています。'
-    data_integrity: 'FY2017〜FY2025の9期統合で、FY2018以降はBS/PL/CFの必須項目が欠損なく揃っています。'
-    source_traceability: 'manifest.json が対象docIDと取得日時を保持し、raw zip/個別JSON/financials の追跡経路が確認できます。'
-    analytical_validity: '4件の新規有報はFY2019〜FY2022の比較期を補完し、既存FY列との突合で整合的です。'
-    clarity: '提出結果は対象件数、対象年度、FY2017比較のみという前提を明確に分けて報告しています。'
-    risk_disclosure: 'manifestのfailed_datesにAPI接続障害が残るため、監視継続と再試行手順の明記が必要です。'
+    schema_conformance: '5カテゴリのリスクキー名を仕様どおりに統一し、既存metrics出力形式は維持しています。'
+    data_integrity: '欠損は confirmed_absent と未収集を区別して表示し、バリュエーション/リスク未指定時は既存キーと警告を保持しています。'
+    source_traceability: 'リスクの analyzed_at/source_documents と valuation の出典情報を本文へ追加し、既存EDINET/J-Quants参照も継続されています。'
+    analytical_validity: 'DCF感度テーブル、相対バリュエーション比較、リスク件数集計は実装通り表示され、既存算出ロジックと矛盾しません。'
+    clarity: 'レポート構成（主要指標→バリュエーション→通期推移→リスク→データソース）とCLI警告文が明確で、SKILL.md更新も追従しています。'
+    risk_disclosure: 'リスクカテゴリ欠損や市場データ未指定などの限界・前提は本文末尾で明示され、再実行条件も追記されています。'
+  e2e_check: 'render_markdown/main/tests を含む 113件テストと提出済み検証ログが一致し、リスクカテゴリ追加・出典表示の統合動作に問題はありません。'
   suggested_changes: []
   status: 'completed'
-  timestamp: '2026-02-26 18:35:11'
+  timestamp: '2026-02-27 21:01:05'

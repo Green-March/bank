@@ -1,32 +1,35 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_s33_T5"
-  task_id: T5
-  junior_id: junior3
+  request_id: "rev_040_02"
+  task_id: "task_040"
+  junior_id: "junior2"
   status: pending
-  timestamp: "2026-02-26T19:17:00+09:00"
+  timestamp: "2026-02-27T21:46:00+09:00"
   payload:
-    description: "EDINET FY2019 リトライ (9743 丹青社) — API復旧確認、FY2019-2022 有報4件取得、全9期XBRLパース完了"
+    summary: |
+      financial-reporter valuation/risk セクション追加（修正版）。
+      前回レビュー指摘2点 + 関連6点を修正:
+      - リスクカテゴリを要件定義5カテゴリに一致 (market/credit/liquidity/operational/regulatory)
+      - liquidity_risk 欠落時は「(該当データなし)」行を表示、other_risk は存在時のみ追加表示
+      - valuation/risk セクション末尾に出典情報追加 (doc_id, data_sources, analyzed_at)
+      - 感度分析テーブル軸名を「永久成長率」に明確化
+      - データ未指定時の再実行警告追加
+      - テスト8件追加 (計113件全パス)
     outputs:
-      - "data/9743/raw/edinet/S100FNV6.zip (FY2019)"
-      - "data/9743/raw/edinet/S100IGWG.zip (FY2020)"
-      - "data/9743/raw/edinet/S100L825.zip (FY2021)"
-      - "data/9743/raw/edinet/S100NXXX.zip (FY2022)"
-      - "data/9743/parsed/financials.json (全9期統合 FY2017-FY2025)"
+      - "skills/financial-reporter/scripts/main.py"
+      - "skills/financial-reporter/scripts/render.py"
+      - "skills/financial-reporter/tests/test_reporter.py"
+      - "skills/financial-reporter/SKILL.md"
     validation:
-      - "edinet_api_status=200 (復旧確認)"
-      - "new_doc_count=4"
-      - "total_parsed_periods=9 (FY2017-FY2025)"
-      - "bs_pl_cf_complete=FY2018-FY2025 (8期)"
-      - "missing_required_fields=0 (FY2018以降)"
-    caveats:
-      - "FY2017 は比較期間データのみ（net_assets のみ、BS/PL/CF 不完全）"
-      - "EDINET API の安定性は不明（前日は 302 redirect で停止）"
-    review_focus:
-      - "取得データの完全性（FY2019-FY2022 の4期が揃っているか）"
-      - "パース結果の品質（BS/PL/CF 全項目が FY2018 以降で揃っているか）"
-      - "financials.json の9期統合に不整合がないか"
+      - "total_tests=113 (既存70 + 新規43)"
+      - "all_tests_passed=true"
+      - "backward_compat=true"
+    acceptance_criteria:
+      - "前回レビュー指摘2点すべて対応済み"
+      - "リスクカテゴリ名が要件定義と一致"
+      - "valuation/risk に出典情報 (source_documents) が含まれる"
+      - "既存テスト全パス + 新規テスト追加"
 review_followup:
   request_id: null
   task_id: null

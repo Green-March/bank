@@ -1,43 +1,48 @@
 queue:
-  - request_id: "req_036"
-    objective: "valuation-calculator と risk-analyzer を pipeline-runner から呼び出せるように組み込む。pipeline-runner のステップ定義に valuation と risk-analysis ステップを追加し、既存ステップとのデータ受け渡し（financial-calculator 出力 → valuation-calculator 入力、全スキル出力 → risk-analyzer 入力）を実装する。"
+  - request_id: "req_039"
+    objective: "web-researcher / web-data-harmonizer をパイプラインステップとして pipeline-runner に追加する。resolve 後に web データ収集・変換フェーズを挟み、EDINET/J-Quants と並行して web ソースからもデータを取得できるようにする。"
     ticker: null
     universe: null
-    analysis_type: "pipeline_integration"
+    analysis_type: "skill_enhancement"
     timeframe: null
-    output_format: ["md"]
+    output_format: ["py", "yaml"]
     priority: "high"
-    due_date: "2026-02-26"
-    constraints:
-      - "既存の pipeline-runner テストが壊れないこと"
-      - "valuation-calculator (30 tests) と risk-analyzer (44 tests) の既存テストも全パスすること"
-      - "ステップ間のスキーマ整合性を確認すること"
-      - "pipeline-runner の SKILL.md にステップ追加を反映すること"
-
-  - request_id: "req_037"
-    objective: "Reviewer (Codex) の instructions/reviewer.md にスキーマ整合性チェック観点を追加する。スキル間のデータ受け渡し（disclosure-parser → financial-integrator → financial-calculator → valuation-calculator など）でスキーマ不整合がないかを検証する観点を reviewer のレビュー基準に組み込む。"
-    ticker: null
-    universe: null
-    analysis_type: "instruction_update"
-    timeframe: null
-    output_format: ["md"]
-    priority: "medium"
-    due_date: "2026-02-26"
-    constraints:
-      - "既存のレビュー観点（5観点）を維持しつつ追加すること"
-      - "Reviewer の簡潔出力ルール（各1文、suggested_changes最大2件）は変更しない"
-      - "各スキルの manifest.json の input/output スキーマを参照基準とする"
-
-  - request_id: "req_038"
-    objective: "req_033 リトライ — EDINET API で FY2019 過去データの取得を再試行する。前回は 302 redirect → notfound.html でブロックされた。API の現在の状態を確認し、取得可能であれば disclosure-collector 経由でデータ収集を実行する。取得不可の場合は代替データソース（J-Quants、web-researcher 経由の公開情報）で補完可能か調査・報告する。"
-    ticker: "9743"
-    universe: null
-    analysis_type: "data_collection"
-    timeframe: "FY2019"
-    output_format: ["md"]
-    priority: "low"
     due_date: "2026-02-27"
     constraints:
-      - "EDINET API が依然 302 の場合、無理にリトライせず代替手段を報告"
-      - "取得できた場合は disclosure-parser でパースまで完了させる"
-      - "結果を dashboard.md の該当セクションに反映"
+      - "既存の10ステップパイプライン構造を維持しつつ拡張する"
+      - "web-researcher (4サイト: Yahoo/Kabutan/Shikiho/Homepage) と web-data-harmonizer の既存スキルを活用"
+      - "pipeline-runner の skill_registry に web_research / harmonize ステップを追加"
+      - "example_pipeline.yaml を更新してフル構成を示す"
+      - "テストを追加し既存テストが壊れないことを確認"
+
+  - request_id: "req_040"
+    objective: "financial-reporter に valuation-calculator と risk-analyzer の出力セクションを追加する。レポートに DCF 評価結果、相対バリュエーション (PER/PBR/EV-EBITDA)、リスク分析 (5カテゴリ) を含める。"
+    ticker: null
+    universe: null
+    analysis_type: "skill_enhancement"
+    timeframe: null
+    output_format: ["py", "md", "html"]
+    priority: "high"
+    due_date: "2026-02-27"
+    constraints:
+      - "既存の financial-reporter テンプレートを拡張する形で実装"
+      - "valuation セクション: DCF結果、感度分析テーブル、PER/PBR/EV-EBITDA 比較"
+      - "risk セクション: 5カテゴリ (market/credit/liquidity/operational/regulatory) のサマリー"
+      - "valuation/risk データが無い場合はセクションを省略する (graceful degradation)"
+      - "テストを追加し既存テストが壊れないことを確認"
+
+  - request_id: "req_041"
+    objective: "Reviewer の instructions にパイプライン全体の E2E (End-to-End) 検証観点を追加する。個別成果物レビューに加え、パイプライン出力間の整合性をチェックできるようにする。"
+    ticker: null
+    universe: null
+    analysis_type: "process_improvement"
+    timeframe: null
+    output_format: ["md", "yaml"]
+    priority: "medium"
+    due_date: "2026-02-27"
+    constraints:
+      - "既存の6観点レビュー体系に E2E 観点を追加する (7観点化ではなく、E2E は補足チェックリスト)"
+      - "チェック項目: ステップ間データ整合性、欠損伝播、source_attribution 一貫性、数値精度保持"
+      - "reviewer_finalize.sh に E2E オプションを追加"
+      - "instructions/reviewer.md を更新"
+      - "CLAUDE.md の関連セクションも同期更新"

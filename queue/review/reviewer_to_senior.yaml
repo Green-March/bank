@@ -1,9 +1,6 @@
 plan_review_response:
-  request_id: 'plan_s33_001'
   verdict: 'ok'
   comments:
-    - '依存関係は req036 の並列後統合、req038 を低優先で分離しており妥当。'
-    - 'EDINET 停止時の代替調査を含め、データ取得リスクに対処している。'
-    - '既存31件/30件/44件テストの再検証条件は回帰防止として適切。'
-  suggested_changes:
-    - 'valuate/analyze_risk の出力先と報告で参照するファイル仕様を明示し、report 依存と整合させてください。'
+    - 'v2 はコマンド名・integrate 接続を明文化しており、前回阻害だった実装断絶を解消しています。'
+    - 'financial-integrator の互換維持前提で harmonized-dir を追加し、E2E で反映検証を要求している点は妥当です。'
+  suggested_changes: []

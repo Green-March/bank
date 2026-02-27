@@ -1,6 +1,6 @@
 pipeline:
   name: "disclosure_analysis"
-  description: "銘柄解決→収集→パース→統合→指標計算→バリュエーション/リスク分析/棚卸→レポート生成"
+  description: "銘柄解決→収集(EDINET/J-Quants/Web 3並列)→パース/ハーモナイズ→統合→指標計算→バリュエーション/リスク分析/棚卸→レポート生成"
   steps:
     - id: resolve
       skill: ticker-resolver
@@ -23,17 +23,27 @@ pipeline:
       output_dir: "data/{ticker}/raw/edinet"
       depends_on: [resolve]
       gates: "skills/quality-gate/references/gates_collect.yaml"
+    - id: web_research
+      skill: web-researcher
+      command: "python3 skills/web-researcher/scripts/main.py collect --ticker {ticker} --source all --output data/{ticker}/web_research/research.json"
+      output_dir: "data/{ticker}/web_research"
+      depends_on: [resolve]
     - id: parse
       skill: disclosure-parser
       command: "python3 skills/disclosure-parser/scripts/main.py --ticker {ticker} --input-dir {prev_output} --output-dir data/{ticker}/parsed"
       output_dir: "data/{ticker}/parsed"
       depends_on: [collect]
       gates: "skills/quality-gate/references/gates_parse.yaml"
+    - id: harmonize
+      skill: web-data-harmonizer
+      command: "python3 skills/web-data-harmonizer/scripts/main.py harmonize --ticker {ticker} --source all --input data/{ticker}/web_research/research.json --output data/{ticker}/harmonized/harmonized_financials.json"
+      output_dir: "data/{ticker}/harmonized"
+      depends_on: [web_research]
     - id: integrate
       skill: financial-integrator
-      command: "python3 skills/financial-integrator/scripts/main.py --ticker {ticker} --fye-month {fye_month} --parsed-dir data/{ticker}/parsed --output data/{ticker}/integrated/integrated_financials.json"
+      command: "python3 skills/financial-integrator/scripts/main.py --ticker {ticker} --fye-month {fye_month} --parsed-dir data/{ticker}/parsed --harmonized-dir data/{ticker}/harmonized --output data/{ticker}/integrated/integrated_financials.json"
       output_dir: "data/{ticker}/integrated"
-      depends_on: [parse]
+      depends_on: [parse, harmonize]
       gates: "skills/quality-gate/references/gates_integrate.yaml"
     - id: calculate
       skill: financial-calculator

@@ -30,7 +30,7 @@ def test_validate_example_pipeline() -> None:
     errors = config.validate_dag()
     assert errors == [], f"DAG errors: {errors}"
 
-    assert len(config.steps) == 10
+    assert len(config.steps) == 12
 
     # validate_vars should pass with only ticker
     config.validate_vars({"ticker": "TEST"})
@@ -41,7 +41,7 @@ def test_validate_example_pipeline() -> None:
 # ---------------------------------------------------------------------------
 
 def test_mock_run_example_pipeline() -> None:
-    """Full 10-step mock run: resolve outputs JSON vars, subsequent steps
+    """Full 12-step mock run: resolve outputs JSON vars, subsequent steps
     receive expanded fye_month. No real API calls."""
     config = PipelineConfig.load(EXAMPLE_PIPELINE)
 
@@ -69,9 +69,9 @@ def test_mock_run_example_pipeline() -> None:
         runner = PipelineRunner()
         log = runner.run(config, {"ticker": "TEST"})
 
-    # All 10 steps completed
+    # All 12 steps completed
     assert log["status"] == "completed"
-    assert len(log["steps"]) == 10
+    assert len(log["steps"]) == 12
     for step_log in log["steps"]:
         assert step_log["status"] == "completed"
 

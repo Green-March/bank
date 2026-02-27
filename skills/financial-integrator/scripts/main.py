@@ -57,6 +57,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="入力ディレクトリ（省略時: data/{ticker}/parsed）",
     )
     parser.add_argument(
+        "--harmonized-dir",
+        default=None,
+        help="web-data-harmonizer 出力ディレクトリ（省略時: web データなし）",
+    )
+    parser.add_argument(
         "--output",
         default=None,
         help="出力JSONパス（省略時: data/{ticker}/parsed/integrated_financials.json）",
@@ -81,6 +86,9 @@ def main() -> int:
         if args.parsed_dir
         else (data_root / ticker / "parsed")
     )
+    harmonized_dir = (
+        Path(args.harmonized_dir) if args.harmonized_dir else None
+    )
     output_path = (
         Path(args.output)
         if args.output
@@ -94,6 +102,7 @@ def main() -> int:
             parsed_dir=parsed_dir,
             output_path=output_path,
             company_name=args.company_name,
+            harmonized_dir=harmonized_dir,
         )
     except IntegrationError as exc:
         print(f"エラー: {exc}", file=sys.stderr)

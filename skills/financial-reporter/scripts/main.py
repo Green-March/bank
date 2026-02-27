@@ -97,6 +97,44 @@ def _resolve_company_name(ticker: str, data_root: Path) -> str | None:
     return None
 
 
+def _load_json(path: Path) -> dict | None:
+    """Load a JSON file and return dict, or None on error."""
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _load_valuation_data(valuation_path: Path) -> dict | None:
+    """Load valuation data. Auto-discovers sibling dcf/relative files."""
+    primary = _load_json(valuation_path)
+    if not primary:
+        return None
+
+    result: dict = {"dcf": None, "relative": None}
+    vtype = primary.get("valuation_type")
+
+    if vtype == "dcf":
+        result["dcf"] = primary
+        sibling = valuation_path.parent / "relative.json"
+        rel = _load_json(sibling)
+        if rel and rel.get("valuation_type") == "relative":
+            result["relative"] = rel
+    elif vtype == "relative":
+        result["relative"] = primary
+        sibling = valuation_path.parent / "dcf.json"
+        dcf = _load_json(sibling)
+        if dcf and dcf.get("valuation_type") == "dcf":
+            result["dcf"] = dcf
+    else:
+        return None
+
+    return result
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="財務指標データから Markdown/HTML 分析レポートを生成")
     parser.add_argument("--ticker", required=True, help="銘柄コード (例: 7203)")
@@ -113,6 +151,16 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["raw", "man_yen", "oku_yen"],
         default="raw",
         help="数値表示形式: raw (デフォルト・生数値), man_yen (百万円), oku_yen (億円)",
+    )
+    parser.add_argument(
+        "--valuation",
+        default=None,
+        help="valuation-calculator 出力JSONパス (dcf.json)",
+    )
+    parser.add_argument(
+        "--risk",
+        default=None,
+        help="risk-analyzer 出力JSONパス (risk_analysis.json)",
     )
     return parser
 
@@ -171,12 +219,32 @@ def main() -> int:
         except (OSError, json.JSONDecodeError):
             pass  # reconciliation is optional; skip on error
 
+    # Load valuation data
+    valuation_data = None
+    valuation_path = (
+        Path(args.valuation)
+        if args.valuation
+        else (data_root / ticker / "valuation" / "dcf.json")
+    )
+    valuation_data = _load_valuation_data(valuation_path)
+
+    # Load risk data
+    risk_data = None
+    risk_path = (
+        Path(args.risk)
+        if args.risk
+        else (data_root / ticker / "risk" / "risk_analysis.json")
+    )
+    risk_data = _load_json(risk_path)
+
     markdown_text = render_markdown(
         metrics_payload=payload,
         ticker=ticker,
         number_format=args.number_format,
         absence_map=absence_map,
         fy_end_month=fy_end_month,
+        valuation_data=valuation_data,
+        risk_data=risk_data,
     )
     html_text = render_html(markdown_text=markdown_text, title=f"{ticker} 分析レポート")
 

@@ -206,6 +206,7 @@ review_response:
     analytical_validity: null
     clarity: null
     risk_disclosure: null
+  e2e_check: null
   suggested_changes: null
   status: idle
   timestamp: ""
@@ -234,7 +235,8 @@ Common-queue correlation keys (`request_id`, `task_id`, `junior_id`) are mandato
   - Deliverable review: `queue/review/reviewer_to_junior.yaml`
 - Receipt-only responses such as "読みました/確認しました" are invalid and must not terminate the review flow.
 - If Reviewer is blocked, Reviewer must still write `verdict: revise` with blockers and required follow-up in `suggested_changes`, then notify Senior.
-- Reviewer must keep comments concise (deliverable 5観点は各1文、`suggested_changes` は最大2件) and use `./templates/reviewer_finalize.sh`.
+- Reviewer must keep comments concise (deliverable 6観点は各1文、`suggested_changes` は最大2件) and use `./templates/reviewer_finalize.sh`.
+- パイプライン経由の成果物レビュー時は、E2E チェックリスト (ステップ間データ整合性・欠損伝播・source_attribution 一貫性・数値精度保持) を適用し、`--e2e-check` オプションで結果を記録する。
 
 ### Reviewer stall recovery (mandatory, Senior)
 - After notifying Reviewer, Senior performs a single verification read of the expected output YAML (no polling loop).
