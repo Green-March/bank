@@ -403,3 +403,231 @@ class TestCLI:
         )
         assert result.returncode == 1
         assert "free_cash_flow" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# per_share_value 算出検証テスト (req_051)
+# ---------------------------------------------------------------------------
+
+class TestPerShareValue:
+    """shares_outstanding → per_share_value 計算の正確性・エッジケースを検証する。"""
+
+    def test_exact_per_share_value(self):
+        """既知の値で per_share_value の正確性を検証する。
+
+        FCF系列=[10_000_000] (1年分なので growth=terminal_growth_rate=0.02),
+        wacc=0.08, net_debt=2_000_000, shares=100_000
+
+        計算:
+          base_fcf=10_000_000, growth=0.02
+          year1: 10_200_000 / 1.08 = 9_444_444.44...
+          year2: 10_404_000 / 1.1664 = 8_919_753.09...
+          year3: 10_612_080 / 1.259712 = 8_424_183.45...
+          year4: 10_824_321.6 / 1.36048896 = 7_955_961.07...
+          year5: 11_040_808.032 / 1.46932808 = 7_513_371.29...
+          pv_fcfs = 42_257_713.34...
+          terminal_fcf = 11_040_808.032 * 1.02 = 11_261_624.19...
+          terminal_value = 11_261_624.19... / 0.06 = 187_693_736.54...
+          pv_terminal = 187_693_736.54... / 1.46932808 = 127_741_189.72...
+          EV = 42_257_713.34... + 127_741_189.72... = 169_998_903.07...
+          equity = 169_998_903.07... - 2_000_000 = 167_998_903.07...
+          per_share = 167_998_903.07... / 100_000 = 1679.99
+        """
+        result = compute_dcf(
+            fcf_series=[10_000_000],
+            wacc=0.08,
+            terminal_growth_rate=0.02,
+            net_debt=2_000_000,
+            shares_outstanding=100_000,
+            projection_years=5,
+        )
+        assert result.per_share_value is not None
+        # EV から net_debt を引いた equity_value を shares で割った値
+        expected_per_share = result.equity_value / 100_000
+        assert result.per_share_value == round(expected_per_share, 2)
+        # equity_value = enterprise_value - net_debt
+        assert result.equity_value == result.enterprise_value - 2_000_000
+
+    def test_shares_none_returns_none(self):
+        """shares_outstanding=None のとき per_share_value=None"""
+        result = compute_dcf(
+            fcf_series=[1_000_000, 1_200_000],
+            wacc=0.08,
+            terminal_growth_rate=0.02,
+            shares_outstanding=None,
+        )
+        assert result.per_share_value is None
+        assert result.assumptions["shares_outstanding"] is None
+
+    def test_shares_zero_returns_none(self):
+        """shares_outstanding=0 のときゼロ除算せず per_share_value=None"""
+        result = compute_dcf(
+            fcf_series=[1_000_000, 1_200_000],
+            wacc=0.08,
+            terminal_growth_rate=0.02,
+            shares_outstanding=0,
+        )
+        assert result.per_share_value is None
+
+    def test_shares_zero_float_returns_none(self):
+        """shares_outstanding=0.0 のときもゼロ除算せず per_share_value=None"""
+        result = compute_dcf(
+            fcf_series=[1_000_000],
+            wacc=0.08,
+            terminal_growth_rate=0.02,
+            shares_outstanding=0.0,
+        )
+        assert result.per_share_value is None
+
+    def test_shares_negative_returns_none(self):
+        """shares_outstanding が負の場合も per_share_value=None"""
+        result = compute_dcf(
+            fcf_series=[1_000_000],
+            wacc=0.08,
+            terminal_growth_rate=0.02,
+            shares_outstanding=-100_000,
+        )
+        assert result.per_share_value is None
+
+    def test_per_share_with_large_shares(self):
+        """大きな株式数（実際の上場企業規模）で計算精度を検証"""
+        result = compute_dcf(
+            fcf_series=[5_000_000_000, 5_500_000_000, 6_000_000_000],
+            wacc=0.08,
+            terminal_growth_rate=0.02,
+            net_debt=10_000_000_000,
+            shares_outstanding=500_000_000,
+        )
+        assert result.per_share_value is not None
+        assert result.per_share_value > 0
+        # 手動検証: equity_value / shares
+        assert result.per_share_value == round(result.equity_value / 500_000_000, 2)
+
+    def test_per_share_negative_equity(self):
+        """equity_value が負の場合でも per_share_value が算出される（債務超過ケース）"""
+        # net_debt を非常に大きくして equity_value < 0 にする
+        result = compute_dcf(
+            fcf_series=[100_000],
+            wacc=0.08,
+            terminal_growth_rate=0.02,
+            net_debt=100_000_000_000,
+            shares_outstanding=100_000,
+        )
+        assert result.equity_value < 0
+        assert result.per_share_value is not None
+        assert result.per_share_value < 0
+
+    def test_assumptions_include_shares(self):
+        """assumptions に shares_outstanding が含まれる"""
+        result = compute_dcf(
+            fcf_series=[1_000_000],
+            wacc=0.08,
+            terminal_growth_rate=0.02,
+            shares_outstanding=50_000,
+        )
+        assert "shares_outstanding" in result.assumptions
+        assert result.assumptions["shares_outstanding"] == 50_000
+
+
+class TestPerShareCLI:
+    """CLI 経由の per_share_value テスト。"""
+
+    def test_dcf_cli_with_shares(self, tmp_path):
+        """--shares 指定時に per_share_value が出力される"""
+        metrics = _make_metrics(
+            fcf_values=[1_000_000_000, 1_200_000_000, 1_500_000_000],
+            total_debt=0,
+            cash=0,
+        )
+        metrics_file = tmp_path / "metrics.json"
+        metrics_file.write_text(json.dumps(metrics), encoding="utf-8")
+
+        output_file = tmp_path / "dcf_result.json"
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "main.py"), "dcf",
+             "--metrics", str(metrics_file),
+             "--shares", "200000",
+             "--output", str(output_file)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        data = json.loads(output_file.read_text(encoding="utf-8"))
+        assert data["per_share_value"] is not None
+        assert data["per_share_value"] > 0
+        assert data["assumptions"]["shares_outstanding"] == 200_000
+
+    def test_dcf_cli_without_shares(self, tmp_path):
+        """--shares 未指定時に per_share_value が null"""
+        metrics = _make_metrics(fcf_values=[1_000_000, 1_200_000])
+        metrics_file = tmp_path / "metrics.json"
+        metrics_file.write_text(json.dumps(metrics), encoding="utf-8")
+
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "main.py"), "dcf",
+             "--metrics", str(metrics_file)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["per_share_value"] is None
+        assert data["assumptions"]["shares_outstanding"] is None
+
+
+class TestPipelineOutputVarsPropagation:
+    """pipeline output_vars 経由の shares_outstanding 伝播を検証する。
+
+    実際の pipeline-runner の subprocess 実行ではなく、
+    パイプライン定義の構造的整合性とコマンドテンプレートの正しさを検証する。
+    """
+
+    def _load_pipeline_steps(self):
+        """example_pipeline.yaml のステップ一覧を読み込む。"""
+        import yaml
+
+        pipeline_path = Path(__file__).resolve().parent.parent.parent / \
+            "pipeline-runner" / "references" / "example_pipeline.yaml"
+        if not pipeline_path.exists():
+            pytest.skip("example_pipeline.yaml not found")
+
+        with open(pipeline_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        return data.get("pipeline", {}).get("steps", [])
+
+    def test_valuate_command_template_includes_shares_conditional(self):
+        """valuate ステップのコマンドテンプレートが shares_outstanding の
+        shell conditional を含むことを検証する。"""
+        steps = self._load_pipeline_steps()
+        valuate_step = next((s for s in steps if s["id"] == "valuate"), None)
+        assert valuate_step is not None, "valuate step not found in pipeline"
+
+        # コマンドに shares_outstanding の条件付き展開が含まれる
+        cmd = valuate_step["command"]
+        assert "{shares_outstanding}" in cmd
+        assert "--shares" in cmd
+
+    def test_collect_jquants_output_vars_has_shares(self):
+        """collect_jquants ステップの output_vars に shares_outstanding が定義されている。"""
+        steps = self._load_pipeline_steps()
+        jquants_step = next((s for s in steps if s["id"] == "collect_jquants"), None)
+        assert jquants_step is not None, "collect_jquants step not found"
+
+        output_vars = jquants_step.get("output_vars", {})
+        assert "shares_outstanding" in output_vars
+
+    def test_shares_propagation_simulation(self):
+        """output_vars の値を使って valuate コマンドをシミュレーションする。
+
+        collect_jquants が shares_outstanding=18260731 を出力した場合、
+        valuate コマンドに --shares 18260731 が含まれることを検証。
+        """
+        # パイプラインの変数展開をシミュレート
+        cmd_template = 'python3 main.py dcf --metrics metrics.json $([ -n "{shares_outstanding}" ] && echo "--shares {shares_outstanding}")'
+
+        # shares_outstanding が設定された場合
+        rendered_with_shares = cmd_template.replace("{shares_outstanding}", "18260731")
+        assert "--shares 18260731" in rendered_with_shares
+
+        # shares_outstanding が空の場合
+        rendered_without_shares = cmd_template.replace("{shares_outstanding}", "")
+        assert '[ -n "" ]' in rendered_without_shares

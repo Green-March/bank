@@ -1,43 +1,62 @@
 queue:
-  - request_id: "req_045"
-    objective: "pipeline-runner の PYTHONPATH 自動解決。_run_step() でサブプロセス起動時に skills ディレクトリを含む PYTHONPATH を env に自動継承させ、毎セッション手動 export を不要にする。既存テスト (83件) が全て pass すること。"
+  - request_id: "req_048"
+    objective: "financial-integrator の E2E テスト強化 — Web 3ソース (EDINET + J-Quants + Web) 統合の実データ検証テストを追加し、integrator の信頼性を向上させる"
     ticker: null
     universe: null
-    analysis_type: "infrastructure"
+    analysis_type: "test_enhancement"
     timeframe: null
-    output_format: ["code"]
+    output_format: ["test_results"]
     priority: "high"
     due_date: "2026-02-27"
     constraints:
-      - "skills/ 配下の全スキルが import 可能であること"
-      - "既存テスト 83件が全て pass すること"
-      - "ハードコードパスではなく、プロジェクトルートから動的に解決すること"
+      - "既存の87テストを壊さない"
+      - "実データに依存するテストはモック/フィクスチャで安定化すること"
+      - "3ソースマージの境界ケース（欠損ソース、重複期間、型不一致）をカバー"
+      - "テスト全パスを確認してから完了報告"
 
-  - request_id: "req_046"
-    objective: "パイプラインに relative valuation ステップと shares_outstanding 取得を追加。(1) J-Quants or EDINET から発行済株式数を取得し per_share_value を算出可能にする。(2) valuation-calculator の cmd_relative() をパイプライン定義に組み込み、PER/PBR/EV-EBITDA の業界比較を実行する。"
+  - request_id: "req_049"
+    objective: "EDINET CSV キャッシュ破損対策 — 302リダイレクト→notfound.html (390bytes) がキャッシュされる問題を根本解決する。レスポンス検証ロジックを追加し、破損キャッシュの検出・再取得を実装する"
     ticker: null
     universe: null
-    analysis_type: "feature_development"
+    analysis_type: "bug_fix"
     timeframe: null
-    output_format: ["code"]
+    output_format: ["code_fix", "test_results"]
     priority: "high"
     due_date: "2026-02-27"
     constraints:
-      - "既存の12ステップ DAG との整合性を維持すること"
-      - "shares_outstanding は J-Quants listed-info API または EDINET メタデータから取得"
-      - "relative valuation 結果は financial-reporter の valuation セクションに反映"
-      - "新規・変更テストが全て pass すること"
+      - "disclosure-collector スキル内で対処"
+      - "HTTPレスポンスのContent-Type/ステータスコード/ファイルサイズで破損を検出"
+      - "既存キャッシュの破損ファイルも検出・パージできること"
+      - "既存テストを壊さない、新規テスト追加必須"
 
-  - request_id: "req_047"
-    objective: "go.sh に agent-pane-map.tsv 自動生成を組み込む。tmux セッション作成後、各ペインの pane_id と agent_role を agent-pane-map.tsv に自動出力し、reviewer_finalize.sh・senior_submit_plan.sh が参照できるようにする。"
+  - request_id: "req_050"
+    objective: "四季報オンライン認証実装 — web-researcher の Shikiho データソースを稼働させる。SHIKIHO_EMAIL/SHIKIHO_PASSWORD 環境変数でログインし、銘柄ページからデータ取得できるようにする"
     ticker: null
     universe: null
-    analysis_type: "infrastructure"
+    analysis_type: "feature_implementation"
     timeframe: null
-    output_format: ["code"]
+    output_format: ["code", "test_results"]
     priority: "medium"
     due_date: "2026-02-27"
     constraints:
-      - "既存の go.sh 起動シーケンスを壊さないこと"
-      - "agent-pane-map.tsv のフォーマットは既存と同一 (pane_id<TAB>agent_role)"
-      - "reviewer_finalize.sh・senior_submit_plan.sh の動作に影響がないこと"
+      - "web-researcher スキル内で対処"
+      - "認証情報はハードコードしない（環境変数経由のみ）"
+      - "セッション管理（ログイン→スクレイピング→ログアウト）を実装"
+      - "robots.txt を尊重する"
+      - "認証失敗時の適切なエラーハンドリング"
+      - "既存テストを壊さない、新規テスト追加必須"
+
+  - request_id: "req_051"
+    objective: "パイプライン出力の per_share_value 算出検証 — shares_outstanding (req_046で追加済み) から DCF per share への連携を検証し、valuation-calculator の出力に1株あたり価値を含める"
+    ticker: null
+    universe: null
+    analysis_type: "feature_enhancement"
+    timeframe: null
+    output_format: ["code", "test_results"]
+    priority: "medium"
+    due_date: "2026-02-27"
+    constraints:
+      - "valuation-calculator スキル内で対処"
+      - "shares_outstanding が null の場合は per_share_value も null（エラーにしない）"
+      - "pipeline-runner の output_vars 経由で shares_outstanding が正しく伝播することを確認"
+      - "既存の30テストを壊さない、新規テスト追加必須"

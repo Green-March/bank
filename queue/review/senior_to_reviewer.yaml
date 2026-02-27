@@ -2,115 +2,134 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: plan_s37_001
-  request_id: req_045_046_047
-  timestamp: "2026-02-27T23:00:00+09:00"
-  objective: "3件のインフラ・機能開発タスク（PYTHONPATH自動解決、relative valuation追加、go.sh pane-map改善）"
+  plan_id: "plan_s38_001_r2"
+  revision: 2
+  previous_plan_id: "plan_s38_001"
+  timestamp: "2026-02-28T00:05:00+09:00"
+
+  objective: "4件の開発タスク (req_048-051) を3名のJuniorで並列実行する"
 
   context:
-    session: 37
-    prior_findings:
-      - "S36: pipeline-runner サブプロセスが skills モジュールを import できない（毎セッション手動 export PYTHONPATH 必要）"
-      - "S36: shares_outstanding 未取得により per_share_value が null"
-      - "S36: valuation-calculator cmd_relative() は実装済みだがパイプライン定義から呼ばれていない"
-      - "S35: agent-pane-map.tsv ベースのペインID管理は稼働中だが go.sh の生成がハードコード変数+スペース区切り"
+    session: 38
+    total_requests: 4
+    high_priority: 2
+    medium_priority: 2
+    all_tasks_independent: false
+    dependency_note: "req_048-050 は相互に独立。req_051 は Wave 1 完了を前提とするスケジューリング依存あり"
 
-  tasks:
-    # === req_045: Junior1 担当 ===
-    - task_id: req_045
-      title: "pipeline-runner PYTHONPATH 自動解決"
-      assigned_to: junior1
+  dependency_graph:
+    req_048: { depends_on: [], blocks: [] }
+    req_049: { depends_on: [], blocks: [] }
+    req_050: { depends_on: [], blocks: [] }
+    req_051: { depends_on: ["wave1_completion_gate"], blocks: [] }
+    wave1_completion_gate:
+      condition: "Wave 1 の少なくとも1件が verdict: ok を受領し、当該Juniorの既存テスト全パスが確認済み"
+      triggered_by: ["req_048 OR req_049 OR req_050"]
+
+  task_decomposition:
+    - task_id: "req_048"
+      title: "financial-integrator E2Eテスト強化"
+      assignee: junior1
       priority: high
+      skill: "skills/financial-integrator/"
       description: |
-        pipeline-runner の _run_step() (pipeline.py:486-524) で subprocess.run() に
-        env パラメータが未指定のため、サブプロセスが skills/ モジュールを import できない。
-        os.environ.copy() で環境変数を継承し、PYTHONPATH にプロジェクトルートを動的追加する。
-      files_to_modify:
-        - "skills/pipeline-runner/scripts/pipeline.py (_run_step メソッド、行492-499)"
-      implementation:
-        - "os.environ.copy() で現在の環境変数を取得"
-        - "PYTHONPATH に self.working_dir（プロジェクトルート）を追加（既存パスがあれば先頭に prepend）"
-        - "subprocess.run() に env=env を追加"
-        - "ハードコードパス禁止 — Path(__file__) や self.working_dir から動的解決"
-      acceptance_criteria:
-        - "既存テスト 83件が全て pass"
-        - "skills/ 配下の全スキルが import 可能であることを確認するテスト追加"
-        - "PYTHONPATH が未設定の環境でもサブプロセスが正常動作"
-      estimated_scope: "小規模（1ファイル修正 + テスト追加）"
+        Web 3ソース (EDINET + J-Quants + Web) 統合の実データ検証テストを追加する。
+        - 既存87テストを壊さないこと
+        - 実データ依存テストはモック/フィクスチャで安定化
+        - 3ソースマージの境界ケースをカバー:
+          - 欠損ソース (1ソースのみ、2ソースのみ)
+          - 重複期間 (同一期間に複数ソースからデータ)
+          - 型不一致 (文字列数値混在、null値)
+        - 全テストパスを確認してから完了報告
+      quality_criteria:
+        - "pytest 全パス (既存87 + 新規テスト)"
+        - "3ソースマージの境界ケース最低6パターン"
+        - "モック/フィクスチャベースで CI 安定"
 
-    # === req_046: Junior2 担当 ===
-    - task_id: req_046
-      title: "relative valuation + shares_outstanding パイプライン統合"
-      assigned_to: junior2
+    - task_id: "req_049"
+      title: "EDINETキャッシュ破損対策"
+      assignee: junior2
       priority: high
+      skill: "skills/disclosure-collector/"
       description: |
-        (1) J-Quants listed_info API から shares_outstanding を取得し、
-            valuation-calculator に --shares オプションとして渡す。
-        (2) パイプライン定義に valuate_relative ステップを追加し、
-            cmd_relative() を DAG に組み込む。
-        (3) report ステップの depends_on に valuate_relative を追加。
-      files_to_modify:
-        - "skills/pipeline-runner/references/example_pipeline.yaml (ステップ追加)"
-        - "skills/disclosure-collector/scripts/main.py or collector.py (shares_outstanding 抽出)"
-        - "必要に応じて financial-integrator or 新規変換スクリプト"
-      implementation:
-        step1_shares_outstanding:
-          - "collect_jquants ステップの出力 listed_info.json から shares_outstanding を抽出"
-          - "output_vars に shares_outstanding を追加し、後続ステップで {shares_outstanding} として参照可能にする"
-          - "J-Quants listed_info API のレスポンスフィールドを確認し、正しいキー名を特定"
-        step2_valuate_relative:
-          - "example_pipeline.yaml に valuate_relative ステップを追加"
-          - "depends_on: [calculate]、calculate と並列実行（diamond パターン維持）"
-          - "command: valuation-calculator relative --metrics + --output"
-          - "ピアデータなしモード（単体の PER/PBR/EV-EBITDA 算出）で初期実装"
-        step3_shares_to_dcf:
-          - "valuate ステップの command に --shares {shares_outstanding} を追加"
-          - "per_share_value が算出されることを確認"
-        step4_report_dependency:
-          - "report ステップの depends_on に valuate_relative を追加"
-          - "financial-reporter は既に relative.json auto-discover をサポート済み（render.py:222-229）"
-        step5_quality_gate:
-          - "必要に応じて gates_valuation_relative.yaml を作成"
-      acceptance_criteria:
-        - "既存12ステップ DAG との整合性維持（既存テスト全パス）"
-        - "shares_outstanding が取得され、DCF の per_share_value が非null"
-        - "relative.json が生成され、レポートに相対バリュエーションセクション表示"
-        - "新規テスト追加"
-      estimated_scope: "中規模（パイプライン定義 + 複数スキル連携）"
+        302リダイレクト→notfound.html (390bytes) がキャッシュされる問題を根本解決する。
+        - HTTPレスポンス検証ロジック追加:
+          - ステータスコード検証 (200以外は保存しない)
+          - Content-Type検証 (text/html をCSVとして保存しない)
+          - ファイルサイズ検証 (閾値以下の異常小ファイル検出)
+        - 既存キャッシュの破損ファイル検出・パージ機能
+        - 既存テストを壊さない、新規テスト追加必須
+      quality_criteria:
+        - "pytest 全パス (既存 + 新規テスト)"
+        - "302→notfound.html の再現テスト"
+        - "既存破損キャッシュのパージテスト"
+        - "正常ダウンロードが影響を受けないこと"
 
-    # === req_047: Junior3 担当 ===
-    - task_id: req_047
-      title: "go.sh agent-pane-map.tsv 自動生成改善"
-      assigned_to: junior3
+    - task_id: "req_050"
+      title: "四季報オンライン認証実装"
+      assignee: junior3
       priority: medium
+      skill: "skills/web-researcher/"
       description: |
-        go.sh (行325-335) の agent-pane-map.tsv 生成を改善する。
-        現状: ハードコード変数 + スペース区切りの heredoc。
-        改善: tmux list-panes + @agent_role ベースの動的生成 + TAB区切り。
-      files_to_modify:
-        - "go.sh (行325-335 の map 生成部分)"
-      implementation:
-        - "set_pane() 完了後に tmux list-panes で @agent_role を動的取得し TSV 生成"
-        - "TAB 区切りフォーマットに統一（既存 awk 読み取りとの互換性維持）"
-        - "生成後にバリデーション: 6行存在、各ロール名が1回ずつ出現することを確認"
-        - "バリデーション失敗時はエラーログ出力（起動は継続）"
-      acceptance_criteria:
-        - "既存の go.sh 起動シーケンスが壊れないこと"
-        - "agent-pane-map.tsv が TAB 区切り pane_id<TAB>agent_role フォーマット"
-        - "reviewer_finalize.sh・senior_submit_plan.sh の動作に影響なし"
-        - "6エージェント全てのマッピングが正しいこと"
-      estimated_scope: "小規模（1ファイル修正 + バリデーション追加）"
+        web-researcher の Shikiho データソースを稼働させる。
+        - SHIKIHO_EMAIL/SHIKIHO_PASSWORD 環境変数で認証
+        - セッション管理: ログイン → スクレイピング → ログアウト
+        - robots.txt 尊重
+        - 認証失敗時の適切なエラーハンドリング
+        - 認証情報ハードコード禁止
+        - 既存テストを壊さない、新規テスト追加必須
+      quality_criteria:
+        - "pytest 全パス (既存 + 新規テスト)"
+        - "認証フロー (login/scrape/logout) のテスト"
+        - "認証失敗時のエラーハンドリングテスト"
+        - "robots.txt 遵守の確認"
+        - "環境変数未設定時の graceful degradation"
 
-  parallelization:
-    strategy: "3 Junior 並列実行"
-    rationale: "3タスクは完全に独立（異なるファイル群を修正）、race condition なし"
-    assignment:
-      junior1: req_045
-      junior2: req_046
-      junior3: req_047
+    - task_id: "req_051"
+      title: "per_share_value算出検証"
+      assignee: "Wave 2 — wave1_completion_gate 通過後に最初に空いたJuniorに割当"
+      priority: medium
+      skill: "skills/valuation-calculator/"
+      description: |
+        shares_outstanding (req_046で追加済み) → DCF per share への連携を検証・実装する。
+        - valuation-calculator の出力に per_share_value を追加
+        - shares_outstanding が null の場合は per_share_value も null (エラーにしない)
+        - pipeline-runner の output_vars 経由で shares_outstanding が正しく伝播することを確認
+        - 既存30テストを壊さない、新規テスト追加必須
+      quality_criteria:
+        - "pytest 全パス (既存30 + 新規テスト)"
+        - "shares_outstanding → per_share_value 計算の正確性テスト"
+        - "shares_outstanding=null 時の null 伝播テスト"
+        - "pipeline output_vars 経由の伝播テスト"
 
-  quality_criteria:
-    - "全既存テストが pass（regression なし）"
-    - "新規テストが追加され pass"
-    - "ハードコードパス・マジックナンバーなし"
-    - "CLAUDE.md の既存アーキテクチャ記述との整合性"
+  execution_strategy:
+    wave_1:
+      description: "3タスクを3名のJuniorで完全並列実行"
+      tasks: ["req_048 → junior1", "req_049 → junior2", "req_050 → junior3"]
+      parallelism: 3
+    wave1_completion_gate:
+      description: "Wave 2 起動の具体条件"
+      conditions:
+        - "Wave 1 の少なくとも1件で Reviewer verdict: ok を受領済み"
+        - "verdict: ok を受けた Junior の既存テスト全パスが成果物レビューで確認済み"
+        - "当該 Junior の /clear + 再初期化が完了済み"
+      evaluation: "Senior が verdict: ok 受領時に自動評価。条件充足で即座に Wave 2 開始"
+    wave_2:
+      description: "gate 通過後、空いた Junior に req_051 を割当"
+      tasks: ["req_051 → gate通過後に空いたJunior"]
+      trigger: "wave1_completion_gate の全条件充足"
+
+  risk_assessment:
+    - risk: "req_050 (Shikiho認証) は外部サービス依存で不安定になる可能性"
+      mitigation: "モックベースのテストで CI 安定性を確保。実認証テストは手動実行マーカー付き"
+    - risk: "req_048 の実データフィクスチャが大きくなりすぎる可能性"
+      mitigation: "最小限の代表データでフィクスチャを構成。巨大JSONは避ける"
+    - risk: "req_051 は req_046 の shares_outstanding 実装に依存"
+      mitigation: "req_046 は S37 で完了済み・テストパス済み。既存実装を前提にする"
+
+  revision_notes:
+    changes_from_r1:
+      - "all_tasks_independent を false に変更し、dependency_note で依存関係を明示"
+      - "dependency_graph を追加し、req_051 → wave1_completion_gate の依存を構造化"
+      - "wave1_completion_gate に3つの具体条件を定義 (verdict:ok受領 + テスト全パス確認 + Junior再初期化完了)"
+      - "execution_strategy に gate 評価タイミングを明記 (Senior が verdict:ok 受領時に自動評価)"

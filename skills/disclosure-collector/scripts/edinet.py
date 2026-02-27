@@ -21,6 +21,76 @@ DEFAULT_TIMEOUT = 60.0
 DEFAULT_START_DATE = date(2008, 1, 1)
 DEFAULT_REPORT_KEYWORD = "有価証券報告書"
 DOC_ID_PATTERN = re.compile(r"^[A-Za-z0-9-]+$")
+MIN_VALID_DOC_SIZE = 1024  # 1KB — legitimate XBRL ZIPs and PDFs are much larger
+
+
+def _looks_like_html(content: bytes) -> bool:
+    """Return True when content appears to be HTML rather than binary data."""
+    header = content[:256].lstrip()
+    lower_header = header.lower()
+    return lower_header.startswith(b"<!doctype html") or lower_header.startswith(b"<html")
+
+
+def _is_valid_cached_file(path: Path, min_size: int = MIN_VALID_DOC_SIZE) -> bool:
+    """Validate a cached file is not corrupted (e.g. an HTML error page saved as ZIP/PDF).
+
+    Returns True when the file exists, is non-empty, and does not look like an
+    HTML error page.  Files smaller than *min_size* are inspected for HTML
+    content markers; larger files pass without reading.
+    """
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return False
+    if size == 0:
+        return False
+    if size < min_size:
+        try:
+            with open(path, "rb") as f:
+                header = f.read(256)
+            if _looks_like_html(header):
+                return False
+        except OSError:
+            return False
+    return True
+
+
+def scan_corrupted_cache(
+    cache_dir: Path,
+    min_size: int = MIN_VALID_DOC_SIZE,
+) -> list[Path]:
+    """Scan *cache_dir* for corrupted document files (HTML error pages saved as ZIP/PDF).
+
+    Returns a list of file paths that appear corrupted.
+    """
+    corrupted: list[Path] = []
+    if not cache_dir.is_dir():
+        return corrupted
+    for path in sorted(cache_dir.iterdir()):
+        if not path.is_file():
+            continue
+        suffix = path.suffix.lower()
+        if suffix not in (".zip", ".pdf"):
+            continue
+        if not _is_valid_cached_file(path, min_size):
+            corrupted.append(path)
+    return corrupted
+
+
+def purge_corrupted_cache(
+    cache_dir: Path,
+    min_size: int = MIN_VALID_DOC_SIZE,
+) -> list[Path]:
+    """Remove corrupted cache files and return list of removed paths."""
+    corrupted = scan_corrupted_cache(cache_dir, min_size)
+    removed: list[Path] = []
+    for path in corrupted:
+        try:
+            path.unlink()
+            removed.append(path)
+        except OSError:
+            pass
+    return removed
 
 
 class EdinetError(Exception):
@@ -142,6 +212,22 @@ class EdinetClient:
 
         if not response.content:
             raise EdinetError(f"download response is empty (docID={doc_id}, type={doc_type})")
+
+        # Validate response is not an HTML error page (e.g., 302→notfound.html)
+        content_type = response.headers.get("content-type", "")
+        if "text/html" in content_type:
+            raise EdinetError(
+                f"download returned HTML instead of document "
+                f"(docID={doc_id}, type={doc_type}, content-type={content_type}, "
+                f"size={len(response.content)} bytes)"
+            )
+
+        if _looks_like_html(response.content):
+            raise EdinetError(
+                f"download content appears to be HTML, not a valid document "
+                f"(docID={doc_id}, type={doc_type}, size={len(response.content)} bytes)"
+            )
+
         return response.content
 
     def download_xbrl_zip(self, doc_id: str) -> bytes:
@@ -474,8 +560,11 @@ def collect_edinet_pdfs(
             document, naming_strategy=naming_strategy, ticker=ticker,
         )
 
-        # Check if any PDF for this doc already exists
-        existing = list(output_path.glob(f"{base_name}*.pdf"))
+        # Check if any valid PDF for this doc already exists
+        existing = [
+            p for p in output_path.glob(f"{base_name}*.pdf")
+            if _is_valid_cached_file(p)
+        ]
         if existing:
             download_statuses.append(
                 DownloadStatus(
@@ -667,7 +756,7 @@ def collect_edinet_reports(
             continue
 
         zip_path = output_path / f"{doc_id}.zip"
-        if zip_path.exists() and zip_path.stat().st_size > 0:
+        if zip_path.exists() and _is_valid_cached_file(zip_path):
             download_statuses.append(
                 DownloadStatus(
                     doc_id=doc_id,

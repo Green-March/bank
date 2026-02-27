@@ -15,11 +15,11 @@ from skills.common.auth import JQuantsAuth, JQuantsAuthError
 
 # スクリプト直接実行とパッケージインポートの両方に対応
 if __name__ == "__main__":
-    from edinet import EdinetError, collect_edinet_pdfs, collect_edinet_reports
+    from edinet import EdinetError, collect_edinet_pdfs, collect_edinet_reports, purge_corrupted_cache
     from shares import extract_shares_outstanding
     from statements import StatementsClient, StatementsError
 else:
-    from .edinet import EdinetError, collect_edinet_pdfs, collect_edinet_reports
+    from .edinet import EdinetError, collect_edinet_pdfs, collect_edinet_reports, purge_corrupted_cache
     from .shares import extract_shares_outstanding
     from .statements import StatementsClient, StatementsError
 
@@ -258,6 +258,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="ticker_year",
         help="PDF命名規則: ticker_year(既定), doc_id({docID}_{periodEnd}), doc_id_desc({docID}_{docDescription})",
     )
+    parser_ed.add_argument(
+        "--purge-corrupted",
+        action="store_true",
+        default=False,
+        help="キャッシュディレクトリ内の破損ファイル (HTML error pages) を検出して削除する",
+    )
 
     return parser
 
@@ -292,6 +298,26 @@ def main() -> int:
             return 0
 
         if args.command == "edinet":
+            if args.purge_corrupted:
+                target_dir = Path(args.output_dir) if args.output_dir else (
+                    _data_root()
+                    / _default_code_for_edinet_output(
+                        ticker=args.ticker,
+                        security_code=args.security_code,
+                        edinet_code=args.edinet_code,
+                    )
+                    / "raw"
+                    / "edinet"
+                )
+                removed = purge_corrupted_cache(target_dir)
+                if removed:
+                    print(f"破損キャッシュを {len(removed)} 件削除しました:")
+                    for p in removed:
+                        print(f"  {p}")
+                else:
+                    print("破損キャッシュは見つかりませんでした")
+                return 0
+
             result = collect_edinet(
                 edinet_code=args.edinet_code,
                 ticker=args.ticker,

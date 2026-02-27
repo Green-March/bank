@@ -8,6 +8,7 @@ import logging
 import os
 import time
 
+import httpx
 from bs4 import BeautifulSoup
 
 try:
@@ -15,6 +16,7 @@ try:
         AuthenticationError,
         BaseCollector,
         CollectorError,
+        RobotsBlockedError,
         _sanitize_log,
     )
 except ImportError:
@@ -22,12 +24,14 @@ except ImportError:
         AuthenticationError,
         BaseCollector,
         CollectorError,
+        RobotsBlockedError,
         _sanitize_log,
     )
 
 logger = logging.getLogger(__name__)
 
 _LOGIN_URL = "https://shikiho.toyokeizai.net/login"
+_LOGOUT_URL = "https://shikiho.toyokeizai.net/logout"
 _STOCK_URL = "https://shikiho.toyokeizai.net/stocks/{ticker}"
 
 
@@ -61,6 +65,17 @@ class ShikihoCollector(BaseCollector):
                 "error": "認証情報が不完全です（SHIKIHO_EMAIL/SHIKIHO_PASSWORD の両方を設定してください）",
             }
 
+        # robots.txt 事前チェック（認証前に確認）
+        try:
+            self._check_robots(url)
+        except RobotsBlockedError:
+            return {
+                "url": url,
+                "collected": False,
+                "data": None,
+                "error": "robots.txt によりアクセスが拒否されました",
+            }
+
         # 認証
         try:
             self._authenticate(email, password)
@@ -76,6 +91,7 @@ class ShikihoCollector(BaseCollector):
         try:
             response = self._fetch(url)
         except (AuthenticationError, CollectorError):
+            self._logout()
             return {
                 "url": url,
                 "collected": False,
@@ -88,12 +104,16 @@ class ShikihoCollector(BaseCollector):
             data = self._parse_page(response.text)
         except Exception:
             logger.exception("パース失敗: %s", url)
+            self._logout()
             return {
                 "url": url,
                 "collected": False,
                 "data": None,
                 "error": "パース失敗",
             }
+
+        # ログアウト
+        self._logout()
 
         return {
             "url": url,
@@ -103,15 +123,35 @@ class ShikihoCollector(BaseCollector):
         }
 
     def _authenticate(self, email: str, password: str) -> None:
-        """ログインエンドポイントへ POST してセッション Cookie を取得する。"""
-        self._wait_interval()
-        self._last_request_time = time.time()
-        response = self._client.post(
-            _LOGIN_URL,
-            data={"email": email, "password": password},
-        )
-        if response.status_code != 200:
-            raise AuthenticationError(f"認証失敗: {response.status_code}")
+        """ログインエンドポイントへ POST してセッション Cookie を取得する。
+
+        ネットワークエラー/タイムアウト時はリトライする。
+        """
+        for attempt in range(self._max_retries + 1):
+            self._wait_interval()
+            self._last_request_time = time.time()
+            try:
+                response = self._client.post(
+                    _LOGIN_URL,
+                    data={"email": email, "password": password},
+                )
+                if response.status_code != 200:
+                    raise AuthenticationError(f"認証失敗: {response.status_code}")
+                return
+            except AuthenticationError:
+                raise
+            except (httpx.TimeoutException, httpx.RequestError) as exc:
+                if attempt < self._max_retries:
+                    self._backoff_sleep(attempt)
+                    continue
+                raise AuthenticationError(f"認証ネットワークエラー: {exc}") from exc
+
+    def _logout(self) -> None:
+        """ログアウトしてセッションをクリアする（ベストエフォート）。"""
+        try:
+            self._client.post(_LOGOUT_URL)
+        except Exception:
+            logger.debug("ログアウト失敗（無視）")
 
     def _parse_page(self, html: str) -> dict:
         """BeautifulSoup で四季報ページをパースする。"""

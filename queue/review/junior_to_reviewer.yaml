@@ -1,38 +1,36 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: rev_req_046_001
-  task_id: req_046
-  junior_id: junior2
+  request_id: "rev_req_051_001"
+  task_id: "req_051"
+  junior_id: "junior2"
   status: pending_review
-  timestamp: "2026-02-28T00:00:00+09:00"
+  timestamp: "2026-02-28T00:52:00+09:00"
   payload:
-    title: "relative valuation + shares_outstanding パイプライン統合"
-    description: |
-      12→13ステップ DAG 拡張:
-      1. shares_outstanding 取得: J-Quants statements から発行済株式数（自己株式除く）を抽出
-         - 新規 shares.py (純関数), main.py に --extract-shares フラグ追加
-         - collect_jquants の output_vars で後続ステップに伝搬
-      2. valuate_relative ステップ新規追加: depends_on=[calculate], relative.json 出力
-         - ピアなしモード（単体 PER/PBR/EV-EBITDA）で初期実装
-      3. valuate ステップに --shares shell条件分岐追加（空文字時は省略）
-      4. report の depends_on に valuate_relative 追加
-      5. 品質ゲート gates_valuation_relative.yaml 新規作成
-      全118テスト パス（既存93 + 新規25）
+    summary: "per_share_value 算出検証を完了。既存ロジックは正しく実装済みであることを確認し、13件の新規テストを追加して全43件パス。コード変更なし（テスト追加のみ）。"
     outputs:
-      - "skills/pipeline-runner/references/example_pipeline.yaml"
-      - "skills/disclosure-collector/scripts/shares.py (新規)"
-      - "skills/disclosure-collector/scripts/main.py"
-      - "skills/quality-gate/references/gates_valuation_relative.yaml (新規)"
-      - "skills/pipeline-runner/tests/test_relative_valuation_step.py (新規16テスト)"
-      - "skills/disclosure-collector/tests/test_shares_outstanding.py (新規9テスト)"
-    review_focus:
-      - "13ステップ DAG の整合性（既存12ステップとの互換性）"
-      - "shares_outstanding 取得ロジック（発行済-自己株式=net shares）"
-      - "shares_outstanding 欠損時フォールバック（null→--shares 省略、エラーにしない）"
-      - "valuate_relative ステップの DAG 配置（diamond パターン維持）"
-      - "全118テスト パスの確認"
-      - "shell 条件分岐の bash/zsh 互換性"
+      - "skills/valuation-calculator/tests/test_valuation.py"
+    validation:
+      pytest_total: 43
+      pytest_passed: 43
+      pytest_failed: 0
+      new_tests: 13
+      existing_tests: 30
+    test_breakdown:
+      - "TestPerShareValue: 8 tests (正確性, None/0/0.0/負値エッジケース, 大規模株式数, 債務超過, assumptions検証)"
+      - "TestPerShareCLI: 2 tests (CLI --shares指定時/未指定時)"
+      - "TestPipelineOutputVarsPropagation: 3 tests (valuateコマンドテンプレート, collect_jquants output_vars, 変数展開シミュレーション)"
+    findings:
+      - "既存実装で per_share_value 算出は正しく実装済み (valuation.py:87-88)"
+      - "shares_outstanding=None/0/0.0/負値 → per_share_value=None (エッジケース全対応済み)"
+      - "pipeline propagation: collect_jquants --extract-shares → output_vars.shares_outstanding → valuate --shares で正しく伝播"
+    caveats:
+      - "コード変更なし（既存実装で全要件を満たしていたためテスト追加のみ）"
+    quality_criteria:
+      - "pytest 全パス (既存30 + 新規テスト)"
+      - "shares_outstanding → per_share_value 計算の正確性テスト"
+      - "shares_outstanding=null 時の null 伝播テスト"
+      - "pipeline output_vars 経由の伝播テスト"
 review_followup:
   request_id: null
   task_id: null
