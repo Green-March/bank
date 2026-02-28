@@ -1,36 +1,45 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_req_051_001"
-  task_id: "req_051"
-  junior_id: "junior2"
-  status: pending_review
-  timestamp: "2026-02-28T00:52:00+09:00"
+  request_id: "rev_s39_055_01"
+  task_id: "T_s39_055"
+  junior_id: junior1
+  status: pending
+  timestamp: "2026-02-28T13:32:00+09:00"
   payload:
-    summary: "per_share_value 算出検証を完了。既存ロジックは正しく実装済みであることを確認し、13件の新規テストを追加して全43件パス。コード変更なし（テスト追加のみ）。"
+    parent_cmd: "req_055"
+    objective: "4971 メックで 3ソース統合を実データ検証 (Primary + Fallback 両シナリオ)"
+    summary: |
+      3ソース統合成功。FY2023/FY2024 が edinet+web+jquants 完全3ソース。
+      Primary (Shikiho fallback→Yahoo) と Fallback (env unset→Yahoo) 両シナリオ検証。
+      型整合性 PASS、Primary vs Fallback revenue 完全一致、FinancialRecord coercion 連携確認。
+      追加発見: J-Quants API が全数値を文字列型で返却、正規化ステップ未組込。
     outputs:
-      - "skills/valuation-calculator/tests/test_valuation.py"
-    validation:
-      pytest_total: 43
-      pytest_passed: 43
-      pytest_failed: 0
-      new_tests: 13
-      existing_tests: 30
-    test_breakdown:
-      - "TestPerShareValue: 8 tests (正確性, None/0/0.0/負値エッジケース, 大規模株式数, 債務超過, assumptions検証)"
-      - "TestPerShareCLI: 2 tests (CLI --shares指定時/未指定時)"
-      - "TestPipelineOutputVarsPropagation: 3 tests (valuateコマンドテンプレート, collect_jquants output_vars, 変数展開シミュレーション)"
-    findings:
-      - "既存実装で per_share_value 算出は正しく実装済み (valuation.py:87-88)"
-      - "shares_outstanding=None/0/0.0/負値 → per_share_value=None (エッジケース全対応済み)"
-      - "pipeline propagation: collect_jquants --extract-shares → output_vars.shares_outstanding → valuate --shares で正しく伝播"
+      - "data/4971/integrated/integrated_primary.json"
+      - "data/4971/integrated/integrated_fallback.json"
+      - "skills/financial-integrator/tests/test_three_source_real_data.py"
+      - "skills/financial-integrator/tests/snapshots/4971/"
+    test_results:
+      existing_tests: 113
+      new_tests: 20
+      total_tests: 133
+      failures: 0
+    key_findings:
+      - "3ソース統合: FY2023, FY2024 完全3ソース"
+      - "型整合性: 全 numeric int|float|None (PASS)"
+      - "Shikiho fallback: AUTH_ENV_MISSING → Yahoo 自動切替 + 二重収集回避 (reused=true)"
+      - "Primary vs Fallback revenue: 完全一致"
+      - "J-Quants raw string numeric: 全レコード str 型確認 → coercion 防御動作 OK"
     caveats:
-      - "コード変更なし（既存実装で全要件を満たしていたためテスト追加のみ）"
-    quality_criteria:
-      - "pytest 全パス (既存30 + 新規テスト)"
-      - "shares_outstanding → per_share_value 計算の正確性テスト"
-      - "shares_outstanding=null 時の null 伝播テスト"
-      - "pipeline output_vars 経由の伝播テスト"
+      - "SHIKIHO 環境変数未設定のため Primary/Fallback が同一 Yahoo データ。Shikiho 認証成功時の差異は未検証"
+      - "J-Quants 正規化ステップが 13ステップパイプラインに未組込 (手動変換で対応)"
+      - "Web データは revenue/operating_income のみ (Yahoo)。BS/CF は null"
+    review_focus:
+      - "3ソース統合結果の型整合性が req_052 の coercion と連動しているか"
+      - "Shikiho fallback (req_054) が実データで正しく動作したか"
+      - "Primary vs Fallback 比較の再現手順 (JSON snapshot) が十分か"
+      - "J-Quants raw string numeric 問題の影響範囲"
+      - "E2E: ステップ間データ整合性・欠損伝播・source_attribution 一貫性・数値精度保持"
 review_followup:
   request_id: null
   task_id: null

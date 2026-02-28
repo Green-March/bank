@@ -7,10 +7,12 @@ from unittest.mock import MagicMock, patch, call
 import httpx
 import pytest
 
-from scripts.shikiho import ShikihoCollector, _LOGOUT_URL
+from scripts.shikiho import ShikihoCollector, _LOGOUT_URL, _LOGIN_URL
 from scripts.collector_base import (
-    _sanitize_log,
+    AuthenticationError,
+    CollectorError,
     RobotsBlockedError,
+    _sanitize_log,
 )
 
 _EVIDENCE_DIR = Path(__file__).resolve().parent / "evidence"
@@ -34,6 +36,8 @@ def _mock_page_ok(html=_SAMPLE_HTML):
     resp.status_code = 200
     resp.text = html
     resp.raise_for_status.return_value = None
+    # url 属性 (SESSION_EXPIRED 検知で参照)
+    resp.url = "https://shikiho.toyokeizai.net/stocks/7203"
     return resp
 
 
@@ -72,9 +76,9 @@ class TestCollectSuccess:
 
 
 class TestCollectAuthFailure:
-    """モック認証失敗 → collected=False + error"""
+    """モック認証失敗 → AuthenticationError with error_code"""
 
-    def test_collect_auth_failure(self, monkeypatch):
+    def test_collect_auth_failure(self, monkeypatch, mock_robots_allow):
         monkeypatch.setenv("SHIKIHO_EMAIL", "test@example.com")
         monkeypatch.setenv("SHIKIHO_PASSWORD", "wrongpass")
 
@@ -87,54 +91,56 @@ class TestCollectAuthFailure:
         collector = _make_collector()
         collector._client = mock_client
 
-        result = collector.collect("7203")
+        with pytest.raises(AuthenticationError) as exc_info:
+            collector.collect("7203")
 
-        assert result["collected"] is False
-        assert "認証失敗" in result["error"]
-        assert "401" in result["error"]
-        assert result["data"] is None
+        assert exc_info.value.error_code == "AUTH_HTTP_ERROR"
+        assert "認証失敗" in str(exc_info.value)
+        assert "401" in str(exc_info.value)
 
 
 class TestCollectEnvNotSet:
-    """環境変数未設定 → 自動スキップ"""
+    """環境変数未設定 → AuthenticationError(AUTH_ENV_MISSING)"""
 
     def test_collect_env_not_set(self, monkeypatch):
         monkeypatch.delenv("SHIKIHO_EMAIL", raising=False)
         monkeypatch.delenv("SHIKIHO_PASSWORD", raising=False)
 
         collector = _make_collector()
-        result = collector.collect("7203")
 
-        assert result["collected"] is False
-        assert "未設定" in result["error"]
-        assert result["data"] is None
-        assert result["url"] == "https://shikiho.toyokeizai.net/stocks/7203"
+        with pytest.raises(AuthenticationError) as exc_info:
+            collector.collect("7203")
+
+        assert exc_info.value.error_code == "AUTH_ENV_MISSING"
+        assert "未設定" in str(exc_info.value)
 
 
 class TestCollectPartialEnv:
-    """片方のみ設定 → AuthenticationError → graceful degradation"""
+    """片方のみ設定 → AuthenticationError(AUTH_ENV_MISSING)"""
 
     def test_email_only(self, monkeypatch):
         monkeypatch.setenv("SHIKIHO_EMAIL", "test@example.com")
         monkeypatch.delenv("SHIKIHO_PASSWORD", raising=False)
 
         collector = _make_collector()
-        result = collector.collect("7203")
 
-        assert result["collected"] is False
-        assert "不完全" in result["error"]
-        assert result["data"] is None
+        with pytest.raises(AuthenticationError) as exc_info:
+            collector.collect("7203")
+
+        assert exc_info.value.error_code == "AUTH_ENV_MISSING"
+        assert "不完全" in str(exc_info.value)
 
     def test_password_only(self, monkeypatch):
         monkeypatch.delenv("SHIKIHO_EMAIL", raising=False)
         monkeypatch.setenv("SHIKIHO_PASSWORD", "secret123")
 
         collector = _make_collector()
-        result = collector.collect("7203")
 
-        assert result["collected"] is False
-        assert "不完全" in result["error"]
-        assert result["data"] is None
+        with pytest.raises(AuthenticationError) as exc_info:
+            collector.collect("7203")
+
+        assert exc_info.value.error_code == "AUTH_ENV_MISSING"
+        assert "不完全" in str(exc_info.value)
 
 
 class TestNoSecretLeakInOutput:
@@ -163,7 +169,7 @@ class TestNoSecretLeakInOutput:
 class TestNoSecretLeakInError:
     """エラーメッセージにも秘密情報が含まれない"""
 
-    def test_no_secret_leak_in_error(self, monkeypatch):
+    def test_no_secret_leak_in_error(self, monkeypatch, mock_robots_allow):
         email = "secret_user@example.com"
         password = "my_password_456"
         monkeypatch.setenv("SHIKIHO_EMAIL", email)
@@ -178,12 +184,12 @@ class TestNoSecretLeakInError:
         collector = _make_collector()
         collector._client = mock_client
 
-        result = collector.collect("7203")
-        result_json = json.dumps(result, ensure_ascii=False)
+        with pytest.raises(AuthenticationError) as exc_info:
+            collector.collect("7203")
 
-        assert result["collected"] is False
-        assert email not in result_json
-        assert password not in result_json
+        error_str = str(exc_info.value)
+        assert email not in error_str
+        assert password not in error_str
 
 
 class TestSanitizeLogMasksCredentials:
@@ -251,7 +257,6 @@ class TestLogoutCalledOnFetchError:
         mock_client.post.return_value = _mock_login_ok()
 
         # _fetch がエラーを投げる
-        from scripts.collector_base import CollectorError
         mock_client.get.side_effect = httpx.HTTPStatusError(
             "500", request=MagicMock(), response=MagicMock(status_code=500)
         )
@@ -259,10 +264,9 @@ class TestLogoutCalledOnFetchError:
         collector = _make_collector()
         collector._client = mock_client
 
-        result = collector.collect("7203")
+        with pytest.raises(CollectorError):
+            collector.collect("7203")
 
-        assert result["collected"] is False
-        assert "取得失敗" in result["error"]
         # post は login + logout の2回
         post_calls = mock_client.post.call_args_list
         assert len(post_calls) == 2
@@ -281,6 +285,7 @@ class TestLogoutCalledOnParseError:
         broken_resp.status_code = 200
         broken_resp.text = "<html></html>"
         broken_resp.raise_for_status.return_value = None
+        broken_resp.url = "https://shikiho.toyokeizai.net/stocks/7203"
 
         mock_client = MagicMock()
         mock_client.post.return_value = _mock_login_ok()
@@ -292,10 +297,9 @@ class TestLogoutCalledOnParseError:
         # _parse_page を強制例外に
         collector._parse_page = MagicMock(side_effect=ValueError("bad html"))
 
-        result = collector.collect("7203")
+        with pytest.raises(CollectorError):
+            collector.collect("7203")
 
-        assert result["collected"] is False
-        assert "パース失敗" in result["error"]
         # post は login + logout の2回
         post_calls = mock_client.post.call_args_list
         assert len(post_calls) == 2
@@ -335,9 +339,9 @@ class TestLogoutBestEffort:
 
 
 class TestRobotsDenied:
-    """robots.txt 拒否時に認証せずスキップ"""
+    """robots.txt 拒否時に RobotsBlockedError が伝播"""
 
-    def test_robots_denied_skips_auth(self, monkeypatch, mock_robots_deny):
+    def test_robots_denied_raises(self, monkeypatch, mock_robots_deny):
         monkeypatch.setenv("SHIKIHO_EMAIL", "test@example.com")
         monkeypatch.setenv("SHIKIHO_PASSWORD", "secret123")
 
@@ -345,23 +349,12 @@ class TestRobotsDenied:
         collector = _make_collector()
         collector._client = mock_client
 
-        result = collector.collect("7203")
+        with pytest.raises(RobotsBlockedError) as exc_info:
+            collector.collect("7203")
 
-        assert result["collected"] is False
-        assert "robots.txt" in result["error"]
+        assert exc_info.value.error_code == "ROBOTS_BLOCKED"
         # 認証 POST は一切呼ばれない
         mock_client.post.assert_not_called()
-
-    def test_robots_denied_returns_url(self, monkeypatch, mock_robots_deny):
-        monkeypatch.setenv("SHIKIHO_EMAIL", "test@example.com")
-        monkeypatch.setenv("SHIKIHO_PASSWORD", "secret123")
-
-        collector = _make_collector()
-        collector._client = MagicMock()
-
-        result = collector.collect("7203")
-
-        assert result["url"] == "https://shikiho.toyokeizai.net/stocks/7203"
 
 
 class TestAuthNetworkErrorRetry:
@@ -399,14 +392,11 @@ class TestAuthNetworkErrorRetry:
         collector = _make_collector(max_retries=1, backoff_base_seconds=0)
         collector._client = mock_client
 
-        result = collector.collect("7203")
+        with pytest.raises(AuthenticationError) as exc_info:
+            collector.collect("7203")
 
-        assert result["collected"] is False
-        assert "ネットワークエラー" in result["error"]
-        # 認証情報がリークしていない
-        result_json = json.dumps(result, ensure_ascii=False)
-        assert "test@example.com" not in result_json
-        assert "secret123" not in result_json
+        assert exc_info.value.error_code == "AUTH_NETWORK_ERROR"
+        assert "ネットワークエラー" in str(exc_info.value)
 
     def test_auth_request_error_retries_then_succeeds(self, monkeypatch, mock_robots_allow):
         monkeypatch.setenv("SHIKIHO_EMAIL", "test@example.com")
@@ -445,9 +435,96 @@ class TestAuthStatusNotRetried:
         collector = _make_collector(max_retries=3)
         collector._client = mock_client
 
-        result = collector.collect("7203")
+        with pytest.raises(AuthenticationError) as exc_info:
+            collector.collect("7203")
 
-        assert result["collected"] is False
-        assert "認証失敗" in result["error"]
-        # リトライせず1回のみ
-        assert mock_client.post.call_count == 1
+        assert exc_info.value.error_code == "AUTH_HTTP_ERROR"
+        assert "認証失敗" in str(exc_info.value)
+        # リトライせず1回のみ (+ logout)
+        assert mock_client.post.call_count == 2  # login attempt + logout
+
+
+class TestSessionExpired:
+    """SESSION_EXPIRED: 認証後ページ取得でログイン URL にリダイレクトされた場合"""
+
+    def test_session_expired_detected(self, monkeypatch, mock_robots_allow):
+        monkeypatch.setenv("SHIKIHO_EMAIL", "test@example.com")
+        monkeypatch.setenv("SHIKIHO_PASSWORD", "secret123")
+
+        # ページ取得時にログイン URL にリダイレクト
+        redirect_resp = MagicMock()
+        redirect_resp.status_code = 200
+        redirect_resp.text = "<html>login page</html>"
+        redirect_resp.raise_for_status.return_value = None
+        redirect_resp.url = _LOGIN_URL + "?redirect=/stocks/7203"
+
+        mock_client = MagicMock()
+        mock_client.post.return_value = _mock_login_ok()
+        mock_client.get.return_value = redirect_resp
+
+        collector = _make_collector()
+        collector._client = mock_client
+
+        with pytest.raises(AuthenticationError) as exc_info:
+            collector.collect("7203")
+
+        assert exc_info.value.error_code == "SESSION_EXPIRED"
+        assert "セッション期限切れ" in str(exc_info.value)
+
+        # logout が呼ばれている
+        post_calls = mock_client.post.call_args_list
+        assert any(c == call(_LOGOUT_URL) for c in post_calls)
+
+
+class TestErrorCodeAttributes:
+    """各条件コードが正しく設定される"""
+
+    def test_auth_env_missing_error_code(self, monkeypatch):
+        monkeypatch.delenv("SHIKIHO_EMAIL", raising=False)
+        monkeypatch.delenv("SHIKIHO_PASSWORD", raising=False)
+
+        collector = _make_collector()
+        with pytest.raises(AuthenticationError) as exc_info:
+            collector.collect("7203")
+        assert exc_info.value.error_code == "AUTH_ENV_MISSING"
+
+    def test_auth_http_error_code(self, monkeypatch, mock_robots_allow):
+        monkeypatch.setenv("SHIKIHO_EMAIL", "test@example.com")
+        monkeypatch.setenv("SHIKIHO_PASSWORD", "wrong")
+
+        mock_client = MagicMock()
+        mock_login_resp = MagicMock()
+        mock_login_resp.status_code = 403
+        mock_client.post.return_value = mock_login_resp
+
+        collector = _make_collector()
+        collector._client = mock_client
+
+        with pytest.raises(AuthenticationError) as exc_info:
+            collector.collect("7203")
+        assert exc_info.value.error_code == "AUTH_HTTP_ERROR"
+
+    def test_auth_network_error_code(self, monkeypatch, mock_robots_allow):
+        monkeypatch.setenv("SHIKIHO_EMAIL", "test@example.com")
+        monkeypatch.setenv("SHIKIHO_PASSWORD", "secret123")
+
+        mock_client = MagicMock()
+        mock_client.post.side_effect = httpx.ConnectError("refused")
+
+        collector = _make_collector(max_retries=0)
+        collector._client = mock_client
+
+        with pytest.raises(AuthenticationError) as exc_info:
+            collector.collect("7203")
+        assert exc_info.value.error_code == "AUTH_NETWORK_ERROR"
+
+    def test_robots_blocked_error_code(self, monkeypatch, mock_robots_deny):
+        monkeypatch.setenv("SHIKIHO_EMAIL", "test@example.com")
+        monkeypatch.setenv("SHIKIHO_PASSWORD", "secret123")
+
+        collector = _make_collector()
+        collector._client = MagicMock()
+
+        with pytest.raises(RobotsBlockedError) as exc_info:
+            collector.collect("7203")
+        assert exc_info.value.error_code == "ROBOTS_BLOCKED"

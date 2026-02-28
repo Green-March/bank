@@ -314,6 +314,96 @@ class TestResolverNotAvailable:
             assert "EDINET metadata にHP URL なし" in result["error"]
 
 
+class TestEdinetCsvUrlExtraction:
+    """EDINET CSV からの公式HP URL 抽出テスト。"""
+
+    def test_csv_path_explicit(self):
+        """csv_path 明示指定で正しい URL が取得できる。"""
+        resolver = _make_resolver_mock()
+        config = {"request_interval_seconds": 0}
+        collector = HomepageCollector(
+            config=config, resolver=resolver,
+            csv_path=_EVIDENCE / "edinet_mock.csv",
+        )
+        url = collector._resolve_homepage_url("7203")
+        assert url == "http://www.toyota.co.jp/"
+
+    def test_csv_path_nonexistent(self):
+        """存在しない CSV パス → None (graceful degradation)。"""
+        resolver = _make_resolver_mock()
+        config = {"request_interval_seconds": 0}
+        collector = HomepageCollector(
+            config=config, resolver=resolver,
+            csv_path=Path("/nonexistent/path.csv"),
+        )
+        url = collector._resolve_homepage_url("7203")
+        assert url is None
+
+    def test_csv_edinet_code_not_found(self):
+        """CSV 内に該当 EDINET コードがない → None。"""
+        resolver = MagicMock()
+        resolver.resolve.return_value = {
+            "edinet_code": "E99999",
+            "company_name": "存在しない会社",
+        }
+        config = {"request_interval_seconds": 0}
+        collector = HomepageCollector(
+            config=config, resolver=resolver,
+            csv_path=_EVIDENCE / "edinet_mock.csv",
+        )
+        url = collector._resolve_homepage_url("9999")
+        assert url is None
+
+    def test_csv_hp_column_empty(self):
+        """CSV の HP 列が空 → None。"""
+        resolver = MagicMock()
+        resolver.resolve.return_value = {
+            "edinet_code": "E00001",
+            "company_name": "テスト株式会社",
+        }
+        config = {"request_interval_seconds": 0}
+        collector = HomepageCollector(
+            config=config, resolver=resolver,
+            csv_path=_EVIDENCE / "edinet_mock.csv",
+        )
+        url = collector._resolve_homepage_url("9999")
+        assert url is None
+
+    def test_csv_via_resolver_cache_dir(self):
+        """csv_path 未指定 → resolver._cache_dir から EdinetcodeDlInfo.csv を参照。"""
+        resolver = _make_resolver_mock()
+        config = {"request_interval_seconds": 0}
+        collector = HomepageCollector(config=config, resolver=resolver)
+        # resolver._cache_dir = _EVIDENCE, there is EdinetcodeDlInfo.csv
+        url = collector._resolve_homepage_url("7203")
+        assert url == "http://www.toyota.co.jp/"
+
+    def test_edinet_csv_cli_option_passthrough(self, mock_robots_allow):
+        """main.collect の edinet_csv パラメータが HomepageCollector に渡される。"""
+        from scripts.main import collect as main_collect
+
+        html = _load_html("homepage_sample.html")
+        mock_response = _make_mock_response(html)
+        resolver = _make_resolver_mock()
+
+        with patch("scripts.main._create_resolver", return_value=resolver):
+            with patch("scripts.collector_base.httpx.Client") as mock_client_cls:
+                mock_client = MagicMock()
+                mock_client.get.return_value = mock_response
+                mock_client_cls.return_value = mock_client
+
+                result = main_collect(
+                    "7203",
+                    ["homepage"],
+                    config={"request_interval_seconds": 0},
+                    edinet_csv=str(_EVIDENCE / "edinet_mock.csv"),
+                )
+
+        hp = result["sources"]["homepage"]
+        assert hp["collected"] is True
+        assert hp["url"] == "https://www.toyota.co.jp/"
+
+
 class TestMainCollectIntegration:
     """main.collect 経由で homepage → collected=True の最小統合テスト。"""
 

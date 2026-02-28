@@ -2,134 +2,125 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_s38_001_r2"
-  revision: 2
-  previous_plan_id: "plan_s38_001"
-  timestamp: "2026-02-28T00:05:00+09:00"
+  plan_id: "plan_s39_001_r5"
+  previous_plan_id: "plan_s39_001_r4"
+  revision_note: "(1) calculate ステップの DAG依存(integrate) vs 実データ入力(parsed/) の不一致を明文化, (2) Shikiho fallback 時の yahoo 二重収集回避 + result キー契約を定義"
+  timestamp: "2026-02-28T12:45:00+09:00"
 
-  objective: "4件の開発タスク (req_048-051) を3名のJuniorで並列実行する"
+  objective: "S39 4件一括計画 (r5)"
 
-  context:
-    session: 38
-    total_requests: 4
-    high_priority: 2
-    medium_priority: 2
-    all_tasks_independent: false
-    dependency_note: "req_048-050 は相互に独立。req_051 は Wave 1 完了を前提とするスケジューリング依存あり"
+  pipeline_data_flow_verified:
+    description: "example_pipeline.yaml + pipeline.py から検証"
+    calculate_step_clarification:
+      dag_dependency: "depends_on: [integrate] — integrate 完了後に実行"
+      actual_data_input: "--parsed-dir data/{ticker}/parsed — disclosure-parser 出力を読む"
+      note: "DAG は実行順序制御のみ。integrate の出力 (integrated/) は calculate に渡らない。integrate が parsed/ を enrichする可能性があるため順序依存が設定されている"
 
-  dependency_graph:
-    req_048: { depends_on: [], blocks: [] }
-    req_049: { depends_on: [], blocks: [] }
-    req_050: { depends_on: [], blocks: [] }
-    req_051: { depends_on: ["wave1_completion_gate"], blocks: [] }
-    wave1_completion_gate:
-      condition: "Wave 1 の少なくとも1件が verdict: ok を受領し、当該Juniorの既存テスト全パスが確認済み"
-      triggered_by: ["req_048 OR req_049 OR req_050"]
+  revision_changes:
+    - "req_053: calculate ステップの DAG依存 vs 実データ入力の区別を明文化。型検証は実データ入力パス (parsed/) に対して行う"
+    - "req_054: Shikiho fallback 契約を追加: 二重収集回避、result キー、success_count 計算ルール"
 
-  task_decomposition:
-    - task_id: "req_048"
-      title: "financial-integrator E2Eテスト強化"
-      assignee: junior1
-      priority: high
-      skill: "skills/financial-integrator/"
-      description: |
-        Web 3ソース (EDINET + J-Quants + Web) 統合の実データ検証テストを追加する。
-        - 既存87テストを壊さないこと
-        - 実データ依存テストはモック/フィクスチャで安定化
-        - 3ソースマージの境界ケースをカバー:
-          - 欠損ソース (1ソースのみ、2ソースのみ)
-          - 重複期間 (同一期間に複数ソースからデータ)
-          - 型不一致 (文字列数値混在、null値)
-        - 全テストパスを確認してから完了報告
-      quality_criteria:
-        - "pytest 全パス (既存87 + 新規テスト)"
-        - "3ソースマージの境界ケース最低6パターン"
-        - "モック/フィクスチャベースで CI 安定"
+  shikiho_fallback_contract:
+    trigger: "collect() 内で shikiho の CollectorError catch 時"
+    duplicate_avoidance: "fallback 実行前に source_results.get('yahoo', {}).get('collected') を確認。既に yahoo 成功済みなら fallback スキップ（yahoo データ再利用）"
+    result_key: "source_results['shikiho'] に fallback 結果を格納。元の shikiho キーを維持し、メタデータで fallback を記録"
+    result_metadata:
+      collected: true  # fallback 成功時
+      fallback_source: "yahoo"
+      fallback_reason: "AUTH_ENV_MISSING"  # 条件コード
+      original_error: "認証情報が不完全です"
+    result_when_yahoo_already_collected:
+      collected: true
+      fallback_source: "yahoo"
+      fallback_reused: true  # 既存 yahoo 結果を再利用
+      note: "source_results['yahoo'] のデータをコピーし shikiho キーにも設定"
+    success_count_rule: "fallback 成功 or 再利用で collected=true なら success_count に算入。source_count は元の source リスト長 (変更なし)"
+    test_scenarios:
+      - "shikiho 失敗 + yahoo 未収集 → yahoo fallback 実行 → shikiho.collected=true, shikiho.fallback_source=yahoo"
+      - "shikiho 失敗 + yahoo 収集済み → yahoo 再利用 → shikiho.collected=true, shikiho.fallback_reused=true"
+      - "shikiho 成功 → fallback なし → shikiho.collected=true, fallback_source なし"
+      - "shikiho 失敗 + yahoo fallback も失敗 → shikiho.collected=false, shikiho.fallback_source=yahoo, shikiho.fallback_error=..."
 
-    - task_id: "req_049"
-      title: "EDINETキャッシュ破損対策"
-      assignee: junior2
-      priority: high
-      skill: "skills/disclosure-collector/"
-      description: |
-        302リダイレクト→notfound.html (390bytes) がキャッシュされる問題を根本解決する。
-        - HTTPレスポンス検証ロジック追加:
-          - ステータスコード検証 (200以外は保存しない)
-          - Content-Type検証 (text/html をCSVとして保存しない)
-          - ファイルサイズ検証 (閾値以下の異常小ファイル検出)
-        - 既存キャッシュの破損ファイル検出・パージ機能
-        - 既存テストを壊さない、新規テスト追加必須
-      quality_criteria:
-        - "pytest 全パス (既存 + 新規テスト)"
-        - "302→notfound.html の再現テスト"
-        - "既存破損キャッシュのパージテスト"
-        - "正常ダウンロードが影響を受けないこと"
+  phase_1_parallel:
+    description: "req_052, req_053, req_054 を3名の Junior に並列割り当て"
 
-    - task_id: "req_050"
-      title: "四季報オンライン認証実装"
-      assignee: junior3
-      priority: medium
-      skill: "skills/web-researcher/"
-      description: |
-        web-researcher の Shikiho データソースを稼働させる。
-        - SHIKIHO_EMAIL/SHIKIHO_PASSWORD 環境変数で認証
-        - セッション管理: ログイン → スクレイピング → ログアウト
-        - robots.txt 尊重
-        - 認証失敗時の適切なエラーハンドリング
-        - 認証情報ハードコード禁止
-        - 既存テストを壊さない、新規テスト追加必須
-      quality_criteria:
-        - "pytest 全パス (既存 + 新規テスト)"
-        - "認証フロー (login/scrape/logout) のテスト"
-        - "認証失敗時のエラーハンドリングテスト"
-        - "robots.txt 遵守の確認"
-        - "環境変数未設定時の graceful degradation"
+    req_052_junior1:
+      task_id: "T_s39_052"
+      assigned_to: junior1
+      objective: "financial-calculator の FinancialRecord に入力型 coercion を追加"
+      scope:
+        - "FinancialRecord.__post_init__ に型強制変換ロジック追加 (frozen dataclass → object.__setattr__)"
+        - "対象: revenue, operating_income, net_income, total_assets, equity, operating_cf, investing_cf (float|None) + fiscal_year (int|None)"
+        - "string numeric → float/int, 不正値 → None, bool → None"
+        - "現行パイプラインでは parsed/ 経由で _to_float 変換済みだが、--input-file 経由の防御的 coercion"
+      test_requirements:
+        - "string numeric, カンマ区切り, 不正値, bool のテスト"
+        - "既存テスト全パス + 新規テスト 10+ cases"
 
-    - task_id: "req_051"
-      title: "per_share_value算出検証"
-      assignee: "Wave 2 — wave1_completion_gate 通過後に最初に空いたJuniorに割当"
-      priority: medium
-      skill: "skills/valuation-calculator/"
-      description: |
-        shares_outstanding (req_046で追加済み) → DCF per share への連携を検証・実装する。
-        - valuation-calculator の出力に per_share_value を追加
-        - shares_outstanding が null の場合は per_share_value も null (エラーにしない)
-        - pipeline-runner の output_vars 経由で shares_outstanding が正しく伝播することを確認
-        - 既存30テストを壊さない、新規テスト追加必須
-      quality_criteria:
-        - "pytest 全パス (既存30 + 新規テスト)"
-        - "shares_outstanding → per_share_value 計算の正確性テスト"
-        - "shares_outstanding=null 時の null 伝播テスト"
-        - "pipeline output_vars 経由の伝播テスト"
+    req_053_junior2:
+      task_id: "T_s39_053"
+      assigned_to: junior2
+      objective: "quality-gate にステップ間型整合性ゲート (step_type_consistency) を追加"
+      scope:
+        - "新ゲートタイプ 'step_type_consistency' を validators.py に実装"
+        - "StepTypeConsistencyResult dataclass 追加"
+        - "[修正] 実パイプラインに基づく接続マッピング:"
+        - "  (1) parsed→calculator: parsed/*.json の bs/pl/cf 数値 → FinancialRecord float|None"
+        - "  (2) calculator→valuate: metrics.json → valuation 入力 float"
+        - "  (3) raw→risk-analyzer: raw/edinet → テキスト str"
+        - "[修正] calculate ステップは DAG 上 integrate に依存するが、実データは parsed/ から読む。型検証は実データ入力パス (parsed/) に対して実行"
+        - "integrator 出力 (integrated/) の型は独立ゲートで検証"
+        - "run_all_gates + CLI 統合"
+      test_requirements:
+        - "型一致/不一致/None パターン + 各接続テスト"
+        - "既存テスト全パス + 新規テスト 12+ cases"
 
-  execution_strategy:
-    wave_1:
-      description: "3タスクを3名のJuniorで完全並列実行"
-      tasks: ["req_048 → junior1", "req_049 → junior2", "req_050 → junior3"]
-      parallelism: 3
-    wave1_completion_gate:
-      description: "Wave 2 起動の具体条件"
-      conditions:
-        - "Wave 1 の少なくとも1件で Reviewer verdict: ok を受領済み"
-        - "verdict: ok を受けた Junior の既存テスト全パスが成果物レビューで確認済み"
-        - "当該 Junior の /clear + 再初期化が完了済み"
-      evaluation: "Senior が verdict: ok 受領時に自動評価。条件充足で即座に Wave 2 開始"
-    wave_2:
-      description: "gate 通過後、空いた Junior に req_051 を割当"
-      tasks: ["req_051 → gate通過後に空いたJunior"]
-      trigger: "wave1_completion_gate の全条件充足"
+    req_054_junior3:
+      task_id: "T_s39_054"
+      assigned_to: junior3
+      objective: "EDINET 公式HP URL + Kabutan 代替 + Shikiho fallback (二重収集回避付き)"
+      scope:
+        - "homepage.py: EDINET CSV から企業HP URL 抽出強化"
+        - "Kabutan 代替調査 (robots.txt 遵守)"
+        - "collect() 関数内 Shikiho fallback 実装:"
+        - "  (a) CollectorError catch 時 source_name=='shikiho' で発火"
+        - "  (b) 二重収集回避: source_results.get('yahoo',{}).get('collected') 確認"
+        - "  (c) yahoo 未収集→YahooFinanceCollector で fallback 実行"
+        - "  (d) yahoo 収集済み→source_results['yahoo'] データ再利用"
+        - "  (e) result を source_results['shikiho'] に格納 (キー維持)"
+        - "  (f) メタデータ: fallback_source, fallback_reason, fallback_reused"
+        - "  (g) success_count: fallback 成功/再利用で collected=true 算入"
+        - "CollectorError に error_code 属性追加"
+      test_requirements:
+        - "EDINET CSV URL 抽出テスト"
+        - "shikiho失敗+yahoo未収集 → yahoo fallback テスト"
+        - "shikiho失敗+yahoo収集済み → yahoo 再利用テスト"
+        - "shikiho成功 → fallback なしテスト"
+        - "shikiho失敗+yahoo fallbackも失敗 → collected=false テスト"
+        - "success_count/source_count 正確性テスト"
+        - "既存テスト全パス + 新規テスト 12+ cases"
+
+  phase_2_sequential:
+    description: "req_052 + req_054 完了後に req_055 を割り当て"
+
+    req_055:
+      task_id: "T_s39_055"
+      assigned_to: "first_available"
+      dependencies: ["req_052", "req_054"]
+      objective: "4971 メックで 3ソース統合を実データ検証"
+      scope:
+        - "Primary: EDINET+J-Quants+Shikiho / Fallback: EDINET+J-Quants+Yahoo"
+        - "calculator 入力は parsed/ (DAG は integrate 依存だが実データは parsed/)"
+        - "fallback テスト: SHIKIHO env var unset → collect() 自動切替"
+        - "Primary vs Fallback 収集率比較 + JSON snapshot"
+      test_requirements:
+        - "E2E テスト Primary + Fallback"
+        - "二重収集回避の実動作確認"
+        - "contribution 比率 + 型整合性検証"
+        - "テスト 8+ cases"
 
   risk_assessment:
-    - risk: "req_050 (Shikiho認証) は外部サービス依存で不安定になる可能性"
-      mitigation: "モックベースのテストで CI 安定性を確保。実認証テストは手動実行マーカー付き"
-    - risk: "req_048 の実データフィクスチャが大きくなりすぎる可能性"
-      mitigation: "最小限の代表データでフィクスチャを構成。巨大JSONは避ける"
-    - risk: "req_051 は req_046 の shares_outstanding 実装に依存"
-      mitigation: "req_046 は S37 で完了済み・テストパス済み。既存実装を前提にする"
-
-  revision_notes:
-    changes_from_r1:
-      - "all_tasks_independent を false に変更し、dependency_note で依存関係を明示"
-      - "dependency_graph を追加し、req_051 → wave1_completion_gate の依存を構造化"
-      - "wave1_completion_gate に3つの具体条件を定義 (verdict:ok受領 + テスト全パス確認 + Junior再初期化完了)"
-      - "execution_strategy に gate 評価タイミングを明記 (Senior が verdict:ok 受領時に自動評価)"
+    - "req_052: 低リスク"
+    - "req_053: 低リスク (実パイプライン接続に正確に対応)"
+    - "req_054: 中リスク (fallback 契約が明確化され管理可能)"
+    - "req_055: 中リスク (Primary/Fallback 両シナリオで再現可能)"

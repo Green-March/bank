@@ -139,7 +139,74 @@ def _create_resolver():
     return None
 
 
-def collect(ticker: str, sources: list[str], config: dict | None = None) -> dict:
+def _shikiho_fallback(
+    ticker: str,
+    error: CollectorError,
+    source_results: dict[str, dict],
+    config: dict | None,
+) -> dict:
+    """Shikiho 失敗時に Yahoo Finance へフォールバックする。
+
+    (b) yahoo 収集済み → データ再利用
+    (c) yahoo 未収集 → YahooFinanceCollector で新規収集
+    (e) 結果は source_results['shikiho'] キーに格納 (メタデータで fallback 記録)
+    """
+    error_code = getattr(error, "error_code", "UNKNOWN")
+    fallback_meta = {
+        "fallback_source": "yahoo",
+        "fallback_reason": error_code,
+    }
+
+    # (b) yahoo 収集済みか確認
+    yahoo_existing = source_results.get("yahoo", {})
+    if yahoo_existing.get("collected"):
+        fallback_meta["fallback_reused"] = True
+        return {
+            "url": yahoo_existing.get("url"),
+            "collected": True,
+            "data": yahoo_existing.get("data"),
+            "error": None,
+            "fallback": fallback_meta,
+        }
+
+    # (c) yahoo 未収集 → YahooFinanceCollector でフォールバック実行
+    fallback_meta["fallback_reused"] = False
+    try:
+        collector = YahooFinanceCollector(config=config)
+        with collector:
+            result = collector.collect(ticker)
+            if result.get("collected"):
+                return {
+                    "url": result.get("url"),
+                    "collected": True,
+                    "data": result.get("data"),
+                    "error": None,
+                    "fallback": fallback_meta,
+                }
+            # yahoo も失敗
+            return {
+                "url": None,
+                "collected": False,
+                "data": None,
+                "error": f"shikiho: {error}; yahoo fallback: {result.get('error', 'unknown')}",
+                "fallback": fallback_meta,
+            }
+    except Exception as fallback_err:
+        return {
+            "url": None,
+            "collected": False,
+            "data": None,
+            "error": f"shikiho: {error}; yahoo fallback: {fallback_err}",
+            "fallback": fallback_meta,
+        }
+
+
+def collect(
+    ticker: str,
+    sources: list[str],
+    config: dict | None = None,
+    edinet_csv: str | None = None,
+) -> dict:
     """指定ソースから企業情報を収集する。"""
     source_results: dict[str, dict] = {}
     accessed_domains: set[str] = set()
@@ -152,7 +219,11 @@ def collect(ticker: str, sources: list[str], config: dict | None = None) -> dict
         collector_cls = SOURCE_MAP[source_name]
         try:
             if source_name == "homepage":
-                collector = collector_cls(config=config, resolver=resolver)
+                collector = collector_cls(
+                    config=config,
+                    resolver=resolver,
+                    csv_path=edinet_csv,
+                )
             else:
                 collector = collector_cls(config=config)
             with collector:
@@ -162,12 +233,22 @@ def collect(ticker: str, sources: list[str], config: dict | None = None) -> dict
                 if domain:
                     accessed_domains.add(domain)
         except CollectorError as e:
-            source_results[source_name] = {
-                "url": None,
-                "collected": False,
-                "data": None,
-                "error": str(e),
-            }
+            # Shikiho fallback: shikiho 失敗時に yahoo へフォールバック
+            if source_name == "shikiho":
+                fallback_result = _shikiho_fallback(
+                    ticker, e, source_results, config
+                )
+                source_results[source_name] = fallback_result
+                domain = _extract_domain(fallback_result.get("url"))
+                if domain:
+                    accessed_domains.add(domain)
+            else:
+                source_results[source_name] = {
+                    "url": None,
+                    "collected": False,
+                    "data": None,
+                    "error": str(e),
+                }
         except Exception as e:
             source_results[source_name] = {
                 "url": None,
@@ -229,6 +310,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="既存JSONの該当sourceのみ上書き",
     )
+    collect_cmd.add_argument(
+        "--edinet-csv",
+        type=str,
+        default=None,
+        help="EdinetcodeDlInfo.csv パス（HomepageCollector 用）",
+    )
     return parser
 
 
@@ -245,7 +332,8 @@ def main() -> int:
         print("有効なソースが指定されていません", file=sys.stderr)
         return 1
 
-    result = collect(args.ticker, sources)
+    edinet_csv = getattr(args, "edinet_csv", None)
+    result = collect(args.ticker, sources, edinet_csv=edinet_csv)
 
     if args.output:
         output_path = Path(args.output)

@@ -1,0 +1,135 @@
+{
+  "ticker": "4971",
+  "fiscal_year_end_month": 12,
+  "input_files": [
+    "edinet",
+    "web",
+    "jquants"
+  ],
+  "coverage_summary": {
+    "FY2021": {
+      "annual": "edinet",
+      "quarters": [],
+      "sources": [
+        "edinet"
+      ]
+    },
+    "FY2022": {
+      "annual": "edinet+web",
+      "quarters": [],
+      "sources": [
+        "edinet+web"
+      ]
+    },
+    "FY2023": {
+      "annual": "edinet+web+jquants",
+      "quarters": [],
+      "sources": [
+        "edinet+web+jquants"
+      ]
+    },
+    "FY2024": {
+      "annual": "edinet+web+jquants",
+      "quarters": [
+        "Q1",
+        "Q2",
+        "Q3"
+      ],
+      "sources": [
+        "edinet+web+jquants",
+        "jquants"
+      ]
+    },
+    "FY2025": {
+      "annual": null,
+      "quarters": [
+        "Q1",
+        "Q2",
+        "Q3"
+      ],
+      "sources": [
+        "jquants"
+      ]
+    }
+  },
+  "annual_count": 4,
+  "quarterly_count": 6,
+  "annual": [
+    {
+      "fiscal_year": 2021,
+      "quarter": "FY",
+      "source": "edinet",
+      "revenue": 19112657000,
+      "operating_income": 4318166000,
+      "total_assets": 25305361000,
+      "operating_cf": 3013519000,
+      "web_source": null,
+      "jquants_disclosed_date": null
+    },
+    {
+      "fiscal_year": 2022,
+      "quarter": "FY",
+      "source": "edinet+web",
+      "revenue": 20455402000,
+      "operating_income": 3979572000,
+      "total_assets": 27499167000,
+      "operating_cf": 3810979000,
+      "web_source": "web:yahoo",
+      "jquants_disclosed_date": null
+    },
+    {
+      "fiscal_year": 2023,
+      "quarter": "FY",
+      "source": "edinet+web+jquants",
+      "revenue": 17058044000,
+      "operating_income": 2189747000,
+      "total_assets": 28665206000,
+      "operating_cf": 1941318000,
+      "web_source": "web:yahoo",
+      "jquants_disclosed_date": "2024-02-14"
+    },
+    {
+      "fiscal_year": 2024,
+      "quarter": "FY",
+      "source": "edinet+web+jquants",
+      "revenue": 23338746000,
+      "operating_income": 4894927000,
+      "total_assets": 33039172000,
+      "operating_cf": 4200122000,
+      "web_source": "web:yahoo",
+      "jquants_disclosed_date": "2025-02-14"
+    }
+  ],
+  "quarterly_sources": [
+    {
+      "fiscal_year": 2024,
+      "quarter": "Q1",
+      "source": "jquants"
+    },
+    {
+      "fiscal_year": 2024,
+      "quarter": "Q2",
+      "source": "jquants"
+    },
+    {
+      "fiscal_year": 2024,
+      "quarter": "Q3",
+      "source": "jquants"
+    },
+    {
+      "fiscal_year": 2025,
+      "quarter": "Q1",
+      "source": "jquants"
+    },
+    {
+      "fiscal_year": 2025,
+      "quarter": "Q2",
+      "source": "jquants"
+    },
+    {
+      "fiscal_year": 2025,
+      "quarter": "Q3",
+      "source": "jquants"
+    }
+  ]
+}

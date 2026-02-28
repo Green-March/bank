@@ -1,0 +1,10 @@
+{
+  "shikiho_fallback": {
+    "fallback_source": "yahoo",
+    "fallback_reason": "AUTH_ENV_MISSING",
+    "fallback_reused": true
+  },
+  "yahoo_collected": true,
+  "success_count": 2,
+  "source_count": 4
+}

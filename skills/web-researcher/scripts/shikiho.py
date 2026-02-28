@@ -45,12 +45,10 @@ class ShikihoCollector(BaseCollector):
 
         # 両方未設定 → 自動スキップ
         if not email and not password:
-            return {
-                "url": url,
-                "collected": False,
-                "data": None,
-                "error": "SHIKIHO_EMAIL/SHIKIHO_PASSWORD 未設定",
-            }
+            raise AuthenticationError(
+                "SHIKIHO_EMAIL/SHIKIHO_PASSWORD 未設定",
+                error_code="AUTH_ENV_MISSING",
+            )
 
         # 片方のみ設定 → graceful degradation
         if not email or not password:
@@ -58,62 +56,37 @@ class ShikihoCollector(BaseCollector):
                 "認証情報が不完全です: %s",
                 _sanitize_log({"email": email or "", "password": password or ""}),
             )
-            return {
-                "url": url,
-                "collected": False,
-                "data": None,
-                "error": "認証情報が不完全です（SHIKIHO_EMAIL/SHIKIHO_PASSWORD の両方を設定してください）",
-            }
+            raise AuthenticationError(
+                "認証情報が不完全です（SHIKIHO_EMAIL/SHIKIHO_PASSWORD の両方を設定してください）",
+                error_code="AUTH_ENV_MISSING",
+            )
 
-        # robots.txt 事前チェック（認証前に確認）
-        try:
-            self._check_robots(url)
-        except RobotsBlockedError:
-            return {
-                "url": url,
-                "collected": False,
-                "data": None,
-                "error": "robots.txt によりアクセスが拒否されました",
-            }
+        # robots.txt 事前チェック（認証前に確認）— RobotsBlockedError をそのまま伝播
+        self._check_robots(url)
 
-        # 認証
+        # 認証→取得→パースは try-finally で logout guarantee
         try:
             self._authenticate(email, password)
-        except AuthenticationError as exc:
-            return {
-                "url": url,
-                "collected": False,
-                "data": None,
-                "error": _safe_error_message(str(exc), email, password),
-            }
 
-        # ページ取得
-        try:
             response = self._fetch(url)
-        except (AuthenticationError, CollectorError):
-            self._logout()
-            return {
-                "url": url,
-                "collected": False,
-                "data": None,
-                "error": "ページ取得失敗",
-            }
 
-        # パース（個別セクションの失敗は null で返す）
-        try:
+            # SESSION_EXPIRED 検知: リダイレクト先がログインページの場合
+            response_url = str(getattr(response, "url", ""))
+            if _LOGIN_URL in response_url:
+                raise AuthenticationError(
+                    "セッション期限切れ（ログインページへリダイレクト）",
+                    error_code="SESSION_EXPIRED",
+                )
+
             data = self._parse_page(response.text)
-        except Exception:
-            logger.exception("パース失敗: %s", url)
+        except (CollectorError, Exception) as exc:
+            # CollectorError (AuthenticationError 含む) はそのまま re-raise
+            if isinstance(exc, CollectorError):
+                raise
+            # 予期しない例外は CollectorError でラップ
+            raise CollectorError(f"予期しないエラー: {exc}") from exc
+        finally:
             self._logout()
-            return {
-                "url": url,
-                "collected": False,
-                "data": None,
-                "error": "パース失敗",
-            }
-
-        # ログアウト
-        self._logout()
 
         return {
             "url": url,
@@ -136,7 +109,10 @@ class ShikihoCollector(BaseCollector):
                     data={"email": email, "password": password},
                 )
                 if response.status_code != 200:
-                    raise AuthenticationError(f"認証失敗: {response.status_code}")
+                    raise AuthenticationError(
+                        f"認証失敗: {response.status_code}",
+                        error_code="AUTH_HTTP_ERROR",
+                    )
                 return
             except AuthenticationError:
                 raise
@@ -144,7 +120,10 @@ class ShikihoCollector(BaseCollector):
                 if attempt < self._max_retries:
                     self._backoff_sleep(attempt)
                     continue
-                raise AuthenticationError(f"認証ネットワークエラー: {exc}") from exc
+                raise AuthenticationError(
+                    f"認証ネットワークエラー: {exc}",
+                    error_code="AUTH_NETWORK_ERROR",
+                ) from exc
 
     def _logout(self) -> None:
         """ログアウトしてセッションをクリアする（ベストエフォート）。"""

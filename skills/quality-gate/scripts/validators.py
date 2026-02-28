@@ -95,6 +95,15 @@ class JsonFileValueRangeResult:
 
 
 @dataclass
+class StepTypeConsistencyResult:
+    """Result of step-to-step type consistency validation."""
+
+    gate_pass: bool
+    mismatches: list[dict]
+    detail: dict[str, object]
+
+
+@dataclass
 class GateResults:
     """Aggregated results from all gates."""
 
@@ -471,6 +480,174 @@ def validate_json_file_value_range(
 
 
 # ---------------------------------------------------------------------------
+# Step type consistency mappings & validator
+# ---------------------------------------------------------------------------
+
+# Each mapping defines the expected types for fields flowing between steps.
+# "from_step" and "to_step" are descriptive labels.
+# "field_type_map" maps field names to expected Python types.
+# None values are always allowed (missing data is distinct from wrong type).
+
+STEP_TYPE_MAPPINGS: list[dict] = [
+    {
+        "id": "parsed_to_calculator",
+        "from_step": "parsed",
+        "to_step": "calculator",
+        "description": "parsed/*.json bs/pl/cf numeric fields → FinancialRecord float|None",
+        "field_type_map": {
+            "revenue": (int, float),
+            "operating_income": (int, float),
+            "net_income": (int, float),
+            "total_assets": (int, float),
+            "equity": (int, float),
+            "total_equity": (int, float),
+            "operating_cf": (int, float),
+            "investing_cf": (int, float),
+        },
+    },
+    {
+        "id": "calculator_to_valuate",
+        "from_step": "calculator",
+        "to_step": "valuate",
+        "description": "metrics.json metrics_series numeric → valuation input float",
+        "field_type_map": {
+            "roe_percent": (int, float),
+            "roa_percent": (int, float),
+            "operating_margin_percent": (int, float),
+            "revenue_growth_yoy_percent": (int, float),
+            "profit_growth_yoy_percent": (int, float),
+            "equity_ratio_percent": (int, float),
+            "revenue": (int, float),
+            "operating_income": (int, float),
+            "net_income": (int, float),
+            "operating_cf": (int, float),
+            "free_cash_flow": (int, float),
+        },
+    },
+    {
+        "id": "raw_to_risk",
+        "from_step": "raw",
+        "to_step": "risk-analyzer",
+        "description": "raw EDINET XBRL → text data str type",
+        "field_type_map": {
+            "content": (str,),
+            "text": (str,),
+            "xbrl_content": (str,),
+        },
+    },
+]
+
+# Integrator output has its own independent type expectations
+INTEGRATOR_TYPE_MAP: dict[str, tuple] = {
+    "revenue": (int, float),
+    "operating_income": (int, float),
+    "net_income": (int, float),
+    "total_assets": (int, float),
+    "equity": (int, float),
+    "total_equity": (int, float),
+    "net_assets": (int, float),
+    "operating_cf": (int, float),
+    "investing_cf": (int, float),
+    "financing_cf": (int, float),
+}
+
+
+def validate_step_type_consistency(
+    data: dict | list,
+    mapping_id: str | None = None,
+    custom_field_type_map: dict[str, tuple] | None = None,
+) -> StepTypeConsistencyResult:
+    """Validate that field values match expected types for a step connection.
+
+    Args:
+        data: The data to validate. Can be a single record (dict) or a list of records.
+              For parsed data, each record may have bs/pl/cf sub-dicts.
+              For metrics data, each record is a flat dict of metric values.
+        mapping_id: One of the predefined mapping IDs (e.g. 'parsed_to_calculator').
+        custom_field_type_map: Override field_type_map instead of using a predefined mapping.
+
+    Returns:
+        StepTypeConsistencyResult with mismatches list.
+    """
+    # Resolve field type map
+    field_type_map: dict[str, tuple] | None = custom_field_type_map
+    mapping_label = "custom"
+
+    if field_type_map is None and mapping_id is not None:
+        for mapping in STEP_TYPE_MAPPINGS:
+            if mapping["id"] == mapping_id:
+                field_type_map = mapping["field_type_map"]
+                mapping_label = mapping_id
+                break
+        if field_type_map is None and mapping_id == "integrator_output":
+            field_type_map = INTEGRATOR_TYPE_MAP
+            mapping_label = "integrator_output"
+
+    if field_type_map is None:
+        return StepTypeConsistencyResult(
+            gate_pass=False,
+            mismatches=[],
+            detail={"error": f"unknown mapping_id: {mapping_id}"},
+        )
+
+    # Normalize data to list of records
+    records: list[dict] = []
+    if isinstance(data, list):
+        records = [r for r in data if isinstance(r, dict)]
+    elif isinstance(data, dict):
+        records = [data]
+
+    mismatches: list[dict] = []
+
+    for idx, record in enumerate(records):
+        # Collect all fields to check: top-level + bs/pl/cf sub-dicts
+        flat_fields: dict[str, object] = {}
+        for key, value in record.items():
+            if isinstance(value, dict) and key in ("bs", "pl", "cf"):
+                for sub_key, sub_value in value.items():
+                    flat_fields[sub_key] = sub_value
+            elif key not in ("bs", "pl", "cf"):
+                flat_fields[key] = value
+
+        for field_name, expected_types in field_type_map.items():
+            if field_name not in flat_fields:
+                continue
+            value = flat_fields[field_name]
+            # None is always allowed (missing data)
+            if value is None:
+                continue
+            # bool is not a valid numeric type even though bool is subclass of int
+            if isinstance(value, bool):
+                mismatches.append({
+                    "record_index": idx,
+                    "field": field_name,
+                    "expected_types": [t.__name__ for t in expected_types],
+                    "actual_type": type(value).__name__,
+                    "actual_value": value,
+                })
+                continue
+            if not isinstance(value, expected_types):
+                mismatches.append({
+                    "record_index": idx,
+                    "field": field_name,
+                    "expected_types": [t.__name__ for t in expected_types],
+                    "actual_type": type(value).__name__,
+                    "actual_value": value,
+                })
+
+    return StepTypeConsistencyResult(
+        gate_pass=len(mismatches) == 0,
+        mismatches=mismatches,
+        detail={
+            "mapping": mapping_label,
+            "records_checked": len(records),
+            "fields_in_map": len(field_type_map),
+            "mismatch_count": len(mismatches),
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
 # Gate runner
 # ---------------------------------------------------------------------------
 
@@ -594,6 +771,41 @@ def run_all_gates(
                 "detail": {
                     "violations": r.violations,
                     "violation_count": len(r.violations),
+                    **r.detail,
+                },
+            })
+
+        elif gate_type == "step_type_consistency":
+            mapping_id = params.get("mapping_id")
+            data_file = params.get("file", "")
+            data_key = params.get("data_key")  # e.g. "period_index", "metrics_series"
+
+            json_path = data_dir / data_file if data_file else None
+            if json_path and json_path.exists():
+                with json_path.open("r", encoding="utf-8") as f:
+                    file_data = json.load(f)
+                if data_key:
+                    check_data = file_data.get(data_key, [])
+                else:
+                    check_data = file_data
+            elif data_file:
+                results.append({
+                    "id": gate_id,
+                    "pass": False,
+                    "detail": {"error": f"{data_file} not found"},
+                })
+                continue
+            else:
+                # Use financials period_index as default
+                check_data = periods
+
+            r = validate_step_type_consistency(check_data, mapping_id=mapping_id)
+            results.append({
+                "id": gate_id,
+                "pass": r.gate_pass,
+                "detail": {
+                    "mismatches": r.mismatches,
+                    "mismatch_count": len(r.mismatches),
                     **r.detail,
                 },
             })

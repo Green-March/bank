@@ -1,7 +1,7 @@
 plan_review_response:
-  request_id: 'plan_s38_001_r2'
+  request_id: 'plan_s39_001_r5'
   verdict: 'ok'
   comments:
-    - '依存グラフが明示され、Wave2起動条件が条件式で定義されているため実行順は妥当である'
-    - '外部依存タスクを含む波の設計と wave1完了依存の扱いは現実的で、実行可能性は高い'
+    - 'calculate ステップの依存順序と実入力(parsed/)の契約が明確で不整合が解消されている。'
+    - 'Shikiho fallback の再利用・キー保持・成功判定が明文化され、二重収集と集計ズレリスクが低減している。'
   suggested_changes: []

@@ -1,18 +1,18 @@
 review_response:
   request_type: deliverable_review_response
   review_type: deliverable
-  request_id: 'rev_req_051_001'
-  task_id: 'req_051'
-  junior_id: 'junior2'
+  request_id: 'rev_s39_055_01'
+  task_id: 'T_s39_055'
+  junior_id: 'junior1'
   verdict: 'ok'
   comments:
-    schema_conformance: 'DCF per_share 出力の型と pipeline 連携が valuation と report の前提に整合しています。'
-    data_integrity: 'shares_outstanding 未指定/0/0.0/負値を除算しない仕様が一致し、境界値の挙動は一貫しています。'
-    source_traceability: 'collect_jquants の shares_outstanding を output_vars 経由で受け、valuate の --shares へ追跡可能に渡されています。'
-    analytical_validity: 'per_share_value は equity_value ÷ shares で再現され、過大株式数・債務超過ケースも検証されています。'
-    clarity: '追加テストは正常/異常・CLI・pipeline 伝播まで 1 連として整理され、判定根拠が追いやすいです。'
-    risk_disclosure: '--shares 未指定は null、0/負値は安全に None 化されるため除算エラーの説明が明確です。'
-  e2e_check: 'ステップ間スキーマ整合・欠損伝播・出典保持は確認済みで問題なし'
+    schema_conformance: 'financial-integrator の統合JSONは annual/quarterly/coverage_matrix/integration_metadata を含み、financial-calculator 下流も受け取り可能なキー構成を満たす。'
+    data_integrity: '数値は int/float/None のみで保持され、Primary/Fallback の annual revenue は一致し、欠損箇所も意図通りです。'
+    source_traceability: '入力ファイルsha256、document_id、source 文字列、jquants_disclosed_dateが保持され、再現可能なスナップショットも保存されている。'
+    analytical_validity: 'FY2023/FY2024 の3ソース採択条件とPrimary/Fallback一致検証が再現可能な形で示され、主要ロジックは要件どおり確認できる。'
+    clarity: '目的、再現手順、key findings、caveatが簡潔に整理され、どの点を再現すべきかが明確。'
+    risk_disclosure: 'Shikiho認証成功時は未検証で、J-Quants 正規化は外部パイプライン未統合と明示されており、追試条件も記載。'
+  e2e_check: 'ステップ間スキーマ整合・欠損伝播・出典保持・数値精度保持の観点で阻害要因は確認されない。'
   suggested_changes: []
   status: 'completed'
-  timestamp: '2026-02-27 23:57:58'
+  timestamp: '2026-02-28 12:04:11'

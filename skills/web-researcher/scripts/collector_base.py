@@ -23,22 +23,31 @@ logger = logging.getLogger(__name__)
 
 class CollectorError(Exception):
     """コレクター基底例外"""
-    pass
+
+    def __init__(self, message: str = "", *, error_code: str = "UNKNOWN"):
+        super().__init__(message)
+        self.error_code = error_code
 
 
 class RobotsBlockedError(CollectorError):
     """robots.txt によりアクセスが拒否された"""
-    pass
+
+    def __init__(self, message: str = "", *, error_code: str = "ROBOTS_BLOCKED"):
+        super().__init__(message, error_code=error_code)
 
 
 class AuthenticationError(CollectorError):
     """認証エラー"""
-    pass
+
+    def __init__(self, message: str = "", *, error_code: str = "AUTH_HTTP_ERROR"):
+        super().__init__(message, error_code=error_code)
 
 
 class DomainNotAllowedError(CollectorError):
     """許可されていないドメインへのアクセス"""
-    pass
+
+    def __init__(self, message: str = "", *, error_code: str = "DOMAIN_NOT_ALLOWED"):
+        super().__init__(message, error_code=error_code)
 
 
 # --- デフォルト設定 ---

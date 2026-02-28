@@ -40,9 +40,7 @@ class TestCollectDefaultSource:
         """--source 未指定で all 扱い。"""
         output = tmp_path / "research.json"
         result = _run_main("collect", "--ticker", "7203", "--output", str(output))
-        # placeholder は全て collected=false なので exit 1
-        assert result.returncode == 1
-        # JSON が出力されていること
+        # JSON が出力されていること（shikiho fallback で yahoo 成功時は exit 0）
         assert '"ticker"' in result.stdout
         assert '"yahoo"' in result.stdout
         assert '"kabutan"' in result.stdout
@@ -442,8 +440,15 @@ class TestCliNoSecretLeakIntegration:
             def __exit__(self, *args):
                 return False
 
+        # Yahoo fallback もモック（fallback で secret が漏れないことを確認）
+        yahoo_fallback_cls = _mock_collector_cls(
+            collected=False,
+            url="https://finance.yahoo.co.jp/quote/7203.T",
+            error="fallback test",
+        )
         mock_map = {"shikiho": InstrumentedShikihoCollector}
-        with patch("scripts.main.SOURCE_MAP", mock_map):
+        with patch("scripts.main.SOURCE_MAP", mock_map), \
+             patch("scripts.main.YahooFinanceCollector", yahoo_fallback_cls):
             result = collect("7203", ["shikiho"])
 
         result_str = json.dumps(result, ensure_ascii=False)

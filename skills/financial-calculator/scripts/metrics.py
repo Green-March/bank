@@ -28,6 +28,28 @@ class FinancialRecord:
     source_details: dict | None = None
     cumulative: bool = False
 
+    def __post_init__(self) -> None:
+        """Coerce field types defensively.
+
+        String numerics and other unexpected types are normalised so that
+        downstream metric calculations always receive the declared type.
+        """
+        for field_name in (
+            "revenue",
+            "operating_income",
+            "net_income",
+            "total_assets",
+            "equity",
+            "operating_cf",
+            "investing_cf",
+        ):
+            object.__setattr__(
+                self, field_name, _coerce_float(getattr(self, field_name))
+            )
+        object.__setattr__(
+            self, "fiscal_year", _coerce_int(getattr(self, "fiscal_year"))
+        )
+
 
 def calculate_metrics_payload(
     parsed_dir: Path | None = None,
@@ -393,6 +415,48 @@ def _to_int(value: object) -> int | None:
     if numeric is None:
         return None
     return int(numeric)
+
+
+def _coerce_float(value: object) -> float | None:
+    """Coerce *value* to ``float | None`` for ``__post_init__``."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, float):
+        return value
+    if isinstance(value, int):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = value.replace(",", "").strip()
+        if cleaned in {"", "-", "--", "N/A", "n/a", "null", "None"}:
+            return None
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+    return None
+
+
+def _coerce_int(value: object) -> int | None:
+    """Coerce *value* to ``int | None`` for ``__post_init__``."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        cleaned = value.replace(",", "").strip()
+        if cleaned in {"", "-", "--", "N/A", "n/a", "null", "None"}:
+            return None
+        try:
+            return int(float(cleaned))
+        except ValueError:
+            return None
+    return None
 
 
 def _as_mapping(value: object) -> Mapping[str, object]:
