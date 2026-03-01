@@ -1,60 +1,30 @@
 queue:
-  - request_id: "req_052"
-    objective: "financial-calculator の入力型バリデーション追加。integrator 経由で string numeric ('1000' など文字列型数値) が通過する問題を修正する。calculator の入力時に型強制変換 (coercion) を実装し、string→numeric 自動変換 + 不正値のエラーハンドリングを行う。テストも追加すること。"
+  - request_id: "req_056"
+    objective: "quality-gate step_type_consistency ゲートを pipeline gates YAML に統合し、パイプライン実行時に実際に発火するようにする。残り40%のマッピング (calculate→inventory, diamond→report 等) も定義してカバレッジ100%を目指す"
     ticker: null
     universe: null
-    analysis_type: "bug_fix"
+    analysis_type: "infrastructure"
     timeframe: null
-    output_format: ["py", "test"]
+    output_format: ["yaml", "test"]
     priority: "high"
-    due_date: "2026-02-28"
+    due_date: "2026-03-01"
     constraints:
-      - "FinancialRecord の入力フィールドで string numeric を numeric に自動変換する"
-      - "変換不能な値は適切にエラーまたは None 処理する"
+      - "既存の gates YAML ファイル (gates_parse.yaml 等) にエントリを追加する"
+      - "step_type_consistency ゲートコード・テストは S39 req_053 で実装済み。YAML 統合のみ"
+      - "残りマッピング (calculate→inventory, diamond→report) を定義してカバレッジ60%→100%"
+      - "パイプライン実行で実際にゲートが発火することを確認するテストを追加"
+
+  - request_id: "req_057"
+    objective: "disclosure-collector の J-Quants パーサーで string numeric を数値型に正規化する。S39 req_055 で発見された raw データの string numeric 残存問題の根本対策"
+    ticker: null
+    universe: null
+    analysis_type: "infrastructure"
+    timeframe: null
+    output_format: ["test"]
+    priority: "medium"
+    due_date: "2026-03-01"
+    constraints:
+      - "J-Quants API レスポンスの数値フィールドが string で返る箇所を特定する"
+      - "collector/parser レベルで string→numeric 変換を実装する"
+      - "下流 (financial-calculator coercion) との二重変換でも問題ないことを確認"
       - "既存テストが壊れないこと"
-      - "S38 req_048 の test_three_source_boundary.py で発覚した問題を解消すること"
-
-  - request_id: "req_053"
-    objective: "quality-gate にステップ間型整合性ゲートを追加。パイプラインの各ステップ出力単体は検証しているが、ステップ間（例: integrator→calculator, calculator→valuate）の型一貫性は未検証。ステップ間の出力→入力の型整合性を検証する新しいゲートタイプを実装する。"
-    ticker: null
-    universe: null
-    analysis_type: "quality_enhancement"
-    timeframe: null
-    output_format: ["py", "test"]
-    priority: "high"
-    due_date: "2026-02-28"
-    constraints:
-      - "既存の8+2ゲートタイプとの整合性を保つ"
-      - "ステップ間の型マッピング定義を設定ファイルまたはコード内で管理する"
-      - "パイプライン13ステップの主要な接続ポイントをカバーする"
-      - "req_052 の型 coercion と連携して動作すること"
-
-  - request_id: "req_054"
-    objective: "Kabutan 代替データソース検討および公式HP URL 解決。現在 Kabutan は robots.txt でブロックされている。(1) EDINET メタデータから公式HP URL を取得する仕組みを実装する、(2) Kabutan の代替として利用可能なデータソースがあれば調査・提案する。web-researcher スキルの改善を含む。"
-    ticker: null
-    universe: null
-    analysis_type: "data_source_enhancement"
-    timeframe: null
-    output_format: ["py", "test"]
-    priority: "medium"
-    due_date: "2026-02-28"
-    constraints:
-      - "robots.txt を遵守すること（ブロックされたサイトへのアクセスは禁止）"
-      - "EDINET API のメタデータ（提出者情報）を活用する"
-      - "web-researcher の既存アーキテクチャ（--source オプション）と整合すること"
-      - "ユーザーは公式HP特定を EDINET メタデータ経由で行うことを好む"
-
-  - request_id: "req_055"
-    objective: "financial-integrator の Web 3ソース統合（EDINET + J-Quants + Web）を実データで検証する。既存のテストはモックベースだが、実際のデータソースからの取得→マージが正しく動作するか確認する。可能であれば処理済み銘柄（2780, 7685, 9743, 4971 のいずれか）で実行し、3ソース統合の結果を検証する。"
-    ticker: "4971"
-    universe: null
-    analysis_type: "integration_test"
-    timeframe: "3y"
-    output_format: ["json", "test"]
-    priority: "medium"
-    due_date: "2026-02-28"
-    constraints:
-      - "実データ取得にはネットワークアクセスを使用（EDINET, J-Quants, Web）"
-      - "req_052 の型 coercion が実装済みであること（依存関係あり）"
-      - "3ソースのマージ結果で欠損・型不整合がないか確認する"
-      - "テスト結果は再現可能な形で記録する"

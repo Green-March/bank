@@ -23,3 +23,9 @@ gates:
     type: null_rate
     params:
       threshold: 0.5
+
+  - id: step_type_parsed_to_calculator
+    type: step_type_consistency
+    params:
+      mapping_id: parsed_to_calculator
+      data_key: period_index

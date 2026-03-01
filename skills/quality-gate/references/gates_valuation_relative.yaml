@@ -31,3 +31,9 @@ gates:
           min: 0
         ev_ebitda:
           min: 0
+
+  - id: step_type_valuate_relative_to_report
+    type: step_type_consistency
+    params:
+      mapping_id: valuate_relative_to_report
+      file: relative.json

@@ -31,3 +31,9 @@ gates:
           min: 0
         equity_value:
           min: 0
+
+  - id: step_type_valuate_to_report
+    type: step_type_consistency
+    params:
+      mapping_id: valuate_to_report
+      file: dcf.json

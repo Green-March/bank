@@ -90,6 +90,49 @@ def _risk_record(*, overrides: dict | None = None) -> dict:
     return record
 
 
+def _dcf_record(*, overrides: dict | None = None) -> dict:
+    """Create a sample DCF valuation output record."""
+    record = {
+        "ticker": "9999",
+        "valuation_type": "dcf",
+        "enterprise_value": 221_009_568_726.49,
+        "equity_value": 180_000_000_000.0,
+        "per_share_value": 3600.0,
+        "assumptions": {
+            "wacc": 0.08,
+            "terminal_growth_rate": 0.02,
+            "projection_years": 5,
+            "base_fcf": 10_000_000_000.0,
+            "estimated_growth_rate": 0.05,
+            "net_debt": 41_009_568_726.49,
+            "shares_outstanding": 50_000_000.0,
+        },
+    }
+    if overrides:
+        record.update(overrides)
+    return record
+
+
+def _relative_record(*, overrides: dict | None = None) -> dict:
+    """Create a sample relative valuation output record."""
+    record = {
+        "ticker": "9999",
+        "valuation_type": "relative",
+        "per": 12.5,
+        "pbr": 1.8,
+        "ev_ebitda": 8.3,
+        "data_sources": {
+            "market_cap": "latest_snapshot",
+            "net_income": "latest_snapshot",
+            "equity": "latest_snapshot",
+            "ebitda": "latest_snapshot",
+        },
+    }
+    if overrides:
+        record.update(overrides)
+    return record
+
+
 # ---------------------------------------------------------------------------
 # Test: parsed → calculator connection
 # ---------------------------------------------------------------------------
@@ -411,3 +454,313 @@ class TestRunAllGatesStepTypeConsistency:
             result = run_all_gates(gates_config, data_dir)
             assert result.overall_pass is False
             assert result.gates[0]["detail"]["mismatch_count"] >= 1
+
+
+# ---------------------------------------------------------------------------
+# Test: calculator → valuate_relative connection
+# ---------------------------------------------------------------------------
+
+class TestCalculatorToValuateRelative:
+    """Tests for calculator → valuate_relative type consistency."""
+
+    def test_all_float_pass(self):
+        """All metrics are float → pass."""
+        data = [_metrics_record()]
+        result = validate_step_type_consistency(data, mapping_id="calculator_to_valuate_relative")
+        assert result.gate_pass is True
+        assert result.detail["mapping"] == "calculator_to_valuate_relative"
+
+    def test_string_metric_fail(self):
+        """String metric value must fail."""
+        data = [_metrics_record(overrides={"operating_margin_percent": "10.0"})]
+        result = validate_step_type_consistency(data, mapping_id="calculator_to_valuate_relative")
+        assert result.gate_pass is False
+        assert result.mismatches[0]["field"] == "operating_margin_percent"
+
+    def test_none_values_pass(self):
+        """None values are acceptable."""
+        data = [_metrics_record(overrides={
+            "roe_percent": None,
+            "pbr": None,  # not in mapping, ignored
+        })]
+        result = validate_step_type_consistency(data, mapping_id="calculator_to_valuate_relative")
+        assert result.gate_pass is True
+
+    def test_bool_metric_fail(self):
+        """Boolean metric value must be rejected."""
+        data = [_metrics_record(overrides={"free_cash_flow": True})]
+        result = validate_step_type_consistency(data, mapping_id="calculator_to_valuate_relative")
+        assert result.gate_pass is False
+        assert result.mismatches[0]["actual_type"] == "bool"
+
+
+# ---------------------------------------------------------------------------
+# Test: calculate → report connection (latest_snapshot is dict)
+# ---------------------------------------------------------------------------
+
+class TestCalculateToReport:
+    """Tests for calculate → report type consistency using latest_snapshot."""
+
+    def test_all_float_pass(self):
+        """All snapshot metrics are float → pass."""
+        data = _metrics_record()  # single dict (latest_snapshot)
+        result = validate_step_type_consistency(data, mapping_id="calculate_to_report")
+        assert result.gate_pass is True
+        assert result.detail["records_checked"] == 1
+
+    def test_string_value_fail(self):
+        """String revenue must fail."""
+        data = _metrics_record(overrides={"revenue": "500000"})
+        result = validate_step_type_consistency(data, mapping_id="calculate_to_report")
+        assert result.gate_pass is False
+        assert result.mismatches[0]["field"] == "revenue"
+
+    def test_none_values_pass(self):
+        """None values in snapshot are acceptable."""
+        data = _metrics_record(overrides={
+            "operating_cf": None,
+            "free_cash_flow": None,
+        })
+        result = validate_step_type_consistency(data, mapping_id="calculate_to_report")
+        assert result.gate_pass is True
+
+    def test_latest_snapshot_dict_input(self):
+        """latest_snapshot is always a single dict, not a list."""
+        data = {
+            "revenue": 500_000.0,
+            "net_income": 30_000.0,
+            "roe_percent": 7.5,
+        }
+        result = validate_step_type_consistency(data, mapping_id="calculate_to_report")
+        assert result.gate_pass is True
+        assert result.detail["records_checked"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Test: valuate → report connection (dcf.json)
+# ---------------------------------------------------------------------------
+
+class TestValuateToReport:
+    """Tests for valuate → report type consistency using dcf.json."""
+
+    def test_all_float_pass(self):
+        """All DCF output values are float → pass."""
+        data = _dcf_record()
+        result = validate_step_type_consistency(data, mapping_id="valuate_to_report")
+        assert result.gate_pass is True
+        assert result.detail["mapping"] == "valuate_to_report"
+
+    def test_string_enterprise_value_fail(self):
+        """String enterprise_value must fail."""
+        data = _dcf_record(overrides={"enterprise_value": "221009568726.49"})
+        result = validate_step_type_consistency(data, mapping_id="valuate_to_report")
+        assert result.gate_pass is False
+        assert result.mismatches[0]["field"] == "enterprise_value"
+
+    def test_none_per_share_pass(self):
+        """None per_share_value is acceptable (no shares_outstanding)."""
+        data = _dcf_record(overrides={"per_share_value": None})
+        result = validate_step_type_consistency(data, mapping_id="valuate_to_report")
+        assert result.gate_pass is True
+
+
+# ---------------------------------------------------------------------------
+# Test: valuate_relative → report connection (relative.json)
+# ---------------------------------------------------------------------------
+
+class TestValuateRelativeToReport:
+    """Tests for valuate_relative → report type consistency using relative.json."""
+
+    def test_all_float_pass(self):
+        """All relative valuation multiples are float → pass."""
+        data = _relative_record()
+        result = validate_step_type_consistency(data, mapping_id="valuate_relative_to_report")
+        assert result.gate_pass is True
+        assert result.detail["mapping"] == "valuate_relative_to_report"
+
+    def test_string_per_fail(self):
+        """String PER must fail."""
+        data = _relative_record(overrides={"per": "12.5"})
+        result = validate_step_type_consistency(data, mapping_id="valuate_relative_to_report")
+        assert result.gate_pass is False
+        assert result.mismatches[0]["field"] == "per"
+
+    def test_none_multiples_pass(self):
+        """None multiples are acceptable (data unavailable)."""
+        data = _relative_record(overrides={"per": None, "pbr": None, "ev_ebitda": None})
+        result = validate_step_type_consistency(data, mapping_id="valuate_relative_to_report")
+        assert result.gate_pass is True
+
+    def test_bool_pbr_fail(self):
+        """Boolean PBR value must be rejected."""
+        data = _relative_record(overrides={"pbr": False})
+        result = validate_step_type_consistency(data, mapping_id="valuate_relative_to_report")
+        assert result.gate_pass is False
+        assert result.mismatches[0]["field"] == "pbr"
+        assert result.mismatches[0]["actual_type"] == "bool"
+
+
+# ---------------------------------------------------------------------------
+# Test: gates YAML integration (actual YAML files → run_all_gates fires)
+# ---------------------------------------------------------------------------
+
+_REFERENCES_DIR = Path(__file__).resolve().parent.parent / "references"
+
+
+class TestGatesYamlIntegration:
+    """Integration tests: load real gates YAML files and verify step_type_consistency fires."""
+
+    @staticmethod
+    def _load_gates(yaml_file: str) -> list[dict]:
+        """Load gates config from a real YAML file."""
+        import yaml
+        gates_path = _REFERENCES_DIR / yaml_file
+        with gates_path.open("r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        return config.get("gates", [])
+
+    def test_gates_parse_yaml_fires(self):
+        """gates_parse.yaml contains step_type_parsed_to_calculator that fires."""
+        gates = self._load_gates("gates_parse.yaml")
+        stc_gates = [g for g in gates if g["type"] == "step_type_consistency"]
+        assert len(stc_gates) == 1
+        assert stc_gates[0]["id"] == "step_type_parsed_to_calculator"
+        assert stc_gates[0]["params"]["mapping_id"] == "parsed_to_calculator"
+
+        # Run through run_all_gates with valid data
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            financials = {"period_index": [_parsed_record()]}
+            (data_dir / "financials.json").write_text(
+                json.dumps(financials, ensure_ascii=False, indent=2)
+            )
+            result = run_all_gates(gates, data_dir)
+            stc_results = [g for g in result.gates if g["id"] == "step_type_parsed_to_calculator"]
+            assert len(stc_results) == 1
+            assert stc_results[0]["pass"] is True
+
+    def test_gates_calculate_yaml_fires(self):
+        """gates_calculate.yaml contains 3 step_type_consistency gates that fire."""
+        gates = self._load_gates("gates_calculate.yaml")
+        stc_gates = [g for g in gates if g["type"] == "step_type_consistency"]
+        assert len(stc_gates) == 3
+        stc_ids = {g["id"] for g in stc_gates}
+        assert stc_ids == {
+            "step_type_calculator_to_valuate",
+            "step_type_calculator_to_valuate_relative",
+            "step_type_calculate_to_report",
+        }
+
+        # Run through run_all_gates with valid metrics data
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            (data_dir / "financials.json").write_text('{"period_index": []}')
+            metrics = {
+                "ticker": "9999",
+                "metrics_series": [_metrics_record()],
+                "latest_snapshot": _metrics_record(),
+            }
+            (data_dir / "metrics.json").write_text(
+                json.dumps(metrics, ensure_ascii=False, indent=2)
+            )
+            result = run_all_gates(gates, data_dir)
+            stc_results = [g for g in result.gates if g["id"].startswith("step_type_")]
+            assert len(stc_results) == 3
+            for g in stc_results:
+                assert g["pass"] is True, f"Gate {g['id']} should pass: {g.get('detail')}"
+
+    def test_gates_integrate_yaml_fires(self):
+        """gates_integrate.yaml contains step_type_integrator_output that fires."""
+        gates = self._load_gates("gates_integrate.yaml")
+        stc_gates = [g for g in gates if g["type"] == "step_type_consistency"]
+        assert len(stc_gates) == 1
+        assert stc_gates[0]["params"]["mapping_id"] == "integrator_output"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            (data_dir / "financials.json").write_text('{"period_index": []}')
+            integrated = {
+                "annual": [
+                    {"revenue": 500_000.0, "operating_income": 50_000.0,
+                     "net_income": 30_000.0, "total_assets": 1_000_000.0,
+                     "equity": 400_000.0, "total_equity": 400_000.0,
+                     "net_assets": 400_000.0, "operating_cf": 80_000.0,
+                     "investing_cf": -20_000.0, "financing_cf": -10_000.0},
+                ],
+            }
+            (data_dir / "integrated_financials.json").write_text(
+                json.dumps(integrated, ensure_ascii=False, indent=2)
+            )
+            result = run_all_gates(gates, data_dir)
+            stc_results = [g for g in result.gates if g["id"] == "step_type_integrator_output"]
+            assert len(stc_results) == 1
+            assert stc_results[0]["pass"] is True
+
+    def test_gates_valuation_yaml_fires(self):
+        """gates_valuation.yaml contains step_type_valuate_to_report that fires."""
+        gates = self._load_gates("gates_valuation.yaml")
+        stc_gates = [g for g in gates if g["type"] == "step_type_consistency"]
+        assert len(stc_gates) == 1
+        assert stc_gates[0]["params"]["mapping_id"] == "valuate_to_report"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            (data_dir / "financials.json").write_text('{"period_index": []}')
+            (data_dir / "dcf.json").write_text(
+                json.dumps(_dcf_record(), ensure_ascii=False, indent=2)
+            )
+            result = run_all_gates(gates, data_dir)
+            stc_results = [g for g in result.gates if g["id"] == "step_type_valuate_to_report"]
+            assert len(stc_results) == 1
+            assert stc_results[0]["pass"] is True
+
+    def test_gates_valuation_relative_yaml_fires(self):
+        """gates_valuation_relative.yaml contains step_type_valuate_relative_to_report."""
+        gates = self._load_gates("gates_valuation_relative.yaml")
+        stc_gates = [g for g in gates if g["type"] == "step_type_consistency"]
+        assert len(stc_gates) == 1
+        assert stc_gates[0]["params"]["mapping_id"] == "valuate_relative_to_report"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            (data_dir / "financials.json").write_text('{"period_index": []}')
+            (data_dir / "relative.json").write_text(
+                json.dumps(_relative_record(), ensure_ascii=False, indent=2)
+            )
+            result = run_all_gates(gates, data_dir)
+            stc_results = [g for g in result.gates
+                           if g["id"] == "step_type_valuate_relative_to_report"]
+            assert len(stc_results) == 1
+            assert stc_results[0]["pass"] is True
+
+
+# ---------------------------------------------------------------------------
+# Test: mapping count validation
+# ---------------------------------------------------------------------------
+
+class TestMappingCount:
+    """Verify total mapping count for coverage tracking."""
+
+    def test_total_mappings_is_seven(self):
+        """STEP_TYPE_MAPPINGS has 7 entries (4 original + 4 new = 7 + integrator separate)."""
+        assert len(STEP_TYPE_MAPPINGS) == 7
+
+    def test_mapping_ids_complete(self):
+        """All 7 mapping IDs are present."""
+        ids = {m["id"] for m in STEP_TYPE_MAPPINGS}
+        expected = {
+            "parsed_to_calculator",
+            "calculator_to_valuate",
+            "raw_to_risk",
+            "calculator_to_valuate_relative",
+            "calculate_to_report",
+            "valuate_to_report",
+            "valuate_relative_to_report",
+        }
+        assert ids == expected
+
+    def test_integrator_output_separate(self):
+        """integrator_output is handled separately via INTEGRATOR_TYPE_MAP."""
+        ids = {m["id"] for m in STEP_TYPE_MAPPINGS}
+        assert "integrator_output" not in ids
+        assert len(INTEGRATOR_TYPE_MAP) > 0

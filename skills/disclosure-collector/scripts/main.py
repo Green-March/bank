@@ -17,11 +17,11 @@ from skills.common.auth import JQuantsAuth, JQuantsAuthError
 if __name__ == "__main__":
     from edinet import EdinetError, collect_edinet_pdfs, collect_edinet_reports, purge_corrupted_cache
     from shares import extract_shares_outstanding
-    from statements import StatementsClient, StatementsError
+    from statements import StatementsClient, StatementsError, normalize_numeric_fields
 else:
     from .edinet import EdinetError, collect_edinet_pdfs, collect_edinet_reports, purge_corrupted_cache
     from .shares import extract_shares_outstanding
-    from .statements import StatementsClient, StatementsError
+    from .statements import StatementsClient, StatementsError, normalize_numeric_fields
 
 load_dotenv()
 
@@ -65,21 +65,33 @@ def collect_jquants(code: str, output_dir: str | None = None) -> dict:
 
     auth = JQuantsAuth()
     client = StatementsClient(auth)
-    statements = client.fetch(code)
+    raw_statements = client.fetch(code)
+
+    if not isinstance(raw_statements, list):
+        raise StatementsError(
+            f"fetch() の戻り値が list ではありません: {type(raw_statements).__name__}"
+        )
 
     today = date.today().isoformat()
+
+    # raw 保存 (変換前の値を監査用に保全)
+    raw_filename = f"statements_raw_{today}.json"
+    raw_save_path = output_path / raw_filename
+    with open(raw_save_path, "w", encoding="utf-8") as f:
+        json.dump(raw_statements, f, ensure_ascii=False, indent=2)
+
+    # 数値型正規化して保存
+    statements = [normalize_numeric_fields(s) for s in raw_statements]
     filename = f"statements_{today}.json"
     save_path = output_path / filename
-
     with open(save_path, "w", encoding="utf-8") as f:
         json.dump(statements, f, ensure_ascii=False, indent=2)
 
     return {
         "saved_path": str(save_path),
-        "record_count": len(statements) if isinstance(statements, list) else 0,
-        "shares_outstanding": extract_shares_outstanding(
-            statements if isinstance(statements, list) else []
-        ),
+        "raw_saved_path": str(raw_save_path),
+        "record_count": len(statements),
+        "shares_outstanding": extract_shares_outstanding(raw_statements),
     }
 
 

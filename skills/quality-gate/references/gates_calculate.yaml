@@ -21,3 +21,24 @@ gates:
       equity_ratio_percent:
         min: 0
         max: 100
+
+  - id: step_type_calculator_to_valuate
+    type: step_type_consistency
+    params:
+      mapping_id: calculator_to_valuate
+      file: metrics.json
+      data_key: metrics_series
+
+  - id: step_type_calculator_to_valuate_relative
+    type: step_type_consistency
+    params:
+      mapping_id: calculator_to_valuate_relative
+      file: metrics.json
+      data_key: metrics_series
+
+  - id: step_type_calculate_to_report
+    type: step_type_consistency
+    params:
+      mapping_id: calculate_to_report
+      file: metrics.json
+      data_key: latest_snapshot

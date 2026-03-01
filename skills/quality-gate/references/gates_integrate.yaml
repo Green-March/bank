@@ -1,7 +1,14 @@
-# Gate for integrate step: integrated output file exists.
+# Gate for integrate step: integrated output file exists with correct types.
 gates:
   - id: integrate_output
     type: file_exists
     params:
       required_files:
         - "integrated_financials.json"
+
+  - id: step_type_integrator_output
+    type: step_type_consistency
+    params:
+      mapping_id: integrator_output
+      file: integrated_financials.json
+      data_key: annual
