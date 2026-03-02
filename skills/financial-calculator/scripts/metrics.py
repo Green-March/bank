@@ -276,6 +276,8 @@ def _build_series_for_group(records: Sequence[FinancialRecord]) -> list[dict[str
             "revenue_growth_yoy_percent": _round_num(revenue_growth),
             "profit_growth_yoy_percent": _round_num(profit_growth),
             "equity_ratio_percent": _round_num(equity_ratio),
+            "total_assets": _round_num(record.total_assets),
+            "equity": _round_num(record.equity),
             "operating_cf": _round_num(record.operating_cf),
             "free_cash_flow": _round_num(free_cash_flow),
         }

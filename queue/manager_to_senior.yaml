@@ -1,30 +1,44 @@
 queue:
-  - request_id: "req_056"
-    objective: "quality-gate step_type_consistency ゲートを pipeline gates YAML に統合し、パイプライン実行時に実際に発火するようにする。残り40%のマッピング (calculate→inventory, diamond→report 等) も定義してカバレッジ100%を目指す"
+  - request_id: "req_061"
+    objective: "market_cap → relative valuation データパス構築。web-researcher が取得済みの market_cap/PER/PBR データが valuate_relative に到達しない問題を修正する。選択肢A: valuate_relative が integrated_financials.json の market indicators も読むよう拡張。選択肢B: market-data-collector スキルをパイプラインに接続。全5銘柄で relative valuation が N/A になっている根本原因を解決すること。テスト追加必須。"
     ticker: null
     universe: null
-    analysis_type: "infrastructure"
+    analysis_type: "skill_enhancement"
     timeframe: null
-    output_format: ["yaml", "test"]
+    output_format: null
     priority: "high"
     due_date: "2026-03-01"
     constraints:
-      - "既存の gates YAML ファイル (gates_parse.yaml 等) にエントリを追加する"
-      - "step_type_consistency ゲートコード・テストは S39 req_053 で実装済み。YAML 統合のみ"
-      - "残りマッピング (calculate→inventory, diamond→report) を定義してカバレッジ60%→100%"
-      - "パイプライン実行で実際にゲートが発火することを確認するテストを追加"
+      - "既存テストを壊さないこと"
+      - "パイプライン13ステップの互換性を維持"
+      - "修正後の動作確認は req_063 の E2E で実施"
 
-  - request_id: "req_057"
-    objective: "disclosure-collector の J-Quants パーサーで string numeric を数値型に正規化する。S39 req_055 で発見された raw データの string numeric 残存問題の根本対策"
+  - request_id: "req_062"
+    objective: "quality-gate に value_presence ゲートタイプを追加。現ゲートは型整合性のみ検証しており、harmonize 出力が BS 0%/CF 0% null でも pass してしまう。null 率閾値による検証を追加し、severity: warn レベルで段階的に導入する。validators.py + gates YAML + テスト追加。"
     ticker: null
     universe: null
-    analysis_type: "infrastructure"
+    analysis_type: "skill_enhancement"
     timeframe: null
-    output_format: ["test"]
+    output_format: null
     priority: "medium"
     due_date: "2026-03-01"
     constraints:
-      - "J-Quants API レスポンスの数値フィールドが string で返る箇所を特定する"
-      - "collector/parser レベルで string→numeric 変換を実装する"
-      - "下流 (financial-calculator coercion) との二重変換でも問題ないことを確認"
-      - "既存テストが壊れないこと"
+      - "既存テストを壊さないこと"
+      - "severity: warn で導入し、パイプライン停止はしない"
+      - "gates YAML 13/13 カバレッジを維持"
+
+  - request_id: "req_063"
+    objective: "9716 乃村工藝社でフルパイプライン13ステップ E2E 検証を実施。req_061 の relative valuation データパス修正後に実施し、relative valuation が有効に算出されることを確認する。13/13 ステップ完了 + 13/13 gates PASS を目標とする。"
+    ticker: "9716"
+    universe: null
+    analysis_type: "full_pipeline_e2e"
+    timeframe: "5y"
+    output_format: ["md", "html"]
+    priority: "medium"
+    due_date: "2026-03-01"
+    constraints:
+      - "req_061 完了後に実施すること"
+      - "relative valuation が non-null で算出されることを検証"
+      - "全13ステップ + 全13ゲート PASS を確認"
+      - "利用データソースを明記する"
+      - "前提とリスクを明示する"

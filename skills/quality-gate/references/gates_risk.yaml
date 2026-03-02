@@ -34,3 +34,9 @@ gates:
       rules:
         summary.total_risks:
           min: 0
+
+  - id: step_type_risk_analyzer_output
+    type: step_type_consistency
+    params:
+      mapping_id: risk_analyzer_output
+      file: risk_analysis.json

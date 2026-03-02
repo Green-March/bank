@@ -129,10 +129,16 @@ def _safe_divide(numerator: float | None, denominator: float | None) -> float | 
     return numerator / denominator
 
 
-def compute_relative_metrics(metrics: dict[str, Any]) -> RelativeMetrics:
+def compute_relative_metrics(
+    metrics: dict[str, Any],
+    market_data: dict[str, Any] | None = None,
+) -> RelativeMetrics:
     """metrics.json の latest_snapshot からPER/PBR/EV-EBITDAを計算する。
 
     データ補完フォールバック（優先度順）:
+      0. market_data の indicators（harmonized_financials.json 由来）
+         - --market-data で渡された場合、indicators.market_cap / indicators.shares_outstanding
+           を最優先で使用。web-researcher が Yahoo Finance から取得したリアルタイムデータ。
       1. latest_snapshot の直接値（market_cap, net_income, equity 等）
          - market_data_collector が listed_info.json / market_data.json 経由で
            時価総額を latest_snapshot.market_cap に格納している場合はこれを使用。
@@ -151,14 +157,24 @@ def compute_relative_metrics(metrics: dict[str, Any]) -> RelativeMetrics:
     series = metrics.get("metrics_series") or []
     sources: dict[str, str] = {}
 
-    market_cap = snapshot.get("market_cap")
+    # market_data (harmonized_financials.json) の indicators を最優先で取得
+    indicators = (market_data.get("indicators") or {}) if market_data else {}
+
+    market_cap = indicators.get("market_cap")
+    if market_cap is not None:
+        sources["market_cap"] = "market_data.indicators"
+
+    # snapshot からの取得（market_data で未取得の場合のみ）
+    if market_cap is None:
+        market_cap = snapshot.get("market_cap")
+        if market_cap is not None:
+            sources["market_cap"] = "latest_snapshot"
+
     net_income = snapshot.get("net_income")
     equity = snapshot.get("equity")
     total_debt = snapshot.get("total_debt", 0) or 0
     cash = snapshot.get("cash_and_equivalents", 0) or 0
 
-    if market_cap is not None:
-        sources["market_cap"] = "latest_snapshot"
     if net_income is not None:
         sources["net_income"] = "latest_snapshot"
     if equity is not None:

@@ -95,6 +95,15 @@ class JsonFileValueRangeResult:
 
 
 @dataclass
+class ValuePresenceResult:
+    """Result of value presence validation."""
+
+    gate_pass: bool
+    field_results: dict[str, dict]  # per-field {non_null_count, total, presence_rate, threshold, pass}
+    summary: dict  # {fields_checked, fields_passed, fields_failed}
+
+
+@dataclass
 class StepTypeConsistencyResult:
     """Result of step-to-step type consistency validation."""
 
@@ -109,6 +118,7 @@ class GateResults:
 
     overall_pass: bool
     gates: list[dict]
+    warnings: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -479,6 +489,65 @@ def validate_json_file_value_range(
     )
 
 
+def validate_value_presence(
+    data: dict,
+    fields: dict[str, dict],
+) -> ValuePresenceResult:
+    """Check that specified fields have non-null values above a threshold.
+
+    Args:
+        data: JSON file content to inspect.
+        fields: {"field_name": {"path": "indicators.market_cap", "threshold": 0.8}}
+            - path: dot-separated key path within data
+            - threshold: minimum non-null rate (0.0-1.0)
+
+    For single values: presence_rate is 1.0 (non-null) or 0.0 (null).
+    For list values (e.g. periods): presence_rate = non-null count / total count.
+    """
+    field_results: dict[str, dict] = {}
+    all_pass = True
+
+    for field_name, spec in fields.items():
+        path = spec.get("path", field_name)
+        threshold = spec.get("threshold", 0.5)
+
+        value = _resolve_nested(data, path)
+
+        if isinstance(value, list):
+            total = len(value)
+            non_null = sum(1 for v in value if v is not None)
+        else:
+            total = 1
+            non_null = 1 if value is not None else 0
+
+        presence_rate = non_null / total if total > 0 else 0.0
+        passed = presence_rate >= threshold
+
+        field_results[field_name] = {
+            "non_null_count": non_null,
+            "total": total,
+            "presence_rate": round(presence_rate, 4),
+            "threshold": threshold,
+            "pass": passed,
+        }
+
+        if not passed:
+            all_pass = False
+
+    fields_checked = len(field_results)
+    fields_passed = sum(1 for f in field_results.values() if f["pass"])
+
+    return ValuePresenceResult(
+        gate_pass=all_pass,
+        field_results=field_results,
+        summary={
+            "fields_checked": fields_checked,
+            "fields_passed": fields_passed,
+            "fields_failed": fields_checked - fields_passed,
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Step type consistency mappings & validator
 # ---------------------------------------------------------------------------
@@ -591,6 +660,49 @@ STEP_TYPE_MAPPINGS: list[dict] = [
             "per": (int, float),
             "pbr": (int, float),
             "ev_ebitda": (int, float),
+        },
+    },
+    {
+        "id": "web_research_to_harmonize",
+        "from_step": "web_research",
+        "to_step": "harmonize",
+        "description": "research.json top-level structure → harmonize input validation",
+        "field_type_map": {
+            "ticker": (str,),
+            "collected_at": (str,),
+            "sources": (dict,),
+            "metadata": (dict,),
+        },
+    },
+    {
+        "id": "harmonize_to_integrate",
+        "from_step": "harmonize",
+        "to_step": "integrate",
+        "description": "harmonized_financials.json annual pl/bs/cf numeric → integrator input float|None",
+        "field_type_map": {
+            "revenue": (int, float),
+            "operating_income": (int, float),
+            "ordinary_income": (int, float),
+            "net_income": (int, float),
+            "gross_profit": (int, float),
+            "total_assets": (int, float),
+            "total_equity": (int, float),
+            "net_assets": (int, float),
+            "operating_cf": (int, float),
+            "investing_cf": (int, float),
+            "financing_cf": (int, float),
+        },
+    },
+    {
+        "id": "risk_analyzer_output",
+        "from_step": "risk-analyzer",
+        "to_step": "reporter",
+        "description": "risk_analysis.json top-level structure → report renderer validation",
+        "field_type_map": {
+            "ticker": (str,),
+            "analyzed_at": (str,),
+            "source_documents": (list,),
+            "risk_categories": (dict,),
         },
     },
 ]
@@ -833,6 +945,35 @@ def run_all_gates(
                 },
             })
 
+        elif gate_type == "value_presence":
+            data_file = params.get("file", "")
+            json_path = data_dir / data_file if data_file else None
+            if json_path and json_path.exists():
+                with json_path.open("r", encoding="utf-8") as f:
+                    file_data = json.load(f)
+            elif data_file:
+                results.append({
+                    "id": gate_id,
+                    "pass": False,
+                    "severity": gate.get("severity", "error"),
+                    "detail": {"error": f"{data_file} not found"},
+                })
+                continue
+            else:
+                file_data = financials or {}
+
+            vp_fields = params.get("fields", {})
+            r = validate_value_presence(file_data, vp_fields)
+            results.append({
+                "id": gate_id,
+                "pass": r.gate_pass,
+                "severity": gate.get("severity", "error"),
+                "detail": {
+                    "field_results": r.field_results,
+                    **r.summary,
+                },
+            })
+
         elif gate_type == "step_type_consistency":
             mapping_id = params.get("mapping_id")
             data_file = params.get("file", "")
@@ -850,6 +991,7 @@ def run_all_gates(
                 results.append({
                     "id": gate_id,
                     "pass": False,
+                    "severity": gate.get("severity", "error"),
                     "detail": {"error": f"{data_file} not found"},
                 })
                 continue
@@ -876,5 +1018,15 @@ def run_all_gates(
                 "detail": {"error": f"unknown gate type: {gate_type}"},
             })
 
-    overall = all(g["pass"] for g in results) if results else False
-    return GateResults(overall_pass=overall, gates=results)
+        # Inject severity into the last appended result if not already set
+        if results and "severity" not in results[-1]:
+            results[-1]["severity"] = gate.get("severity", "error")
+
+    # Only error-severity gates affect overall_pass; warn gates are advisory
+    overall = (
+        all(g["pass"] for g in results if g.get("severity", "error") == "error")
+        if results
+        else False
+    )
+    warnings = [g["id"] for g in results if g.get("severity") == "warn" and not g["pass"]]
+    return GateResults(overall_pass=overall, gates=results, warnings=warnings)

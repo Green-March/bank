@@ -3,4 +3,10 @@ gates:
     type: file_exists
     params:
       required_files:
-        - "web_research/research.json"
+        - "research.json"
+
+  - id: step_type_web_research_to_harmonize
+    type: step_type_consistency
+    params:
+      mapping_id: web_research_to_harmonize
+      file: research.json

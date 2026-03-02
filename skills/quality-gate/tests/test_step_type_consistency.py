@@ -90,6 +90,30 @@ def _risk_record(*, overrides: dict | None = None) -> dict:
     return record
 
 
+def _risk_analysis_data(*, overrides: dict | None = None) -> dict:
+    """Create a sample risk_analysis.json top-level record."""
+    record = {
+        "ticker": "9999",
+        "analyzed_at": "2026-03-01T00:00:00+00:00",
+        "source_documents": ["E12345"],
+        "risk_categories": {
+            "financial": [{"text": "リスク情報", "source": "E12345",
+                           "severity": "medium"}],
+            "business": [], "regulatory": [],
+            "operational": [], "other": [],
+        },
+        "summary": {
+            "total_risks": 1,
+            "by_category": {"financial": 1, "business": 0, "regulatory": 0,
+                            "operational": 0, "other": 0},
+            "by_severity": {"high": 0, "medium": 1, "low": 0},
+        },
+    }
+    if overrides:
+        record.update(overrides)
+    return record
+
+
 def _dcf_record(*, overrides: dict | None = None) -> dict:
     """Create a sample DCF valuation output record."""
     record = {
@@ -130,6 +154,63 @@ def _relative_record(*, overrides: dict | None = None) -> dict:
     }
     if overrides:
         record.update(overrides)
+    return record
+
+
+def _web_research_record(*, overrides: dict | None = None) -> dict:
+    """Create a sample web research output (research.json top-level)."""
+    record = {
+        "ticker": "9999",
+        "company_name": None,
+        "collected_at": "2026-03-01T12:00:00+09:00",
+        "sources": {
+            "yahoo": {"url": "https://example.com", "collected": True, "data": {}, "error": None},
+        },
+        "metadata": {
+            "source_count": 4,
+            "success_count": 1,
+            "errors": [],
+            "accessed_domains": ["finance.yahoo.co.jp"],
+            "robots_checked": True,
+        },
+    }
+    if overrides:
+        record.update(overrides)
+    return record
+
+
+def _harmonized_record(*, overrides: dict | None = None) -> dict:
+    """Create a sample harmonized annual entry with bs/pl/cf sub-dicts."""
+    record = {
+        "period_end": "2024-03-31",
+        "fiscal_year": 2024,
+        "quarter": "FY",
+        "source": "web:yahoo",
+        "bs": {
+            "total_assets": None,
+            "total_equity": None,
+            "net_assets": None,
+        },
+        "pl": {
+            "revenue": 500_000.0,
+            "operating_income": 50_000.0,
+            "ordinary_income": None,
+            "net_income": None,
+            "gross_profit": None,
+        },
+        "cf": {
+            "operating_cf": None,
+            "investing_cf": None,
+            "financing_cf": None,
+        },
+    }
+    if overrides:
+        for key, value in overrides.items():
+            if "." in key:
+                section, field = key.split(".", 1)
+                record[section][field] = value
+            else:
+                record[key] = value
     return record
 
 
@@ -601,6 +682,118 @@ class TestValuateRelativeToReport:
 
 
 # ---------------------------------------------------------------------------
+# Test: web_research → harmonize connection
+# ---------------------------------------------------------------------------
+
+class TestWebResearchToHarmonize:
+    """Tests for web_research → harmonize type consistency."""
+
+    def test_valid_structure_pass(self):
+        """Valid research.json top-level structure passes."""
+        data = _web_research_record()
+        result = validate_step_type_consistency(data, mapping_id="web_research_to_harmonize")
+        assert result.gate_pass is True
+        assert result.detail["mapping"] == "web_research_to_harmonize"
+
+    def test_ticker_int_fail(self):
+        """Integer ticker must fail (expected str)."""
+        data = _web_research_record(overrides={"ticker": 9999})
+        result = validate_step_type_consistency(data, mapping_id="web_research_to_harmonize")
+        assert result.gate_pass is False
+        assert result.mismatches[0]["field"] == "ticker"
+        assert result.mismatches[0]["actual_type"] == "int"
+
+    def test_sources_list_fail(self):
+        """sources as list instead of dict must fail."""
+        data = _web_research_record(overrides={"sources": ["yahoo", "kabutan"]})
+        result = validate_step_type_consistency(data, mapping_id="web_research_to_harmonize")
+        assert result.gate_pass is False
+        assert result.mismatches[0]["field"] == "sources"
+        assert result.mismatches[0]["actual_type"] == "list"
+
+    def test_metadata_string_fail(self):
+        """metadata as string instead of dict must fail."""
+        data = _web_research_record(overrides={"metadata": "invalid"})
+        result = validate_step_type_consistency(data, mapping_id="web_research_to_harmonize")
+        assert result.gate_pass is False
+        assert result.mismatches[0]["field"] == "metadata"
+
+    def test_none_collected_at_pass(self):
+        """None collected_at is acceptable (missing data)."""
+        data = _web_research_record(overrides={"collected_at": None})
+        result = validate_step_type_consistency(data, mapping_id="web_research_to_harmonize")
+        assert result.gate_pass is True
+
+    def test_none_sources_pass(self):
+        """None sources is acceptable."""
+        data = _web_research_record(overrides={"sources": None})
+        result = validate_step_type_consistency(data, mapping_id="web_research_to_harmonize")
+        assert result.gate_pass is True
+
+
+# ---------------------------------------------------------------------------
+# Test: harmonize → integrate connection
+# ---------------------------------------------------------------------------
+
+class TestHarmonizeToIntegrate:
+    """Tests for harmonize → integrate type consistency."""
+
+    def test_all_float_pass(self):
+        """Harmonized annual with float PL values passes."""
+        data = [_harmonized_record()]
+        result = validate_step_type_consistency(data, mapping_id="harmonize_to_integrate")
+        assert result.gate_pass is True
+        assert result.detail["mapping"] == "harmonize_to_integrate"
+
+    def test_int_values_pass(self):
+        """int values are accepted alongside float."""
+        data = [_harmonized_record(overrides={"pl.revenue": 500_000, "pl.operating_income": 50_000})]
+        result = validate_step_type_consistency(data, mapping_id="harmonize_to_integrate")
+        assert result.gate_pass is True
+
+    def test_string_numeric_fail(self):
+        """String numeric revenue must fail."""
+        data = [_harmonized_record(overrides={"pl.revenue": "500000"})]
+        result = validate_step_type_consistency(data, mapping_id="harmonize_to_integrate")
+        assert result.gate_pass is False
+        assert result.mismatches[0]["field"] == "revenue"
+        assert result.mismatches[0]["actual_type"] == "str"
+
+    def test_none_values_pass(self):
+        """None values are acceptable (web data often has null BS/CF)."""
+        data = [_harmonized_record()]  # BS and CF are already None
+        result = validate_step_type_consistency(data, mapping_id="harmonize_to_integrate")
+        assert result.gate_pass is True
+
+    def test_bool_value_fail(self):
+        """Boolean revenue must be rejected."""
+        data = [_harmonized_record(overrides={"pl.revenue": True})]
+        result = validate_step_type_consistency(data, mapping_id="harmonize_to_integrate")
+        assert result.gate_pass is False
+        assert result.mismatches[0]["actual_type"] == "bool"
+
+    def test_multiple_records_mixed(self):
+        """Multiple annual records: mismatch in second detected."""
+        data = [
+            _harmonized_record(),
+            _harmonized_record(overrides={"pl.operating_income": "50000"}),
+        ]
+        result = validate_step_type_consistency(data, mapping_id="harmonize_to_integrate")
+        assert result.gate_pass is False
+        assert result.mismatches[0]["record_index"] == 1
+        assert result.mismatches[0]["field"] == "operating_income"
+
+    def test_all_null_web_data_pass(self):
+        """Harmonized record with all null financials still passes (missing != wrong type)."""
+        data = [_harmonized_record(overrides={
+            "pl.revenue": None, "pl.operating_income": None,
+            "pl.ordinary_income": None, "pl.net_income": None, "pl.gross_profit": None,
+        })]
+        result = validate_step_type_consistency(data, mapping_id="harmonize_to_integrate")
+        assert result.gate_pass is True
+
+
+# ---------------------------------------------------------------------------
 # Test: gates YAML integration (actual YAML files → run_all_gates fires)
 # ---------------------------------------------------------------------------
 
@@ -714,6 +907,51 @@ class TestGatesYamlIntegration:
             assert len(stc_results) == 1
             assert stc_results[0]["pass"] is True
 
+    def test_gates_web_research_yaml_fires(self):
+        """gates_web_research.yaml contains step_type_web_research_to_harmonize that fires."""
+        gates = self._load_gates("gates_web_research.yaml")
+        stc_gates = [g for g in gates if g["type"] == "step_type_consistency"]
+        assert len(stc_gates) == 1
+        assert stc_gates[0]["id"] == "step_type_web_research_to_harmonize"
+        assert stc_gates[0]["params"]["mapping_id"] == "web_research_to_harmonize"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            (data_dir / "financials.json").write_text('{"period_index": []}')
+            # Gate YAML references "research.json" at data_dir root (step output_dir)
+            (data_dir / "research.json").write_text(
+                json.dumps(_web_research_record(), ensure_ascii=False, indent=2)
+            )
+            result = run_all_gates(gates, data_dir)
+            stc_results = [g for g in result.gates
+                           if g["id"] == "step_type_web_research_to_harmonize"]
+            assert len(stc_results) == 1
+            assert stc_results[0]["pass"] is True
+
+    def test_gates_harmonize_yaml_fires(self):
+        """gates_harmonize.yaml contains step_type_harmonize_to_integrate that fires."""
+        gates = self._load_gates("gates_harmonize.yaml")
+        stc_gates = [g for g in gates if g["type"] == "step_type_consistency"]
+        assert len(stc_gates) == 1
+        assert stc_gates[0]["id"] == "step_type_harmonize_to_integrate"
+        assert stc_gates[0]["params"]["mapping_id"] == "harmonize_to_integrate"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            (data_dir / "financials.json").write_text('{"period_index": []}')
+            harmonized = {
+                "ticker": "9999",
+                "annual": [_harmonized_record()],
+            }
+            (data_dir / "harmonized_financials.json").write_text(
+                json.dumps(harmonized, ensure_ascii=False, indent=2)
+            )
+            result = run_all_gates(gates, data_dir)
+            stc_results = [g for g in result.gates
+                           if g["id"] == "step_type_harmonize_to_integrate"]
+            assert len(stc_results) == 1
+            assert stc_results[0]["pass"] is True
+
     def test_gates_valuation_relative_yaml_fires(self):
         """gates_valuation_relative.yaml contains step_type_valuate_relative_to_report."""
         gates = self._load_gates("gates_valuation_relative.yaml")
@@ -733,6 +971,68 @@ class TestGatesYamlIntegration:
             assert len(stc_results) == 1
             assert stc_results[0]["pass"] is True
 
+    def test_gates_risk_yaml_fires(self):
+        """gates_risk.yaml contains step_type_risk_analyzer_output that fires."""
+        gates = self._load_gates("gates_risk.yaml")
+        stc_gates = [g for g in gates if g["type"] == "step_type_consistency"]
+        assert len(stc_gates) == 1
+        assert stc_gates[0]["id"] == "step_type_risk_analyzer_output"
+        assert stc_gates[0]["params"]["mapping_id"] == "risk_analyzer_output"
+
+        # Run through run_all_gates with valid risk_analysis.json
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            (data_dir / "financials.json").write_text('{"period_index": []}')
+            risk_data = _risk_analysis_data()
+            (data_dir / "risk_analysis.json").write_text(
+                json.dumps(risk_data, ensure_ascii=False, indent=2)
+            )
+            result = run_all_gates(gates, data_dir)
+            stc_results = [g for g in result.gates
+                           if g["id"] == "step_type_risk_analyzer_output"]
+            assert len(stc_results) == 1
+            assert stc_results[0]["pass"] is True
+
+    def test_gates_risk_yaml_risk_categories_not_dict_fails(self):
+        """risk_analyzer_output gate fails when risk_categories is not dict."""
+        data = _risk_analysis_data()
+        data["risk_categories"] = "not a dict"
+        result = validate_step_type_consistency(data, mapping_id="risk_analyzer_output")
+        assert result.gate_pass is False
+        assert any(m["field"] == "risk_categories" for m in result.mismatches)
+
+    def test_gates_risk_yaml_source_documents_not_list_fails(self):
+        """risk_analyzer_output gate fails when source_documents is not list."""
+        data = _risk_analysis_data()
+        data["source_documents"] = "E12345"
+        result = validate_step_type_consistency(data, mapping_id="risk_analyzer_output")
+        assert result.gate_pass is False
+        assert any(m["field"] == "source_documents" for m in result.mismatches)
+
+    def test_gates_risk_yaml_ticker_not_str_fails(self):
+        """risk_analyzer_output gate fails when ticker is not str."""
+        data = _risk_analysis_data()
+        data["ticker"] = 9999
+        result = validate_step_type_consistency(data, mapping_id="risk_analyzer_output")
+        assert result.gate_pass is False
+        assert any(m["field"] == "ticker" for m in result.mismatches)
+
+    def test_gates_risk_yaml_all_gates_pass(self):
+        """All 4 gates in gates_risk.yaml pass with valid data."""
+        gates = self._load_gates("gates_risk.yaml")
+        assert len(gates) == 4
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_dir = Path(tmpdir)
+            (data_dir / "financials.json").write_text('{"period_index": []}')
+            risk_data = _risk_analysis_data()
+            (data_dir / "risk_analysis.json").write_text(
+                json.dumps(risk_data, ensure_ascii=False, indent=2)
+            )
+            result = run_all_gates(gates, data_dir)
+            assert result.overall_pass is True
+            assert len(result.gates) == 4
+
 
 # ---------------------------------------------------------------------------
 # Test: mapping count validation
@@ -741,12 +1041,12 @@ class TestGatesYamlIntegration:
 class TestMappingCount:
     """Verify total mapping count for coverage tracking."""
 
-    def test_total_mappings_is_seven(self):
-        """STEP_TYPE_MAPPINGS has 7 entries (4 original + 4 new = 7 + integrator separate)."""
-        assert len(STEP_TYPE_MAPPINGS) == 7
+    def test_total_mappings_is_ten(self):
+        """STEP_TYPE_MAPPINGS has 10 entries (7 original + 2 web path + 1 risk output)."""
+        assert len(STEP_TYPE_MAPPINGS) == 10
 
     def test_mapping_ids_complete(self):
-        """All 7 mapping IDs are present."""
+        """All 10 mapping IDs are present."""
         ids = {m["id"] for m in STEP_TYPE_MAPPINGS}
         expected = {
             "parsed_to_calculator",
@@ -756,6 +1056,9 @@ class TestMappingCount:
             "calculate_to_report",
             "valuate_to_report",
             "valuate_relative_to_report",
+            "web_research_to_harmonize",
+            "harmonize_to_integrate",
+            "risk_analyzer_output",
         }
         assert ids == expected
 

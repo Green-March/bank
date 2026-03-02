@@ -2,124 +2,184 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_s40_001_rev4"
-  timestamp: "2026-03-01T15:40:00+09:00"
-  revision_note: "gates_integrate data_key:annual追加 + calculate_to_report検証対象をlatest_snapshotに変更"
+  plan_id: "plan_s42_002"
+  revision: 2
+  previous_plan_id: "plan_s42_001"
+  timestamp: "2026-03-01T16:45:00+09:00"
 
-  objective: "S39 /weird で発見された2つの技術的負債を解消する"
+  revision_notes: |
+    Reviewer指摘2点を反映:
+    1. T1: --market-data 未指定/指定時の回帰テスト明記 + パイプライン後方互換検証を先行
+    2. T2: severity:warn の pipeline-runner 集計仕様を明確化 + T3 の PASS 条件定義を一致
 
-  tasks:
-    - task_id: "task_056"
-      request_id: "req_056"
-      title: "quality-gate step_type_consistency gates YAML 統合 + カバレッジ100%"
+  objective: |
+    3件のタスク (req_061-063) を実行する。
+    req_061: market_cap → relative valuation データパス構築
+    req_062: quality-gate に value_presence ゲートタイプ追加
+    req_063: 9716 乃村工藝社フルパイプライン13ステップ E2E
+
+  background: |
+    S41で発見された2つの課題が req_061/062 の起源。
+    - web-researcher は Yahoo Finance から market_cap/PER/PBR を取得し harmonized_financials.json の indicators セクションに保存する
+    - しかし financial-integrator は indicators セクションを無視し、financial-calculator も market_cap を含まない
+    - 結果として valuate_relative の入力 metrics.json に market_cap がなく、PER/PBR/EV-EBITDA 全て null
+    - また gates は型整合性のみ検証し、値の存在率（null率）を検証しないため、BS 0%/CF 0% null でも pass
+
+  task_decomposition:
+    - task_id: "T1_req061"
+      title: "market_cap → relative valuation データパス構築"
       assigned_to: junior1
       priority: high
       description: |
-        ## A. 新規4マッピング (validators.py STEP_TYPE_MAPPINGS)
-        既存4: parsed_to_calculator, calculator_to_valuate, raw_to_risk, integrator_output
-        新規4: calculator_to_valuate_relative, calculate_to_report, valuate_to_report, valuate_relative_to_report
+        valuation-calculator の valuate_relative サブコマンドを拡張し、
+        harmonized_financials.json から market indicators を読み取れるようにする。
+      deliverables:
+        - "valuation-calculator/scripts/main.py に --market-data CLI オプション追加（optional引数）"
+        - "valuation-calculator/scripts/valuation.py の compute_relative_metrics() を拡張し、market_data ファイルから indicators.market_cap/shares_outstanding を読む"
+        - "pipeline-runner/references/example_pipeline.yaml の valuate_relative コマンドに --market-data data/{ticker}/harmonized/harmonized_financials.json を追加"
+        - "テスト追加（詳細は regression_tests セクション参照）"
+        - "既存テスト全 PASS 確認"
+      implementation_approach: |
+        選択肢A を採用: valuate_relative が直接 harmonized_financials.json を読む。
+        理由:
+        1. 変更箇所が最小（valuation-calculator + pipeline YAML のみ）
+        2. integrator/calculator の責務を変えない
+        3. harmonized_financials.json は harmonize ステップで既に生成されており、
+           valuate_relative は calculate に依存するため harmonize は常に先行完了
+      regression_tests:
+        - name: "後方互換テスト: --market-data 未指定"
+          scenario: "--market-data を指定しない場合、従来通り metrics.json のみから計算を試み、market_cap がなければ PER/PBR は None"
+          expected: "既存の全テストが変更なしで PASS"
+        - name: "正常系テスト: --market-data 指定"
+          scenario: "--market-data に indicators.market_cap を含む JSON ファイルを指定"
+          expected: "PER = market_cap / net_income, PBR = market_cap / equity が正しく計算される"
+        - name: "エッジケース: --market-data ファイル不在"
+          scenario: "--market-data に存在しないファイルパスを指定"
+          expected: "FileNotFoundError を適切にハンドルし、market_cap = None として従来動作にフォールバック"
+        - name: "エッジケース: --market-data に indicators キーがない"
+          scenario: "--market-data に indicators セクションを含まない JSON を指定"
+          expected: "market_cap = None として従来動作にフォールバック"
+        - name: "パイプライン互換テスト"
+          scenario: "既存データ（4971等）で pipeline YAML 更新後にパイプライン実行"
+          expected: "13ステップ正常完了 + relative.json に non-null 値"
+      acceptance_criteria:
+        - "valuation-calculator の既存テスト全 PASS"
+        - "--market-data なしで従来通り動作（後方互換確認済み）"
+        - "--market-data ありで PER/PBR/EV-EBITDA が non-null"
+        - "--market-data ファイル不在/indicators キー不在時にエラーせず graceful degradation"
+        - "pipeline YAML 更新後もパイプライン全体が正常動作"
 
-        ## B. 7エントリを5つの gates YAML に追加（パラメータ確定版）
-
-        ### gates_parse.yaml (1エントリ)
-        ```yaml
-        - id: step_type_parsed_to_calculator
-          type: step_type_consistency
-          params:
-            mapping_id: parsed_to_calculator
-            data_key: period_index
-        ```
-
-        ### gates_calculate.yaml (3エントリ)
-        検証対象の棲み分け:
-        - calculator_to_valuate → metrics_series (valuate入力)
-        - calculator_to_valuate_relative → metrics_series (valuate_relative入力)
-        - calculate_to_report → latest_snapshot (reporter入力。metrics_seriesは上記2つで検証済みのため、reporterが主に参照するlatest_snapshotを検証)
-        ```yaml
-        - id: step_type_calculator_to_valuate
-          type: step_type_consistency
-          params:
-            mapping_id: calculator_to_valuate
-            file: metrics.json
-            data_key: metrics_series
-
-        - id: step_type_calculator_to_valuate_relative
-          type: step_type_consistency
-          params:
-            mapping_id: calculator_to_valuate_relative
-            file: metrics.json
-            data_key: metrics_series
-
-        - id: step_type_calculate_to_report
-          type: step_type_consistency
-          params:
-            mapping_id: calculate_to_report
-            file: metrics.json
-            data_key: latest_snapshot
-        ```
-
-        ### gates_integrate.yaml (1エントリ)
-        data_key: annual で年次配列内の bs/pl/cf 数値型を検証。
-        四半期データ (quarterly) は将来の拡張として別ゲート化可能。
-        ```yaml
-        - id: step_type_integrator_output
-          type: step_type_consistency
-          params:
-            mapping_id: integrator_output
-            file: integrated_financials.json
-            data_key: annual
-        ```
-
-        ### gates_valuation.yaml (1エントリ)
-        ```yaml
-        - id: step_type_valuate_to_report
-          type: step_type_consistency
-          params:
-            mapping_id: valuate_to_report
-            file: dcf.json
-        ```
-
-        ### gates_valuation_relative.yaml (1エントリ)
-        ```yaml
-        - id: step_type_valuate_relative_to_report
-          type: step_type_consistency
-          params:
-            mapping_id: valuate_relative_to_report
-            file: relative.json
-        ```
-
-        ## C. 対象外 gates YAML (7ファイル、理由は rev2 と同一)
-
-        ## D. テスト
-        - 新規4マッピング単体テスト (≈ 12-16件)
-        - gates YAML発火統合テスト (≈ 3-5件)
-        - latest_snapshot が dict の場合の step_type_consistency 動作テスト
-      output_path: "skills/quality-gate/"
-      quality_criteria:
-        - "既存84件全パス"
-        - "新規15件以上追加"
-        - "STEP_TYPE_MAPPINGS 8マッピング (既存4+新規4)"
-        - "7エントリが5つのgates YAMLに存在 (parse:1, calculate:3, integrate:1, valuation:1, valuation_relative:1)"
-        - "gates_integrate data_key:annual 指定あり"
-        - "calculate_to_report data_key:latest_snapshot 指定あり"
-
-    - task_id: "task_057"
-      request_id: "req_057"
-      title: "disclosure-collector J-Quants パーサー string→numeric 正規化"
+    - task_id: "T2_req062"
+      title: "value_presence ゲートタイプ追加"
       assigned_to: junior2
       priority: medium
       description: |
-        (rev2と同一)
-        金額→int, 比率→float, 無効値→None。テスト10件以上。
-      output_path: "skills/disclosure-collector/"
-      quality_criteria:
-        - "既存96件全パス"
-        - "新規10件以上"
-        - "金額→int, 比率→float, 無効値→None"
-        - "coercion二重変換テストパス"
+        quality-gate に value_presence ゲートタイプを新規追加する。
+        指定フィールドの非null率を閾値で検証し、severity: warn で段階的に導入する。
+      deliverables:
+        - "validators.py に ValuePresenceResult dataclass 追加"
+        - "validators.py に validate_value_presence() 関数追加"
+        - "validators.py の run_all_gates() に value_presence ハンドラ追加"
+        - "validators.py に severity フィールド対応"
+        - "gates YAML の harmonize/integrate に value_presence エントリ追加（severity: warn）"
+        - "テスト追加: 正常系・境界値・severity:warn の動作確認"
+      severity_specification: |
+        ## severity フィールド仕様（pipeline-runner 集計ロジックとの整合）
+
+        ### Gate YAML スキーマ拡張
+        各ゲートエントリに optional な severity フィールドを追加:
+          severity: "error" | "warn"  (デフォルト: "error")
+
+        ### validators.py の処理
+        - severity を gate 結果 dict に含める: {"id": ..., "pass": bool, "severity": "warn"|"error", "detail": ...}
+        - severity: "warn" のゲートは、validate 関数の結果（gate_pass）をそのまま返す（強制 True にしない）
+        - 代わりに severity フィールドで区別する
+
+        ### run_all_gates() の集計ロジック変更
+        - overall_pass の計算: severity: "error" のゲートのみ考慮する
+        - 新しい計算式:
+          overall_pass = all(g["pass"] for g in results if g.get("severity", "error") == "error")
+        - severity: "warn" のゲートが FAIL でも overall_pass には影響しない
+        - 追加フィールド: "warnings" リストに severity: "warn" かつ pass=False のゲートIDを記録
+
+        ### pipeline-runner との整合
+        - pipeline-runner は gate_results.json の overall_pass のみを参照する（既存動作）
+        - severity:warn のゲート FAIL は overall_pass に影響しないため、パイプラインは停止しない
+        - pipeline-runner 側の変更は不要
+
+        ### T3 (E2E) での PASS 条件定義
+        - "13/13 gates PASS" = overall_pass == True（severity:error ゲートが全 PASS）
+        - severity:warn ゲートの FAIL は "warned" として記録されるが、PASS カウントには含める
+        - ログに warnings セクションがあれば報告に含める
+      implementation_approach: |
+        既存パターンに従い実装する:
+        1. ValuePresenceResult dataclass を他の Result クラスと同様に定義
+        2. validate_value_presence(data, fields) を実装
+           - data: JSON ファイルパスまたは periods リスト
+           - fields: {"field_name": {"threshold": 0.8, "section": "indicators"}} のような設定
+           - 各フィールドの non-null 率を計算し、閾値と比較
+        3. run_all_gates() に elif gate_type == "value_presence" を追加
+        4. run_all_gates() の overall_pass 計算を severity 対応に変更
+        5. gates YAML に value_presence エントリを追加（harmonize ステップ: indicators セクション）
+      acceptance_criteria:
+        - "既存テスト全 PASS（127テスト）"
+        - "value_presence テスト 5件以上追加"
+        - "severity: warn 時に overall_pass に影響しないこと"
+        - "severity: error 時に overall_pass が False になること"
+        - "null率が閾値を超えた場合に pass=False"
+        - "gates YAML 13/13 カバレッジ維持"
+        - "pipeline-runner 側の変更が不要であることを確認"
+
+    - task_id: "T3_req063"
+      title: "9716 乃村工藝社 フルパイプライン13ステップ E2E"
+      assigned_to: junior3
+      priority: medium
+      depends_on: ["T1_req061"]
+      description: |
+        req_061 完了後、9716 乃村工藝社でフルパイプライン13ステップ E2E を実施。
+        relative valuation が non-null で算出されることを確認する。
+      deliverables:
+        - "13/13 ステップ完了"
+        - "13/13 gates PASS（定義: overall_pass == True、severity:warn の FAIL は warned 扱い）"
+        - "relative valuation (PER/PBR/EV-EBITDA) が non-null であること"
+        - "実行結果サマリー（DCF企業価値、リスク件数等）"
+        - "利用データソースの明記"
+        - "前提とリスクの明示"
+        - "severity:warn ゲートの warnings があれば報告に含める"
+      pass_criteria_definition: |
+        E2E の "13/13 gates PASS" 条件:
+        - 各ステップの gate_results.json の overall_pass が True であること
+        - overall_pass は severity:error ゲートのみで判定される（severity:warn は含まない）
+        - severity:warn ゲートが FAIL の場合は warned として記録し、レポートに含めるが PASS カウントに影響しない
+        - relative.json の per, pbr が non-null であること（market_cap データパス修正の検証）
+      acceptance_criteria:
+        - "13/13 ステップ completed"
+        - "13/13 overall_pass == True"
+        - "relative.json の per, pbr が non-null"
+        - "data_sources に market_cap のソースが記録されている"
+        - "report 出力ファイルが存在する"
+        - "warnings があれば報告に含める"
 
   parallelization:
-    strategy: "2タスク並列 (independent)"
-    junior1: "task_056"
-    junior2: "task_057"
-    junior3: "待機"
+    parallel_tasks: ["T1_req061", "T2_req062"]
+    sequential_tasks: ["T3_req063 (after T1_req061)"]
+    junior_allocation:
+      junior1: "T1_req061 (market_cap data path)"
+      junior2: "T2_req062 (value_presence gate)"
+      junior3: "T3_req063 (E2E, after T1 completes)"
+
+  quality_criteria:
+    - "既存テスト全 PASS（全スキル合計 2000+ テスト）"
+    - "新規テスト追加（req_061: valuation-calculator, req_062: quality-gate）"
+    - "パイプライン13ステップ互換性維持"
+    - "gates YAML 13/13 カバレッジ維持"
+    - "後方互換性（--market-data なしでも従来通り動作）"
+    - "severity:warn 仕様が validators.py と pipeline-runner で一貫していること"
+
+  risk_assessment:
+    - risk: "harmonized_financials.json の indicators 構造が銘柄により異なる可能性"
+      mitigation: "Yahoo 以外のソースでも indicators キーは統一されている（harmonizer が正規化済み）"
+    - risk: "value_presence の severity:warn が pipeline-runner 側で正しくハンドルされない"
+      mitigation: "overall_pass の計算を validators.py 内で完結させ、pipeline-runner 側の変更を不要にする"
+    - risk: "9716 乃村工藝社の EDINET データが不十分"
+      mitigation: "web-researcher の Yahoo/Kabutan フォールバックで補完可能"

@@ -1,0 +1,27 @@
+# Gate for harmonize step: harmonized_financials.json exists with correct types.
+gates:
+  - id: harmonize_file_check
+    type: file_exists
+    params:
+      required_files:
+        - "harmonized_financials.json"
+
+  - id: step_type_harmonize_to_integrate
+    type: step_type_consistency
+    params:
+      mapping_id: harmonize_to_integrate
+      file: harmonized_financials.json
+      data_key: annual
+
+  - id: harmonize_indicator_presence
+    type: value_presence
+    severity: warn
+    params:
+      file: harmonized_financials.json
+      fields:
+        market_cap:
+          path: "indicators.market_cap"
+          threshold: 0.5
+        shares_outstanding:
+          path: "indicators.shares_outstanding"
+          threshold: 0.5

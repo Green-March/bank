@@ -67,6 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
     rel_p = subparsers.add_parser("relative", help="相対バリュエーション（PER/PBR/EV-EBITDA）計算")
     rel_p.add_argument("--metrics", required=True, help="対象銘柄の metrics.json パス")
     rel_p.add_argument("--peers", nargs="*", default=[], help="同業他社の metrics.json パス群")
+    rel_p.add_argument("--market-data", default=None, help="harmonized_financials.json パス（market_cap 等の市場データ補完用）")
     rel_p.add_argument("--output", default=None, help="出力JSONファイルパス")
 
     return parser
@@ -101,6 +102,17 @@ def cmd_dcf(args: argparse.Namespace) -> int:
 def cmd_relative(args: argparse.Namespace) -> int:
     metrics = _load_json(args.metrics)
 
+    # --market-data の読み込み（ファイル不在時は graceful degradation）
+    market_data = None
+    market_data_path = getattr(args, "market_data", None)
+    if market_data_path:
+        md_path = Path(market_data_path)
+        if md_path.exists():
+            market_data = _load_json(market_data_path)
+            print(f"Loaded market data from {market_data_path}", file=sys.stderr)
+        else:
+            print(f"Warning: market-data file not found: {market_data_path}, proceeding without it", file=sys.stderr)
+
     if args.peers:
         peer_data = [_load_json(p) for p in args.peers]
         result = compute_peer_comparison(metrics, peer_data)
@@ -112,7 +124,7 @@ def cmd_relative(args: argparse.Namespace) -> int:
             "comparison": result.comparison,
         }
     else:
-        rm = compute_relative_metrics(metrics)
+        rm = compute_relative_metrics(metrics, market_data=market_data)
         output = {
             "ticker": metrics.get("ticker", "unknown"),
             "valuation_type": "relative",

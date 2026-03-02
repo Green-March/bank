@@ -30,6 +30,7 @@ pipeline:
       command: "python3 skills/web-researcher/scripts/main.py collect --ticker {ticker} --source all --output data/{ticker}/web_research/research.json"
       output_dir: "data/{ticker}/web_research"
       depends_on: [resolve]
+      gates: "skills/quality-gate/references/gates_web_research.yaml"
     - id: parse
       skill: disclosure-parser
       command: "python3 skills/disclosure-parser/scripts/main.py --ticker {ticker} --input-dir {prev_output} --output-dir data/{ticker}/parsed"
@@ -41,6 +42,7 @@ pipeline:
       command: "python3 skills/web-data-harmonizer/scripts/main.py harmonize --ticker {ticker} --source all --input data/{ticker}/web_research/research.json --output data/{ticker}/harmonized/harmonized_financials.json"
       output_dir: "data/{ticker}/harmonized"
       depends_on: [web_research]
+      gates: "skills/quality-gate/references/gates_harmonize.yaml"
     - id: integrate
       skill: financial-integrator
       command: "python3 skills/financial-integrator/scripts/main.py --ticker {ticker} --fye-month {fye_month} --parsed-dir data/{ticker}/parsed --harmonized-dir data/{ticker}/harmonized --output data/{ticker}/integrated/integrated_financials.json"
@@ -67,7 +69,7 @@ pipeline:
       gates: "skills/quality-gate/references/gates_valuation.yaml"
     - id: valuate_relative
       skill: valuation-calculator
-      command: "python3 skills/valuation-calculator/scripts/main.py relative --metrics data/{ticker}/parsed/metrics.json --output data/{ticker}/valuation/relative.json"
+      command: "python3 skills/valuation-calculator/scripts/main.py relative --metrics data/{ticker}/parsed/metrics.json --market-data data/{ticker}/harmonized/harmonized_financials.json --output data/{ticker}/valuation/relative.json"
       output_dir: "data/{ticker}/valuation"
       depends_on: [calculate]
       gates: "skills/quality-gate/references/gates_valuation_relative.yaml"

@@ -631,3 +631,204 @@ class TestPipelineOutputVarsPropagation:
         # shares_outstanding が空の場合
         rendered_without_shares = cmd_template.replace("{shares_outstanding}", "")
         assert '[ -n "" ]' in rendered_without_shares
+
+
+# ---------------------------------------------------------------------------
+# --market-data テスト (req_061)
+# ---------------------------------------------------------------------------
+
+def _make_market_data(
+    market_cap: float | None = 94_418_000_000.0,
+    shares_outstanding: float | None = 53_983_965.0,
+    per: float | None = 16.5,
+    pbr: float | None = 2.01,
+) -> dict:
+    """harmonized_financials.json 相当のテストデータを生成する。"""
+    indicators: dict = {}
+    if market_cap is not None:
+        indicators["market_cap"] = market_cap
+    if shares_outstanding is not None:
+        indicators["shares_outstanding"] = shares_outstanding
+    if per is not None:
+        indicators["per"] = per
+    if pbr is not None:
+        indicators["pbr"] = pbr
+    return {"indicators": indicators}
+
+
+class TestMarketDataIntegration:
+    """--market-data (harmonized_financials.json) 経由の market_cap 補完テスト。"""
+
+    def test_backward_compat_no_market_data(self):
+        """a) 後方互換: market_data=None → 従来通り metrics のみで計算"""
+        metrics = _make_metrics(market_cap=50_000, net_income=5_000, equity=30_000)
+        result = compute_relative_metrics(metrics, market_data=None)
+        assert result.per == 10.0  # 50000 / 5000
+        assert result.pbr == pytest.approx(1.67, abs=0.01)
+        assert result.data_sources["market_cap"] == "latest_snapshot"
+
+    def test_market_data_provides_market_cap(self):
+        """b) 正常系: market_data 指定 → PER/PBR が non-null"""
+        # metrics には market_cap がない
+        metrics = _make_metrics(
+            market_cap=None,
+            net_income=5_000_000_000,
+            equity=30_000_000_000,
+        )
+        market_data = _make_market_data(market_cap=94_418_000_000.0)
+
+        result = compute_relative_metrics(metrics, market_data=market_data)
+        assert result.per is not None
+        assert result.pbr is not None
+        # PER = 94_418_000_000 / 5_000_000_000 ≈ 18.88
+        assert result.per == pytest.approx(18.88, abs=0.01)
+        assert result.data_sources["market_cap"] == "market_data.indicators"
+
+    def test_market_data_overrides_snapshot(self):
+        """market_data の market_cap が snapshot より優先される"""
+        metrics = _make_metrics(
+            market_cap=50_000,
+            net_income=5_000,
+            equity=30_000,
+        )
+        market_data = _make_market_data(market_cap=100_000)
+
+        result = compute_relative_metrics(metrics, market_data=market_data)
+        # market_data の 100_000 が使われる
+        assert result.per == 20.0  # 100_000 / 5_000
+        assert result.data_sources["market_cap"] == "market_data.indicators"
+
+    def test_market_data_no_indicators_key(self):
+        """d) エッジケース: market_data に indicators キーがない → graceful degradation"""
+        metrics = _make_metrics(market_cap=50_000, net_income=5_000)
+        market_data = {"some_other_key": "value"}
+
+        result = compute_relative_metrics(metrics, market_data=market_data)
+        # snapshot の market_cap にフォールバック
+        assert result.per == 10.0
+        assert result.data_sources["market_cap"] == "latest_snapshot"
+
+    def test_market_data_indicators_empty(self):
+        """market_data.indicators が空 → snapshot にフォールバック"""
+        metrics = _make_metrics(market_cap=50_000, net_income=5_000)
+        market_data = {"indicators": {}}
+
+        result = compute_relative_metrics(metrics, market_data=market_data)
+        assert result.per == 10.0
+        assert result.data_sources["market_cap"] == "latest_snapshot"
+
+    def test_market_data_market_cap_none(self):
+        """market_data.indicators.market_cap が None → snapshot にフォールバック"""
+        metrics = _make_metrics(market_cap=50_000, net_income=5_000)
+        market_data = _make_market_data(market_cap=None)
+
+        result = compute_relative_metrics(metrics, market_data=market_data)
+        assert result.per == 10.0
+        assert result.data_sources["market_cap"] == "latest_snapshot"
+
+    def test_ev_ebitda_with_market_data(self):
+        """market_data 由来の market_cap で EV/EBITDA も計算される"""
+        metrics = _make_metrics(
+            market_cap=None,
+            net_income=5_000,
+            equity=30_000,
+            operating_income=7_000,
+            depreciation=1_000,
+            total_debt=10_000,
+            cash=5_000,
+        )
+        market_data = _make_market_data(market_cap=50_000)
+
+        result = compute_relative_metrics(metrics, market_data=market_data)
+        # EV = 50000 + 10000 - 5000 = 55000, EBITDA = 7000 + 1000 = 8000
+        assert result.ev_ebitda == pytest.approx(6.88, abs=0.01)
+
+
+class TestMarketDataCLI:
+    """CLI 経由の --market-data テスト。"""
+
+    def test_relative_with_market_data(self, tmp_path):
+        """b) 正常系 CLI: --market-data 指定 → PER/PBR が non-null"""
+        metrics = _make_metrics(market_cap=None, net_income=5_000, equity=30_000)
+        metrics_file = tmp_path / "metrics.json"
+        metrics_file.write_text(json.dumps(metrics), encoding="utf-8")
+
+        market_data = _make_market_data(market_cap=100_000)
+        md_file = tmp_path / "harmonized.json"
+        md_file.write_text(json.dumps(market_data), encoding="utf-8")
+
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "main.py"), "relative",
+             "--metrics", str(metrics_file),
+             "--market-data", str(md_file)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["per"] == 20.0  # 100_000 / 5_000
+        assert data["data_sources"]["market_cap"] == "market_data.indicators"
+
+    def test_relative_market_data_file_missing(self, tmp_path):
+        """c) エッジケース CLI: --market-data ファイル不在 → graceful degradation"""
+        metrics = _make_metrics(market_cap=50_000, net_income=5_000)
+        metrics_file = tmp_path / "metrics.json"
+        metrics_file.write_text(json.dumps(metrics), encoding="utf-8")
+
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "main.py"), "relative",
+             "--metrics", str(metrics_file),
+             "--market-data", str(tmp_path / "nonexistent.json")],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        # ファイル不在でも snapshot の値で計算成功
+        assert data["per"] == 10.0
+        assert "Warning: market-data file not found" in result.stderr
+
+    def test_relative_without_market_data_backward_compat(self, tmp_path):
+        """a) 後方互換 CLI: --market-data 未指定 → 従来通り動作"""
+        metrics = _make_metrics(market_cap=50_000, net_income=5_000, equity=30_000)
+        metrics_file = tmp_path / "metrics.json"
+        metrics_file.write_text(json.dumps(metrics), encoding="utf-8")
+
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "main.py"), "relative",
+             "--metrics", str(metrics_file)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["per"] == 10.0
+        assert data["data_sources"]["market_cap"] == "latest_snapshot"
+
+
+class TestMarketDataPipelineCompat:
+    """e) パイプライン互換テスト: pipeline YAML の valuate_relative ステップ構造検証。"""
+
+    def _load_pipeline_steps(self):
+        import yaml
+
+        pipeline_path = Path(__file__).resolve().parent.parent.parent / \
+            "pipeline-runner" / "references" / "example_pipeline.yaml"
+        if not pipeline_path.exists():
+            pytest.skip("example_pipeline.yaml not found")
+
+        with open(pipeline_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        return data.get("pipeline", {}).get("steps", [])
+
+    def test_valuate_relative_has_market_data_flag(self):
+        """valuate_relative ステップが --market-data を含む"""
+        steps = self._load_pipeline_steps()
+        vr_step = next((s for s in steps if s["id"] == "valuate_relative"), None)
+        assert vr_step is not None, "valuate_relative step not found"
+        assert "--market-data" in vr_step["command"]
+        assert "harmonized_financials.json" in vr_step["command"]
+
+    def test_valuate_relative_depends_on_calculate(self):
+        """valuate_relative は calculate に依存している"""
+        steps = self._load_pipeline_steps()
+        vr_step = next((s for s in steps if s["id"] == "valuate_relative"), None)
+        assert vr_step is not None
+        assert "calculate" in vr_step.get("depends_on", [])

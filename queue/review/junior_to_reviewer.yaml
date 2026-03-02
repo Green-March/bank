@@ -1,37 +1,78 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_task057_003"
-  task_id: "task_057"
-  junior_id: "junior2"
-  status: pending
-  timestamp: "2026-03-01T16:55:00+09:00"
+  request_id: "rev_T3_req063_002"
+  task_id: "T3_req063"
+  junior_id: "junior3"
+  status: pending_review
+  timestamp: "2026-03-01T17:55:00+09:00"
   payload:
     summary: |
-      J-Quants パーサー正規化 rev3。累計4件のレビュー指摘を全て修正済み:
-      1. _to_int 整数文字列のみ許容 (小数点文字列→None)
-      2. _to_int float分岐 is_integer() ガード (1000.9→None, 100.0→100)
-      3. raw保存 (statements_raw_{date}.json) で監査性担保
-      4. fetch結果が list以外なら StatementsError 送出
-      NaN/Inf境界値ガード実装済み。61テスト全パス。
+      9716 乃村工藝社 フルパイプライン13ステップ E2E 検証完了 (rev2)。
+      13/13 ステップ completed、13/13 ゲート PASS。
+      relative valuation: per=26.01, pbr=3.32, ev_ebitda=19.76 (全 non-null)。
+      PBR null 問題を修正: financial-calculator の metrics.py に equity フィールド伝播を追加。
     outputs:
-      - "skills/disclosure-collector/scripts/statements.py"
-      - "skills/disclosure-collector/scripts/main.py"
-      - "skills/disclosure-collector/tests/test_jquants_normalization.py"
+      - "data/9716/pipeline_log.json"
+      - "data/9716/valuation/dcf.json"
+      - "data/9716/valuation/relative.json"
+      - "data/9716/risk/risk_analysis.json"
+      - "data/9716/reports/9716_report.md"
+      - "data/9716/reports/9716_report.html"
+      - "skills/financial-calculator/scripts/metrics.py"
     validation:
-      - "既存96テスト + 新規61テスト = 全パス"
-      - "is_integer() ガード: float(100.0)→100, float(1000.9)→None"
-      - "fetch結果 list以外 → StatementsError"
-      - "coercion二重変換テストパス"
-    revision_response:
-      - concern: "_to_int float分岐で is_integer ガード不足"
-        fix: "is_integer()=True のみ int 変換。小数 float は None"
-      - concern: "fetch結果が list以外で静かに0件扱い"
-        fix: "isinstance チェックで StatementsError を送出"
+      - "13/13 steps completed"
+      - "13/13 gates overall_pass=True"
+      - "relative.json per=26.01 (non-null)"
+      - "relative.json pbr=3.32 (non-null, rev2 修正で解決)"
+      - "relative.json ev_ebitda=19.76 (non-null)"
+      - "data_sources.market_cap=market_data.indicators"
+      - "data_sources.equity=latest_snapshot"
+      - "report files exist (md + html)"
+      - "severity:warn harmonize_indicator_presence PASS"
+      - "financial-calculator 154/154 tests passed"
+    rev2_fixes:
+      - "financial-calculator metrics.py: _build_series_for_group の entry dict に total_assets + equity 追加 → latest_snapshot に equity 伝播"
+      - "再E2E 実行で PBR=3.32 (market_cap 175,768,000,000 / equity 52,948,000,000) を確認"
+    pipeline_result:
+      steps_completed: "13/13"
+      gates_passed: "13/13"
+      total_duration_min: 3.9
+    dcf_valuation:
+      enterprise_value_billion: 168.9
+      per_share_value_yen: 151.4
+    relative_valuation:
+      per: 26.01
+      pbr: 3.32
+      ev_ebitda: 19.76
+    risk_analysis:
+      total_risks: 103
+      high: 8
+      medium: 95
+    caveats:
+      - "EDINET キャッシュに 9716 未登録のため手動追加 (E04835)"
+      - "DCF growth_rate=-0.1 はヒストリカル FCF 減少傾向を反映"
+      - "J-Quants fins_statements が parsed ディレクトリに不在の警告あり (EDINET のみで統合)"
+    review_criteria:
+      - "schema_conformance: 13ステップ出力 + metrics.py 変更の構造整合"
+      - "data_integrity: PBR=3.32 の算出経路 (equity → latest_snapshot → valuation)"
+      - "source_traceability: data_sources に market_cap + equity のソース記録"
+      - "analytical_validity: PBR=market_cap/equity=175,768M/52,948M=3.32 の妥当性"
+      - "clarity: レポート出力の可読性"
+      - "risk_disclosure: caveats の妥当性"
+    e2e_check:
+      - "13/13 ステップ completed + 13/13 gates PASS"
+      - "PER/PBR/EV-EBITDA 全 non-null (受入条件充足)"
+      - "financial-calculator 154/154 テスト PASS (既存テスト破壊なし)"
+      - "severity:warn ゲート PASS"
 review_followup:
-  request_id: null
-  task_id: null
-  junior_id: null
-  status: null
-  timestamp: ""
-  payload: null
+  request_id: "rev_T3_req063_001"
+  task_id: "T3_req063"
+  junior_id: "junior3"
+  status: "revised"
+  timestamp: "2026-03-01T17:55:00+09:00"
+  payload:
+    previous_verdict: "revise"
+    fixes_applied:
+      - "metrics.py に total_assets/equity フィールド伝播追加 → PBR=3.32 算出成功"
+      - "再E2E 実行で全受入条件充足を確認"

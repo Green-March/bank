@@ -70,6 +70,7 @@ def main() -> int:
         "data_dir": str(data_dir),
         "overall_pass": results.overall_pass,
         "gates": results.gates,
+        "warnings": results.warnings,
     }
 
     output_json = json.dumps(output, ensure_ascii=False, indent=2)
