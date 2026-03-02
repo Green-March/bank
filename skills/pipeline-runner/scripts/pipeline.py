@@ -198,30 +198,46 @@ class PipelineConfig:
             step.command = step.command.replace(placeholder, val)
             step.output_dir = step.output_dir.replace(placeholder, val)
 
-    def validate_vars(self, vars_dict: dict[str, str]) -> None:
-        """Validate that all placeholders can be resolved at execution time."""
+    def validate_vars(self, vars_dict: dict[str, str],
+                      from_step: str | None = None,
+                      exec_set: set[str] | None = None) -> None:
+        """Validate that all placeholders can be resolved at execution time.
+
+        If exec_set is provided, only validate and count output_vars for
+        steps in the execution set (skipped steps are ignored).
+        """
         placeholder_re = re.compile(r"\{(\w+)\}")
         steps = self.execution_order()
         available_output_vars: set[str] = set()
 
         for step in steps:
+            in_scope = exec_set is None or step.id in exec_set
+
             available = set(vars_dict.keys())
             available.add("prev_output")
             available.update(available_output_vars)
 
-            placeholders = set(placeholder_re.findall(step.command))
-            placeholders.update(placeholder_re.findall(step.output_dir))
+            if in_scope:
+                placeholders = set(placeholder_re.findall(step.command))
+                placeholders.update(placeholder_re.findall(step.output_dir))
 
-            for name in placeholders:
-                if name not in available:
-                    raise PipelineError(
-                        f"変数 '{name}' が未定義です。"
-                        f"--vars {name}=VALUE で指定するか、"
-                        f"output_vars を持つ先行ステップを追加してください"
-                    )
+                for name in placeholders:
+                    if name not in available:
+                        if from_step:
+                            raise PipelineError(
+                                f"--from-step {from_step} requires variable "
+                                f"'{name}'. Provide via --vars or --log with "
+                                f"a previous run log."
+                            )
+                        raise PipelineError(
+                            f"変数 '{name}' が未定義です。"
+                            f"--vars {name}=VALUE で指定するか、"
+                            f"output_vars を持つ先行ステップを追加してください"
+                        )
 
-            for key in step.output_vars:
-                available_output_vars.add(key)
+            if in_scope:
+                for key in step.output_vars:
+                    available_output_vars.add(key)
 
     def validate_dag(self) -> list[str]:
         """Validate DAG structure. Returns list of errors (empty if valid)."""
@@ -301,23 +317,94 @@ class PipelineRunner:
 
     def run(self, config: PipelineConfig, vars_dict: dict[str, str],
             log_path: str | Path | None = None,
-            max_parallel: int = 1) -> dict[str, Any]:
+            max_parallel: int = 1,
+            from_step: str | None = None,
+            prev_runtime_vars: dict[str, str] | None = None) -> dict[str, Any]:
         sys.stderr.write(f"[pipeline] working_dir={self.working_dir}\n")
         errors = config.validate_dag()
         if errors:
             raise PipelineError(f"DAG validation failed: {'; '.join(errors)}")
 
-        config.validate_vars(vars_dict)
+        exec_set: set[str] | None = None
+
+        if from_step:
+            if from_step not in config._step_map:
+                raise PipelineError(
+                    f"--from-step '{from_step}' is not a valid step. "
+                    f"Available steps: {', '.join(s.id for s in config.steps)}"
+                )
+
+            exec_set = self._compute_exec_set(config, from_step)
+
+            # Build effective vars for validation and output_dir checks
+            effective_vars = dict(prev_runtime_vars or {})
+            effective_vars.update(vars_dict)
+
+            # Validate output_dirs for skipped steps
+            resolved_dirs: dict[str, str] = {}
+            for step in config.execution_order():
+                prev_output = ""
+                if step.depends_on:
+                    dep_id = step.depends_on[0]
+                    if dep_id in resolved_dirs:
+                        prev_output = resolved_dirs[dep_id]
+                resolved_dir = step.output_dir
+                all_vars = {**effective_vars, "prev_output": prev_output}
+                for k, v in all_vars.items():
+                    resolved_dir = resolved_dir.replace("{" + k + "}", v)
+                resolved_dirs[step.id] = resolved_dir
+
+                if step.id not in exec_set:
+                    output_path = Path(self.working_dir) / resolved_dir
+                    if not output_path.exists():
+                        raise PipelineError(
+                            f"--from-step: skipped step '{step.id}' output dir "
+                            f"'{resolved_dir}' does not exist. "
+                            f"Run the full pipeline first."
+                        )
+
+            config.validate_vars(effective_vars, from_step=from_step,
+                                exec_set=exec_set)
+        else:
+            config.validate_vars(vars_dict)
 
         if max_parallel <= 1:
-            return self._run_sequential(config, vars_dict, log_path)
-        return self._run_parallel(config, vars_dict, log_path, max_parallel)
+            return self._run_sequential(config, vars_dict, log_path,
+                                        exec_set=exec_set,
+                                        prev_runtime_vars=prev_runtime_vars)
+        return self._run_parallel(config, vars_dict, log_path, max_parallel,
+                                  exec_set=exec_set,
+                                  prev_runtime_vars=prev_runtime_vars)
+
+    @staticmethod
+    def _compute_exec_set(config: PipelineConfig, from_step: str) -> set[str]:
+        """Compute the set of steps to execute: from_step + transitive dependents."""
+        dependents: dict[str, list[str]] = {s.id: [] for s in config.steps}
+        for step in config.steps:
+            for dep in step.depends_on:
+                dependents[dep].append(step.id)
+
+        exec_set = {from_step}
+        queue = [from_step]
+        while queue:
+            sid = queue.pop(0)
+            for dep_id in dependents.get(sid, []):
+                if dep_id not in exec_set:
+                    exec_set.add(dep_id)
+                    queue.append(dep_id)
+        return exec_set
 
     def _run_sequential(self, config: PipelineConfig, vars_dict: dict[str, str],
-                        log_path: str | Path | None) -> dict[str, Any]:
+                        log_path: str | Path | None,
+                        exec_set: set[str] | None = None,
+                        prev_runtime_vars: dict[str, str] | None = None) -> dict[str, Any]:
         """Sequential execution (original fail-fast behavior)."""
         steps = config.execution_order()
         runtime_vars = dict(vars_dict)
+        if prev_runtime_vars:
+            for k, v in prev_runtime_vars.items():
+                if k not in vars_dict:
+                    runtime_vars[k] = v
 
         pipeline_log: dict[str, Any] = {
             "pipeline_name": config.name,
@@ -325,10 +412,24 @@ class PipelineRunner:
             "completed_at": None,
             "status": "running",
             "vars": vars_dict,
+            "runtime_vars": {},
             "steps": [],
         }
 
+        def _snapshot_rv() -> None:
+            pipeline_log["runtime_vars"] = {
+                k: v for k, v in runtime_vars.items() if k not in vars_dict
+            }
+
         for step in steps:
+            if exec_set is not None and step.id not in exec_set:
+                skip_log = StepLog(
+                    id=step.id, skill=step.skill, status="skipped",
+                    skipped_reason="upstream of from-step",
+                )
+                pipeline_log["steps"].append(skip_log.to_dict())
+                continue
+
             config._resolve_step(step, runtime_vars)
             step_log, stdout = self._run_step(step)
             pipeline_log["steps"].append(step_log.to_dict())
@@ -336,6 +437,7 @@ class PipelineRunner:
             if step_log.status == "failed":
                 pipeline_log["status"] = "failed"
                 pipeline_log["completed_at"] = datetime.now(JST).isoformat()
+                _snapshot_rv()
                 self._write_log(pipeline_log, log_path)
                 return pipeline_log
 
@@ -351,19 +453,27 @@ class PipelineRunner:
                     step_log_dict["status"] = "gate_failed"
                     pipeline_log["status"] = "gate_failed"
                     pipeline_log["completed_at"] = datetime.now(JST).isoformat()
+                    _snapshot_rv()
                     self._write_log(pipeline_log, log_path)
                     return pipeline_log
 
         pipeline_log["status"] = "completed"
         pipeline_log["completed_at"] = datetime.now(JST).isoformat()
+        _snapshot_rv()
         self._write_log(pipeline_log, log_path)
         return pipeline_log
 
     def _run_parallel(self, config: PipelineConfig, vars_dict: dict[str, str],
                       log_path: str | Path | None,
-                      max_parallel: int) -> dict[str, Any]:
+                      max_parallel: int,
+                      exec_set: set[str] | None = None,
+                      prev_runtime_vars: dict[str, str] | None = None) -> dict[str, Any]:
         """Parallel execution with dependency-based scheduling."""
         runtime_vars = dict(vars_dict)
+        if prev_runtime_vars:
+            for k, v in prev_runtime_vars.items():
+                if k not in vars_dict:
+                    runtime_vars[k] = v
         step_map = config._step_map
 
         # Build reverse dependency map
@@ -386,9 +496,20 @@ class PipelineRunner:
             "completed_at": None,
             "status": "running",
             "vars": vars_dict,
+            "runtime_vars": {},
             "steps": [],
             "concurrency_info": {},
         }
+
+        # Pre-register skipped steps for from_step
+        if exec_set is not None:
+            for step in config.steps:
+                if step.id not in exec_set:
+                    finished[step.id] = "completed"
+                    step_results[step.id] = StepLog(
+                        id=step.id, skill=step.skill, status="skipped",
+                        skipped_reason="upstream of from-step",
+                    ).to_dict()
 
         def mark_downstream_skipped(failed_id: str) -> None:
             """BFS to mark all transitive dependents as skipped."""
@@ -482,6 +603,9 @@ class PipelineRunner:
                 pipeline_log["steps"].append(step_results[step.id])
 
         pipeline_log["concurrency_info"] = concurrency_info
+        pipeline_log["runtime_vars"] = {
+            k: v for k, v in runtime_vars.items() if k not in vars_dict
+        }
         has_failure = any(v != "completed" for v in finished.values())
         pipeline_log["status"] = "failed" if has_failure else "completed"
         pipeline_log["completed_at"] = datetime.now(JST).isoformat()

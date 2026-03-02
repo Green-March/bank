@@ -31,10 +31,25 @@ def cmd_run(args: argparse.Namespace) -> None:
         print(f"Error loading pipeline: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # Load previous runtime_vars from log if --from-step is specified
+    prev_runtime_vars: dict[str, str] | None = None
+    from_step: str | None = getattr(args, "from_step", None)
+    if from_step and args.log:
+        log_file = Path(args.log)
+        if log_file.exists():
+            try:
+                with open(log_file, "r", encoding="utf-8") as f:
+                    prev_log = json.load(f)
+                prev_runtime_vars = prev_log.get("runtime_vars", {})
+            except (json.JSONDecodeError, OSError):
+                pass  # No usable previous log
+
     runner = PipelineRunner()
     try:
         log = runner.run(config, vars_dict, log_path=args.log,
-                         max_parallel=args.max_parallel)
+                         max_parallel=args.max_parallel,
+                         from_step=from_step,
+                         prev_runtime_vars=prev_runtime_vars)
     except PipelineError as e:
         print(f"Pipeline error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -93,6 +108,8 @@ def main() -> None:
     run_parser.add_argument("--log", default=None, help="Path to write execution log JSON")
     run_parser.add_argument("--max-parallel", type=int, default=3,
                             help="Max parallel step execution (default: 3)")
+    run_parser.add_argument("--from-step", default=None, dest="from_step",
+                            help="Resume from this step (skip upstream steps)")
 
     # validate
     val_parser = subparsers.add_parser("validate", help="Validate a pipeline definition")

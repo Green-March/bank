@@ -1,44 +1,46 @@
 queue:
-  - request_id: "req_061"
-    objective: "market_cap → relative valuation データパス構築。web-researcher が取得済みの market_cap/PER/PBR データが valuate_relative に到達しない問題を修正する。選択肢A: valuate_relative が integrated_financials.json の market indicators も読むよう拡張。選択肢B: market-data-collector スキルをパイプラインに接続。全5銘柄で relative valuation が N/A になっている根本原因を解決すること。テスト追加必須。"
+  - request_id: "req_064"
+    objective: "pipeline-runner に --from-step オプションを追加し、指定ステップ以降のみ再実行可能にする。DAG依存グラフを活用し、from-step より上流のステップはスキップ（既存出力を再利用）。テストを追加すること。"
     ticker: null
     universe: null
     analysis_type: "skill_enhancement"
     timeframe: null
-    output_format: null
+    output_format: ["test"]
     priority: "high"
-    due_date: "2026-03-01"
+    due_date: "2026-03-02"
     constraints:
-      - "既存テストを壊さないこと"
-      - "パイプライン13ステップの互換性を維持"
-      - "修正後の動作確認は req_063 の E2E で実施"
+      - "既存の13ステップDAGとの整合性を維持"
+      - "--from-step で指定したステップ以降のみ実行"
+      - "上流ステップの出力ファイルが存在することを前提チェック"
+      - "既存テストを壊さない"
+      - "並列実行（ThreadPoolExecutor）との互換性を維持"
 
-  - request_id: "req_062"
-    objective: "quality-gate に value_presence ゲートタイプを追加。現ゲートは型整合性のみ検証しており、harmonize 出力が BS 0%/CF 0% null でも pass してしまう。null 率閾値による検証を追加し、severity: warn レベルで段階的に導入する。validators.py + gates YAML + テスト追加。"
+  - request_id: "req_065"
+    objective: "既処理6銘柄(2780,7685,9743,4971,9823,9716)のリグレッション検証スクリプトを作成。--from-step と組み合わせて、staleデータ（特に9823のrelative valuation全null）を一括更新し、差分レポートを出力する。"
     ticker: null
-    universe: null
-    analysis_type: "skill_enhancement"
+    universe: ["2780", "7685", "9743", "4971", "9823", "9716"]
+    analysis_type: "regression_test"
     timeframe: null
-    output_format: null
-    priority: "medium"
-    due_date: "2026-03-01"
+    output_format: ["md"]
+    priority: "high"
+    due_date: "2026-03-02"
     constraints:
-      - "既存テストを壊さないこと"
-      - "severity: warn で導入し、パイプライン停止はしない"
-      - "gates YAML 13/13 カバレッジを維持"
+      - "req_064 の --from-step 完了後に実行"
+      - "各銘柄の更新前後で差分レポートを生成"
+      - "APIコスト最小化のため、データ収集ステップ(1-4)はスキップ可能に"
+      - "9823のrelative valuation null解消を検証"
 
-  - request_id: "req_063"
-    objective: "9716 乃村工藝社でフルパイプライン13ステップ E2E 検証を実施。req_061 の relative valuation データパス修正後に実施し、relative valuation が有効に算出されることを確認する。13/13 ステップ完了 + 13/13 gates PASS を目標とする。"
-    ticker: "9716"
+  - request_id: "req_066"
+    objective: "4971メックでフルパイプライン13ステップE2Eを再実行し、全ステップ完了・全ゲートPASSを確認する。relative valuationがnon-nullであることを検証。"
+    ticker: "4971"
     universe: null
     analysis_type: "full_pipeline_e2e"
     timeframe: "5y"
     output_format: ["md", "html"]
     priority: "medium"
-    due_date: "2026-03-01"
+    due_date: "2026-03-02"
     constraints:
-      - "req_061 完了後に実施すること"
-      - "relative valuation が non-null で算出されることを検証"
-      - "全13ステップ + 全13ゲート PASS を確認"
-      - "利用データソースを明記する"
-      - "前提とリスクを明示する"
+      - "req_065 完了後に実行（リグレッション検証の一環として確認）"
+      - "13/13ステップ完了、全ゲートPASS必須"
+      - "relative valuation (PER/PBR/EV-EBITDA) が全てnon-null"
+      - "前回(S39)の結果との差分を確認"
