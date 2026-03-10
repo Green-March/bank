@@ -32,6 +32,22 @@ gates:
         ev_ebitda:
           min: 0
 
+  - id: relative_valuation_reasonableness
+    type: valuation_reasonableness
+    severity: warn
+    params:
+      file: "relative.json"
+      thresholds:
+        per:
+          min: 0
+          max: 50
+        pbr:
+          min: 0
+          max: 5.0
+        ev_ebitda:
+          min: 0
+          max: 40
+
   - id: step_type_valuate_relative_to_report
     type: step_type_consistency
     params:

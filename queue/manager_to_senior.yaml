@@ -1,46 +1,45 @@
 queue:
-  - request_id: "req_064"
-    objective: "pipeline-runner に --from-step オプションを追加し、指定ステップ以降のみ再実行可能にする。DAG依存グラフを活用し、from-step より上流のステップはスキップ（既存出力を再利用）。テストを追加すること。"
+  - request_id: "req_067"
+    objective: "--from-step ダイヤモンドDAG安全バリデーション。--from-step=valuate 等で部分再実行時、report ステップが兄弟ステップ(valuate_relative, analyze_risk, inventory)に依存しているにもかかわらず、それらがスキップされて暗黙的に失敗する問題を修正する。兄弟自動包含またはバリデーションエラーを追加すること。"
     ticker: null
     universe: null
-    analysis_type: "skill_enhancement"
-    timeframe: null
-    output_format: ["test"]
-    priority: "high"
-    due_date: "2026-03-02"
-    constraints:
-      - "既存の13ステップDAGとの整合性を維持"
-      - "--from-step で指定したステップ以降のみ実行"
-      - "上流ステップの出力ファイルが存在することを前提チェック"
-      - "既存テストを壊さない"
-      - "並列実行（ThreadPoolExecutor）との互換性を維持"
-
-  - request_id: "req_065"
-    objective: "既処理6銘柄(2780,7685,9743,4971,9823,9716)のリグレッション検証スクリプトを作成。--from-step と組み合わせて、staleデータ（特に9823のrelative valuation全null）を一括更新し、差分レポートを出力する。"
-    ticker: null
-    universe: ["2780", "7685", "9743", "4971", "9823", "9716"]
-    analysis_type: "regression_test"
+    analysis_type: "pipeline_enhancement"
     timeframe: null
     output_format: ["md"]
     priority: "high"
-    due_date: "2026-03-02"
+    due_date: "2026-03-10"
     constraints:
-      - "req_064 の --from-step 完了後に実行"
-      - "各銘柄の更新前後で差分レポートを生成"
-      - "APIコスト最小化のため、データ収集ステップ(1-4)はスキップ可能に"
-      - "9823のrelative valuation null解消を検証"
+      - "pipeline-runner の _compute_exec_set() を修正対象とする"
+      - "ダイヤモンドDAG (calculate → {valuate, valuate_relative, analyze_risk, inventory} → report) で安全に動作すること"
+      - "既存テスト(147件)を壊さないこと"
+      - "新規テストを追加すること"
 
-  - request_id: "req_066"
-    objective: "4971メックでフルパイプライン13ステップE2Eを再実行し、全ステップ完了・全ゲートPASSを確認する。relative valuationがnon-nullであることを検証。"
-    ticker: "4971"
+  - request_id: "req_068"
+    objective: "バリュエーション妥当性ゲート valuation_reasonableness を quality-gate に追加。PER=61.06 等の極端な値が全ゲート PASS する現状を改善し、severity:warn の閾値ベースゲートで警告を出す。PER/PBR/EV-EBITDA の妥当範囲チェック。"
+    ticker: null
     universe: null
-    analysis_type: "full_pipeline_e2e"
-    timeframe: "5y"
-    output_format: ["md", "html"]
+    analysis_type: "quality_gate_enhancement"
+    timeframe: null
+    output_format: ["md"]
     priority: "medium"
-    due_date: "2026-03-02"
+    due_date: "2026-03-10"
     constraints:
-      - "req_065 完了後に実行（リグレッション検証の一環として確認）"
-      - "13/13ステップ完了、全ゲートPASS必須"
-      - "relative valuation (PER/PBR/EV-EBITDA) が全てnon-null"
-      - "前回(S39)の結果との差分を確認"
+      - "severity: warn（パイプライン非停止）で実装"
+      - "閾値は設定可能にする (PER: 0-100, PBR: 0-30, EV/EBITDA: 0-50 等のデフォルト)"
+      - "既存テスト(142件)を壊さないこと"
+      - "新規テストを追加すること"
+
+  - request_id: "req_069"
+    objective: "regression.py を実データで実行し、9823 マミーマートHD の relative valuation null 問題を解消する。必要に応じて 9823 のフルパイプライン再実行も行う。"
+    ticker: "9823"
+    universe: null
+    analysis_type: "regression_fix"
+    timeframe: null
+    output_format: ["md"]
+    priority: "medium"
+    due_date: "2026-03-10"
+    constraints:
+      - "regression.py の dry-run ではなく実データ実行を行う"
+      - "relative.json の PER/PBR/EV-EBITDA が全て non-null になること"
+      - "既存の他銘柄データを破壊しないこと"
+      - "実行結果を報告すること"

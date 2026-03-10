@@ -2,127 +2,222 @@ plan_review_request:
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_s43_req064_066_rev2"
-  timestamp: "2026-03-02T14:15:00+09:00"
-  revision: 2
-  revision_notes: "Reviewer指摘2点を反映: (1) output_vars永続化設計を先行確定, (2) T2失敗時ロールバック手順追加"
-  objective: "3件の依頼を順次実行: (1) pipeline-runner --from-step 部分再実行, (2) 既処理銘柄リグレッション検証, (3) 4971メック E2E"
+  plan_id: "plan_s44_req067-069_v4"
+  timestamp: "2026-03-10T16:55:00+09:00"
+  revision: 4
+  revision_note: "Reviewer指摘反映: T3バックアップ先タイムスタンプ化、他銘柄検証を実行前後JSON内容スナップショット比較に変更"
+  objective: "3件のタスク (req_067, req_068, req_069) を3名の Junior に並列割り当てし、パイプラインの堅牢性・品質ゲート強化・実データ修正を同時に進める"
+
+  context:
+    session: 44
+    previous_session: 43
+    total_tests_baseline: "2,100+"
+    pipeline_steps: 13
+    diamond_dag: "calculate -> {valuate, valuate_relative, analyze_risk, inventory} -> report"
 
   tasks:
-    - task_id: "T1_from_step"
-      request_id: "req_064"
-      assignee: "junior1"
-      description: "pipeline-runner に --from-step オプションを追加 (output_vars永続化含む)"
-      scope:
-        - "【永続化設計 (Reviewer指摘1対応)】pipeline_log.json に runtime_vars フィールドを追加。各ステップ完了時に蓄積された output_vars をログに永続化する"
-        - "pipeline.py: _run_sequential/_run_parallel 内で runtime_vars を pipeline_log['runtime_vars'] に書き出す"
-        - "main.py: argparse に --from-step <step_id> 引数追加"
-        - "pipeline.py: PipelineRunner.run() に from_step パラメータ追加"
-        - "from_step 自体とその下流 (transitive dependents) のみを実行対象にする"
-        - "上流ステップを skipped (reason: from-step) としてマーク"
-        - "【output_vars復元の3層優先度】(1) --vars 明示指定 > (2) --log 指定の前回ログの runtime_vars > (3) PipelineError で具体的に不足変数名を表示"
-        - "スキップされたステップの output_dir 存在チェック (前提条件バリデーション)"
-        - "並列実行 (_run_parallel) との互換性維持"
-        - "テスト 10-14件追加 (既存テストに runtime_vars永続化テスト含む)"
-      implementation_details:
-        output_vars_persistence:
-          format: "pipeline_log.json に 'runtime_vars' キーを追加"
-          example: |
-            {
-              "pipeline_name": "...",
-              "vars": {"ticker": "2780"},
-              "runtime_vars": {"fye_month": "3", "edinet_code": "E03416", "shares_outstanding": "12345678"},
-              "steps": [...]
-            }
-          write_timing: "各ステップの output_vars 処理後に runtime_vars を更新"
-          backward_compat: "runtime_vars キーが無い旧ログは空dictとして扱う"
-        from_step_var_resolution:
-          priority_1: "--vars で指定された値 (最優先)"
-          priority_2: "--log で指定された前回ログの runtime_vars"
-          priority_3: "PipelineError('--from-step {step} requires variable {var}. Provide via --vars or --log with a previous run log.')"
-        from_step_logic:
-          step_1: "from_step がパイプライン内に存在するか検証"
-          step_2: "from_step の transitive dependents を BFS で算出 (from_step 自身を含む)"
-          step_3: "実行対象外ステップを skipped (reason: 'upstream of from-step') としてマーク"
-          step_4: "実行対象外ステップの output_dir 存在チェック → 存在しなければ PipelineError"
-          step_5: "output_vars を3層優先度で解決"
-          step_6: "実行対象ステップのみを _run_sequential or _run_parallel に渡す"
-      quality_criteria:
-        - "pytest 全テスト PASS (既存 + 新規)"
-        - "runtime_vars が pipeline_log.json に正しく永続化されること"
-        - "--from-step calculate で valuate/valuate_relative/analyze_risk/inventory/report のみ実行"
-        - "--from-step resolve で全ステップ実行 (= from-step なしと同等)"
-        - "前回ログから runtime_vars を復元して --from-step が成功すること"
-        - "前回ログなし + --vars なしで適切なエラーメッセージが出ること"
-        - "無効ステップ名で適切なエラー"
+    - task_id: "T1_req067"
+      request_id: "req_067"
+      title: "--from-step ダイヤモンドDAG安全バリデーション"
+      assigned_to: junior1
+      priority: high
+      description: |
+        pipeline-runner の _compute_exec_set() (pipeline.py:379-395) を修正し、
+        ダイヤモンドDAGで --from-step 実行時に兄弟ステップの欠落を検出・対応する。
 
-    - task_id: "T2_regression"
-      request_id: "req_065"
-      assignee: "junior2"
-      depends_on: ["T1_from_step"]
-      description: "既処理銘柄リグレッション検証スクリプト作成 (ロールバック機能付き)"
-      scope:
-        - "skills/pipeline-runner/scripts/regression.py 新規作成"
-        - "CLI: python3 regression.py --tickers 2780,... --from-step <step> [--pipeline <yaml>] [--report <output.md>] [--dry-run]"
-        - "各銘柄: (a) 更新前出力バックアップ, (b) --from-step でパイプライン部分再実行, (c) JSON diff生成"
-        - "【Reviewer指摘2対応】失敗時ロールバック: パイプライン失敗時にバックアップから自動復元"
-        - "差分レポート (markdown): 銘柄ごとに変更ファイル・フィールド・値の差分"
-        - "テスト 5-8件追加"
-      implementation_details:
-        vars_fallback_procedure:
-          step_1: "各銘柄の data/{ticker}/pipeline_log.json の存在を確認"
-          step_2: "ログ存在 → --log で runtime_vars を自動供給"
-          step_3: "ログ欠損 (2780,7685,9743,4971) → resolve_result.json から edinet_code/fye_month を読み取り --vars に変換"
-          step_4: "resolve_result.json も欠損 → 当該銘柄をスキップし、レポートに 'SKIPPED: insufficient data' と記録"
-        rollback_procedure:
-          backup_location: "/tmp/bank_regression_{ticker}_{timestamp}/"
-          backup_scope: "--from-step で再実行されるステップの output_dir のみ"
-          trigger: "パイプライン exit code != 0 またはゲート失敗"
-          action: "バックアップから output_dir を復元し、レポートに 'ROLLED BACK' と記録"
-          cleanup: "全銘柄完了後、成功銘柄のバックアップを削除。失敗銘柄のバックアップは保持"
-        dry_run: "--dry-run: 実際のパイプライン実行なしで、バックアップ対象ファイルとvars解決結果を表示"
-      quality_criteria:
-        - "6銘柄すべてで部分再実行が成功 (またはログ欠損銘柄は適切にスキップ)"
-        - "9823 の relative.json PER/PBR/EV-EBITDA non-null"
-        - "失敗時にバックアップから正しく復元されること"
-        - "差分レポートが生成され変更内容が明確"
+        現状の問題:
+        - --from-step=valuate -> exec_set={valuate, report}
+        - report は {valuate, valuate_relative, analyze_risk, inventory} に依存
+        - 兄弟3ステップがスキップされ report が暗黙的に失敗
 
-    - task_id: "T3_mec_e2e"
-      request_id: "req_066"
-      assignee: "junior3"
-      depends_on: ["T2_regression"]
-      description: "4971メック フルパイプライン13ステップ E2E"
-      scope:
-        - "example_pipeline.yaml で ticker=4971 の13ステップ E2E 実行"
-        - "全13ステップ completed、全ゲート PASS 確認"
-        - "relative valuation (PER/PBR/EV-EBITDA) 全て non-null 確認"
-        - "前回(S39)結果との差分確認・報告"
-        - "pipeline_log.json に runtime_vars が正しく永続化されていることも確認 (T1の実地検証)"
-      quality_criteria:
-        - "13/13 ステップ completed"
-        - "13/13 ゲート PASS"
-        - "relative valuation: PER, PBR, EV/EBITDA 全て non-null"
-        - "DCF 企業価値が算出されていること"
-        - "pipeline_log.json に runtime_vars が含まれていること"
+        実装方針:
+        1. _compute_exec_set() 実行後、exec_set 内の各ステップの depends_on を検査
+        2. depends_on に含まれるがexec_setに含まれないステップを missing siblings として検出
+        3. missing siblings の output_dir が存在しなければ PipelineError を発生
+           エラーメッセージに missing siblings リストと推奨 --from-step を含める
+        4. missing siblings の output_dir が全て存在すれば実行を許可（前回実行結果を再利用）
+      outputs:
+        - "skills/pipeline-runner/scripts/pipeline.py (修正)"
+        - "skills/pipeline-runner/tests/test_from_step.py (テスト追加)"
+      acceptance_criteria:
+        - "--from-step=valuate で兄弟 output_dir なし -> 明確なエラーメッセージ"
+        - "--from-step=valuate で兄弟 output_dir あり -> 正常実行"
+        - "--from-step=calculate -> 全4兄弟含む -> 正常実行"
+        - "既存テスト147件 PASS"
+        - "新規テスト5件以上追加"
 
-  execution_order:
-    - phase: 1
-      task: "T1_from_step"
-      assignee: "junior1"
-      note: "output_vars永続化 + --from-step 実装"
-    - phase: 2
-      task: "T2_regression"
-      assignee: "junior2"
-      note: "T1完了後。vars自動解決 + ロールバック付きリグレッション検証"
-    - phase: 3
-      task: "T3_mec_e2e"
-      assignee: "junior3"
-      note: "T2完了後。runtime_vars永続化の実地検証含むフルE2E"
+    - task_id: "T2_req068"
+      request_id: "req_068"
+      title: "バリュエーション妥当性ゲート valuation_reasonableness"
+      assigned_to: junior2
+      priority: medium
+      description: |
+        quality-gate スキルに valuation_reasonableness ゲートタイプを追加する。
+        PER=61.06 等の極端な値に対して severity:warn で警告を出す。
 
-  risk_assessment:
-    - risk: "前回 pipeline_log.json が存在しない銘柄 (4971, 7685, 9743, 2780)"
-      mitigation: "resolve_result.json からの vars 自動抽出フォールバック。それも欠損なら SKIPPED 記録"
-    - risk: "リグレッション検証中のパイプライン失敗でデータ破損"
-      mitigation: "バックアップからの自動ロールバック + 失敗銘柄のバックアップ保持"
-    - risk: "既存テスト破壊"
-      mitigation: "T1完了時に全既存テストPASS必須"
+        既存パターン参照:
+        - value_presence ゲート (validators.py:492-548) の severity:warn 実装
+        - json_file_value_range ゲート (validators.py:440-489) の数値範囲チェック
+
+        実装方針:
+        1. validators.py に validate_valuation_reasonableness() 関数を追加
+           - 対象ファイル: relative.json (パラメータで指定可能)
+           - チェック対象: per, pbr, ev_ebitda
+           - デフォルト閾値（YAML・テスト・acceptance_criteria で統一）:
+             PER: min=0, max=50  (PER=61.06 は warn)
+             PBR: min=0, max=5.0 (PBR=6.01 は warn)
+             EV/EBITDA: min=0, max=40
+           - 閾値はゲート YAML パラメータで上書き可能
+           - null 値はスキップ（チェック対象外）
+        2. run_all_gates() に case を追加 (validators.py:825-1032 付近)
+        3. gates_valuation_relative.yaml に severity:warn で定義を追加
+           閾値はデフォルト値と一致: per_max=50, pbr_max=5.0, ev_ebitda_max=40
+        4. テスト追加（閾値はデフォルト値を使用）
+      outputs:
+        - "skills/quality-gate/scripts/validators.py (修正)"
+        - "skills/quality-gate/references/gates_valuation_relative.yaml (修正)"
+        - "skills/quality-gate/tests/test_validators.py (テスト追加)"
+      acceptance_criteria:
+        - "PER=61.06 -> severity:warn で警告出力 (デフォルト上限 50 超過)"
+        - "PER=15.0 -> PASS (範囲内)"
+        - "PBR=6.01 -> severity:warn で警告出力 (デフォルト上限 5.0 超過)"
+        - "PBR=3.0 -> PASS (範囲内)"
+        - "EV/EBITDA=45.0 -> severity:warn (デフォルト上限 40 超過)"
+        - "null 値 -> スキップ (チェック対象外)"
+        - "閾値カスタマイズ: per_max=100 指定時 PER=61.06 は PASS"
+        - "既存テスト142件 PASS"
+        - "新規テスト8件以上追加"
+
+    - task_id: "T3_req069"
+      request_id: "req_069"
+      title: "9823 マミーマートHD regression実データ実行"
+      assigned_to: junior3
+      priority: medium
+      execution_basis: "現行 main ブランチのコードで実行する。T1 (--from-step 修正) の変更は取り込まない。"
+      description: |
+        9823 の relative valuation null 問題を解消する。
+        全手順は config/permissions.yaml の許可コマンド (python3, find, cat, jq 等) のみで実施する。
+
+        Step 0: 原因切り分け（実行前に必ず実施）
+        以下3ファイルを読み、null の発生源を特定する:
+        - data/9823/parsed/metrics.json: latest_snapshot の net_income, equity, operating_income の有無を確認
+        - data/9823/harmonized/harmonized_financials.json: indicators.market_cap, indicators.per の有無を確認
+        - data/9823/pipeline_log.json: valuate_relative ステップの status, output_vars を確認
+        原因を特定した上で、最適な再実行範囲を決定する。
+
+        Step 1: バックアップ（python3 shutil 使用、タイムスタンプ付き一意パス）
+        バックアップ対象: data/9823/valuation/ ディレクトリ全体
+        コマンド:
+          python3 -c "
+          import shutil, datetime
+          ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+          dst = f'/tmp/bank_regression_9823_{ts}'
+          shutil.copytree('data/9823/valuation', f'{dst}/valuation')
+          print(f'Backup created: {dst}/valuation')
+          "
+        バックアップ先パスを記録し、以降の手順で使用する。
+
+        Step 2: 他銘柄スナップショット取得（実行前）
+        実行前に他銘柄の relative.json の内容をスナップショットとして保存:
+          python3 -c "
+          import json, hashlib, pathlib
+          targets = ['data/4971/valuation/relative.json', 'data/9716/valuation/relative.json']
+          snap = {}
+          for p in targets:
+              path = pathlib.Path(p)
+              if path.exists():
+                  content = path.read_text()
+                  snap[p] = hashlib.sha256(content.encode()).hexdigest()
+              else:
+                  snap[p] = 'NOT_FOUND'
+          json.dump(snap, open('/tmp/bank_regression_9823_pre_snapshot.json', 'w'), indent=2)
+          print('Pre-snapshot saved:', snap)
+          "
+
+        Step 3: 再実行
+        原因切り分け結果に基づき、以下のいずれかを実行:
+        A) regression.py --from-step=valuate_relative (推奨)
+           python3 skills/pipeline-runner/scripts/regression.py \
+             --tickers "9823" \
+             --from-step valuate_relative \
+             --pipeline skills/pipeline-runner/references/example_pipeline.yaml
+        B) valuation-calculator を直接実行（regression.py で問題がある場合）
+           python3 skills/valuation-calculator/scripts/main.py relative \
+             --metrics data/9823/parsed/metrics.json \
+             --market-data data/9823/harmonized/harmonized_financials.json \
+             --output data/9823/valuation/relative.json
+
+        Step 4: 検証
+        4a) relative.json の non-null 確認:
+          python3 -c "
+          import json
+          d = json.load(open('data/9823/valuation/relative.json'))
+          for k in ['per', 'pbr', 'ev_ebitda']:
+              assert d.get(k) is not None, f'{k} is null'
+          print('OK:', {k: d[k] for k in ['per', 'pbr', 'ev_ebitda']})
+          "
+        4b) 他銘柄未変更確認（実行前スナップショットとの比較）:
+          python3 -c "
+          import json, hashlib, pathlib
+          pre = json.load(open('/tmp/bank_regression_9823_pre_snapshot.json'))
+          for p, old_hash in pre.items():
+              path = pathlib.Path(p)
+              if path.exists():
+                  new_hash = hashlib.sha256(path.read_text().encode()).hexdigest()
+              else:
+                  new_hash = 'NOT_FOUND'
+              status = 'UNCHANGED' if old_hash == new_hash else 'CHANGED'
+              print(f'{p}: {status}')
+              assert status == 'UNCHANGED', f'Unexpected change in {p}'
+          print('All other tickers unchanged.')
+          "
+
+        Step 5: ロールバック条件
+        以下のいずれかに該当する場合、Step 1 で記録したバックアップパスからロールバック:
+        - relative.json の per/pbr/ev_ebitda が依然 null
+        - 他銘柄データに意図しない変更が発生
+        - パイプラインエラーが発生
+        コマンド:
+          python3 -c "
+          import shutil
+          backup_path = '/tmp/bank_regression_9823_YYYYMMDD_HHMMSS/valuation'  # Step 1 で記録したパスに置換
+          shutil.copytree(backup_path, 'data/9823/valuation', dirs_exist_ok=True)
+          print('Rollback completed from:', backup_path)
+          "
+
+        Step 6: 結果報告
+        - 変更前後の diff を報告:
+          python3 -c "
+          import json
+          backup_path = '/tmp/bank_regression_9823_YYYYMMDD_HHMMSS/valuation/relative.json'  # Step 1 で記録したパスに置換
+          old = json.load(open(backup_path))
+          new = json.load(open('data/9823/valuation/relative.json'))
+          for k in ['per', 'pbr', 'ev_ebitda']:
+              print(f'{k}: {old.get(k)} -> {new.get(k)}')
+          "
+        - 原因切り分け結果を報告
+      outputs:
+        - "data/9823/valuation/relative.json (更新)"
+      acceptance_criteria:
+        - "原因切り分けで null 発生源が特定されていること"
+        - "relative.json の per, pbr, ev_ebitda が全て non-null"
+        - "他銘柄データが実行前スナップショットと一致していること"
+        - "タイムスタンプ付きバックアップが /tmp に作成されていること"
+        - "変更前後の diff が報告に含まれること"
+        - "全手順が permissions.yaml 許可コマンドのみで実施されていること"
+
+  parallelization:
+    strategy: "3 Junior 完全並列"
+    junior1: "T1_req067 (DAG安全バリデーション)"
+    junior2: "T2_req068 (valuation_reasonableness ゲート)"
+    junior3: "T3_req069 (9823 regression実データ実行)"
+    execution_basis: "T3 は現行 main コードで実行。T1 の --from-step 修正は T3 に影響しない。"
+    rationale: "3件のタスクは独立。T1はpipeline-runner修正、T2はquality-gate修正、T3は実データ再実行で、編集対象ファイルの重複なし。"
+
+  quality_criteria:
+    - "全既存テストが PASS すること"
+    - "各タスクで新規テストが追加されること (req_067, req_068)"
+    - "コード変更は最小限に留め、既存アーキテクチャを踏襲すること"
+    - "severity:warn ゲートはパイプラインを停止させないこと"
+    - "T2 の閾値はデフォルト値・YAML定義・テスト・acceptance_criteria の4箇所で一致すること"
+    - "全手順は config/permissions.yaml の許可コマンドのみで実施すること"

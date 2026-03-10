@@ -340,6 +340,10 @@ class PipelineRunner:
             effective_vars = dict(prev_runtime_vars or {})
             effective_vars.update(vars_dict)
 
+            # Validate diamond DAG sibling dependencies
+            self._validate_sibling_deps(config, exec_set, from_step,
+                                        effective_vars)
+
             # Validate output_dirs for skipped steps
             resolved_dirs: dict[str, str] = {}
             for step in config.execution_order():
@@ -393,6 +397,102 @@ class PipelineRunner:
                     exec_set.add(dep_id)
                     queue.append(dep_id)
         return exec_set
+
+    @staticmethod
+    def _ancestors(config: PipelineConfig, step_id: str) -> set[str]:
+        """Return all ancestor step IDs (transitive dependencies) of step_id."""
+        step_map = {s.id: s for s in config.steps}
+        visited: set[str] = set()
+        queue = list(step_map[step_id].depends_on)
+        while queue:
+            sid = queue.pop(0)
+            if sid not in visited:
+                visited.add(sid)
+                queue.extend(step_map[sid].depends_on)
+        return visited
+
+    @staticmethod
+    def _find_missing_siblings(
+        config: PipelineConfig, exec_set: set[str], from_step: str,
+    ) -> dict[str, list[str]]:
+        """Find diamond DAG siblings: deps of exec_set steps not in exec_set
+        and not ancestors of from_step (i.e., parallel branches, not upstream).
+
+        Returns a mapping of step_id -> list of missing sibling IDs.
+        """
+        ancestors = PipelineRunner._ancestors(config, from_step)
+        step_map = {s.id: s for s in config.steps}
+        missing: dict[str, list[str]] = {}
+        for sid in exec_set:
+            step = step_map[sid]
+            for dep in step.depends_on:
+                if dep not in exec_set and dep not in ancestors:
+                    missing.setdefault(sid, []).append(dep)
+        return missing
+
+    def _validate_sibling_deps(
+        self,
+        config: PipelineConfig,
+        exec_set: set[str],
+        from_step: str,
+        effective_vars: dict[str, str],
+    ) -> None:
+        """Validate diamond DAG siblings: deps of exec_set steps not in exec_set.
+
+        If missing siblings have no output_dir on disk, raise PipelineError
+        with the list of missing siblings and a recommended --from-step.
+        """
+        missing = self._find_missing_siblings(config, exec_set, from_step)
+        if not missing:
+            return
+
+        step_map = {s.id: s for s in config.steps}
+        all_missing_ids: set[str] = set()
+        for deps in missing.values():
+            all_missing_ids.update(deps)
+
+        # Check which missing siblings lack output_dir on disk
+        missing_no_output: list[str] = []
+        for mid in sorted(all_missing_ids):
+            step = step_map[mid]
+            resolved_dir = step.output_dir
+            for k, v in effective_vars.items():
+                resolved_dir = resolved_dir.replace("{" + k + "}", v)
+            output_path = Path(self.working_dir) / resolved_dir
+            if not output_path.exists():
+                missing_no_output.append(mid)
+
+        if not missing_no_output:
+            return
+
+        # Find recommended --from-step: common parent of from_step + siblings
+        from_step_obj = step_map[from_step]
+        from_deps = set(from_step_obj.depends_on)
+        sibling_deps: set[str] = set()
+        for mid in all_missing_ids:
+            sibling_deps.update(step_map[mid].depends_on)
+        common = from_deps & sibling_deps
+        if common:
+            recommended = sorted(common)[0]
+        else:
+            # Fallback: suggest the first missing sibling's parent
+            first_missing = sorted(all_missing_ids)[0]
+            parents = step_map[first_missing].depends_on
+            recommended = parents[0] if parents else from_step
+
+        # Build error listing which exec_set steps need the missing siblings
+        affected = [
+            f"  '{sid}' depends on: {deps}"
+            for sid, deps in sorted(missing.items())
+        ]
+        raise PipelineError(
+            f"--from-step='{from_step}': diamond DAG has missing sibling steps "
+            f"without prior output: {missing_no_output}\n"
+            + "\n".join(affected) + "\n"
+            f"These steps are not in the exec set but are required dependencies.\n"
+            f"Recommended: --from-step='{recommended}' "
+            f"(includes all sibling branches)"
+        )
 
     def _run_sequential(self, config: PipelineConfig, vars_dict: dict[str, str],
                         log_path: str | Path | None,

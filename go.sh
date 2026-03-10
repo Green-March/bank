@@ -322,6 +322,17 @@ set_pane "$junior2_pane" "junior2" "blue"
 set_pane "$junior3_pane" "junior3" "blue"
 set_pane "$reviewer_pane" "reviewer" "yellow"
 
+DEV_TMUX_STYLE_RELOAD="${SCRIPT_DIR}/.codex/tmux/source-dev-workspace-style.sh"
+if [ -x "${DEV_TMUX_STYLE_RELOAD}" ]; then
+    if "${DEV_TMUX_STYLE_RELOAD}" >/dev/null 2>&1; then
+        log_info "Applied dev workspace tmux theme"
+    else
+        log_warn "Failed to apply dev workspace tmux theme automatically"
+    fi
+else
+    log_warn "Dev workspace tmux theme helper not found: ${DEV_TMUX_STYLE_RELOAD}"
+fi
+
 map_dir="${TARGET_DIR}/.claude/runtime"
 map_file="${map_dir}/agent-pane-map.tsv"
 mkdir -p "${map_dir}"

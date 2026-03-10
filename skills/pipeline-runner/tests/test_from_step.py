@@ -556,3 +556,157 @@ class TestFromStepEndToEnd:
         assert log["status"] == "completed"
         # --vars value should be used, not prev_runtime_vars
         assert "fetch --code NEW_VALUE" in call_cmds[0]
+
+
+# ---------------------------------------------------------------------------
+# 13. Diamond DAG sibling validation
+# ---------------------------------------------------------------------------
+
+def _wide_diamond_dag() -> list[dict]:
+    """Realistic diamond: root -> mid -> {A, B, C, D} -> final."""
+    return [
+        {"id": "root", "skill": "s", "command": "echo root", "output_dir": "out/root"},
+        {"id": "mid", "skill": "s", "command": "echo mid",
+         "output_dir": "out/mid", "depends_on": ["root"]},
+        {"id": "A", "skill": "s", "command": "echo A",
+         "output_dir": "out/A", "depends_on": ["mid"]},
+        {"id": "B", "skill": "s", "command": "echo B",
+         "output_dir": "out/B", "depends_on": ["mid"]},
+        {"id": "C", "skill": "s", "command": "echo C",
+         "output_dir": "out/C", "depends_on": ["mid"]},
+        {"id": "D", "skill": "s", "command": "echo D",
+         "output_dir": "out/D", "depends_on": ["mid"]},
+        {"id": "final", "skill": "s", "command": "echo final",
+         "output_dir": "out/final", "depends_on": ["A", "B", "C", "D"]},
+    ]
+
+
+class TestDiamondSiblingValidation:
+
+    def test_from_step_sibling_no_output_raises_error(self, tmp_path: Path) -> None:
+        """--from-step=A with siblings B,C,D missing output -> specific error."""
+        yaml_path = _write_pipeline_yaml(tmp_path, _wide_diamond_dag())
+        config = PipelineConfig.load(yaml_path)
+
+        # Create upstream output dirs (root, mid) but NOT siblings B, C, D
+        (tmp_path / "out" / "root").mkdir(parents=True)
+        (tmp_path / "out" / "mid").mkdir(parents=True)
+
+        with pytest.raises(PipelineError, match="diamond DAG.*missing sibling") as exc_info:
+            runner = PipelineRunner(working_dir=tmp_path)
+            runner.run(config, {}, from_step="A")
+
+        err_msg = str(exc_info.value)
+        assert "B" in err_msg
+        assert "C" in err_msg
+        assert "D" in err_msg
+        assert "--from-step='mid'" in err_msg
+
+    def test_from_step_sibling_with_output_ok(self, tmp_path: Path) -> None:
+        """--from-step=A with siblings B,C,D having output -> execution allowed."""
+        yaml_path = _write_pipeline_yaml(tmp_path, _wide_diamond_dag())
+        config = PipelineConfig.load(yaml_path)
+
+        # Create ALL required output dirs
+        for d in ["root", "mid", "B", "C", "D"]:
+            (tmp_path / "out" / d).mkdir(parents=True)
+
+        call_cmds = []
+
+        def mock_run(cmd, **kwargs):
+            call_cmds.append(cmd)
+            return _mock_ok(cmd, **kwargs)
+
+        with patch("pipeline.subprocess.run", side_effect=mock_run):
+            runner = PipelineRunner(working_dir=tmp_path)
+            log = runner.run(config, {}, from_step="A")
+
+        assert log["status"] == "completed"
+        step_statuses = {s["id"]: s["status"] for s in log["steps"]}
+        assert step_statuses["A"] == "completed"
+        assert step_statuses["final"] == "completed"
+        assert step_statuses["B"] == "skipped"
+        assert step_statuses["C"] == "skipped"
+        assert step_statuses["D"] == "skipped"
+
+    def test_from_step_parent_includes_all_siblings(self, tmp_path: Path) -> None:
+        """--from-step=mid -> exec_set includes all 4 siblings + final -> no error."""
+        yaml_path = _write_pipeline_yaml(tmp_path, _wide_diamond_dag())
+        config = PipelineConfig.load(yaml_path)
+
+        # Create output for root (upstream of mid)
+        (tmp_path / "out" / "root").mkdir(parents=True)
+
+        call_cmds = []
+
+        def mock_run(cmd, **kwargs):
+            call_cmds.append(cmd)
+            return _mock_ok(cmd, **kwargs)
+
+        with patch("pipeline.subprocess.run", side_effect=mock_run):
+            runner = PipelineRunner(working_dir=tmp_path)
+            log = runner.run(config, {}, from_step="mid")
+
+        assert log["status"] == "completed"
+        # mid + A + B + C + D + final = 6 steps executed
+        executed = [s for s in log["steps"] if s["status"] == "completed"]
+        assert len(executed) == 6
+        assert len(call_cmds) == 6
+
+    def test_from_step_partial_sibling_missing(self, tmp_path: Path) -> None:
+        """Only 1 of 3 siblings missing output -> error lists only the missing one."""
+        yaml_path = _write_pipeline_yaml(tmp_path, _wide_diamond_dag())
+        config = PipelineConfig.load(yaml_path)
+
+        (tmp_path / "out" / "root").mkdir(parents=True)
+        (tmp_path / "out" / "mid").mkdir(parents=True)
+        (tmp_path / "out" / "B").mkdir(parents=True)
+        (tmp_path / "out" / "C").mkdir(parents=True)
+        # D is missing
+
+        with pytest.raises(PipelineError, match="diamond DAG.*missing sibling") as exc_info:
+            runner = PipelineRunner(working_dir=tmp_path)
+            runner.run(config, {}, from_step="A")
+
+        err_msg = str(exc_info.value)
+        assert "D" in err_msg
+        # B and C have output, should not be in the missing list
+        assert "['D']" in err_msg or "D" in err_msg
+
+    def test_simple_diamond_from_step_no_siblings(self, tmp_path: Path) -> None:
+        """from_step=root in diamond DAG -> no missing siblings (all downstream)."""
+        yaml_path = _write_pipeline_yaml(tmp_path, _diamond_dag())
+        config = PipelineConfig.load(yaml_path)
+
+        call_cmds = []
+
+        def mock_run(cmd, **kwargs):
+            call_cmds.append(cmd)
+            return _mock_ok(cmd, **kwargs)
+
+        with patch("pipeline.subprocess.run", side_effect=mock_run):
+            runner = PipelineRunner(working_dir=tmp_path)
+            log = runner.run(config, {}, from_step="root")
+
+        assert log["status"] == "completed"
+        assert len(call_cmds) == 4  # all 4 steps
+
+    def test_linear_pipeline_no_sibling_issue(self, tmp_path: Path) -> None:
+        """Linear pipeline has no diamond siblings -> no validation error."""
+        yaml_path = _write_pipeline_yaml(tmp_path, _three_step_linear())
+        config = PipelineConfig.load(yaml_path)
+
+        (tmp_path / "out" / "A").mkdir(parents=True)
+
+        call_cmds = []
+
+        def mock_run(cmd, **kwargs):
+            call_cmds.append(cmd)
+            return _mock_ok(cmd, **kwargs)
+
+        with patch("pipeline.subprocess.run", side_effect=mock_run):
+            runner = PipelineRunner(working_dir=tmp_path)
+            log = runner.run(config, {}, from_step="B")
+
+        assert log["status"] == "completed"
+        assert len(call_cmds) == 2

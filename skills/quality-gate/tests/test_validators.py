@@ -24,6 +24,7 @@ from validators import (
     NullRateResult,
     RangeResult,
     SchemaResult,
+    ValuationReasonablenessResult,
     extract_periods,
     load_financials,
     run_all_gates,
@@ -34,6 +35,7 @@ from validators import (
     validate_metrics_value_range,
     validate_null_rate,
     validate_value_range,
+    validate_valuation_reasonableness,
 )
 
 
@@ -917,3 +919,118 @@ class TestRunAllGatesNewTypes:
         }]
         result = run_all_gates(gates_config, tmp_path)
         assert result.overall_pass is True
+
+
+# ---------------------------------------------------------------------------
+# ValuationReasonableness tests
+# ---------------------------------------------------------------------------
+
+
+class TestValuationReasonableness:
+    """Tests for validate_valuation_reasonableness."""
+
+    @staticmethod
+    def _write_relative(tmp_path, data):
+        (tmp_path / "relative.json").write_text(json.dumps(data))
+
+    def test_per_above_max_warns(self, tmp_path):
+        """PER=61.06 exceeds default max=50 -> violation."""
+        self._write_relative(tmp_path, {"valuation_type": "relative", "per": 61.06, "pbr": 3.0, "ev_ebitda": 20.0})
+        result = validate_valuation_reasonableness(tmp_path)
+        assert result.gate_pass is False
+        assert any(v["metric"] == "per" for v in result.violations)
+
+    def test_per_in_range_passes(self, tmp_path):
+        """PER=15.0 within default range -> pass."""
+        self._write_relative(tmp_path, {"valuation_type": "relative", "per": 15.0, "pbr": 2.0, "ev_ebitda": 10.0})
+        result = validate_valuation_reasonableness(tmp_path)
+        assert result.gate_pass is True
+        assert len(result.violations) == 0
+
+    def test_pbr_above_max_warns(self, tmp_path):
+        """PBR=6.01 exceeds default max=5.0 -> violation."""
+        self._write_relative(tmp_path, {"valuation_type": "relative", "per": 10.0, "pbr": 6.01, "ev_ebitda": 10.0})
+        result = validate_valuation_reasonableness(tmp_path)
+        assert result.gate_pass is False
+        assert any(v["metric"] == "pbr" for v in result.violations)
+
+    def test_pbr_in_range_passes(self, tmp_path):
+        """PBR=3.0 within default range -> pass."""
+        self._write_relative(tmp_path, {"valuation_type": "relative", "per": 10.0, "pbr": 3.0, "ev_ebitda": 10.0})
+        result = validate_valuation_reasonableness(tmp_path)
+        assert result.gate_pass is True
+
+    def test_ev_ebitda_above_max_warns(self, tmp_path):
+        """EV/EBITDA=45.0 exceeds default max=40 -> violation."""
+        self._write_relative(tmp_path, {"valuation_type": "relative", "per": 10.0, "pbr": 2.0, "ev_ebitda": 45.0})
+        result = validate_valuation_reasonableness(tmp_path)
+        assert result.gate_pass is False
+        assert any(v["metric"] == "ev_ebitda" for v in result.violations)
+
+    def test_null_values_skipped(self, tmp_path):
+        """Null metric values are skipped (not violations)."""
+        self._write_relative(tmp_path, {"valuation_type": "relative", "per": None, "pbr": None, "ev_ebitda": None})
+        result = validate_valuation_reasonableness(tmp_path)
+        assert result.gate_pass is True
+        assert len(result.violations) == 0
+        assert len(result.detail["checked_metrics"]) == 0
+
+    def test_custom_thresholds_override(self, tmp_path):
+        """Custom per_max=100 -> PER=61.06 passes."""
+        self._write_relative(tmp_path, {"valuation_type": "relative", "per": 61.06, "pbr": 3.0, "ev_ebitda": 10.0})
+        result = validate_valuation_reasonableness(tmp_path, thresholds={"per": {"min": 0, "max": 100}})
+        assert result.gate_pass is True
+        assert len(result.violations) == 0
+
+    def test_missing_file_fails(self, tmp_path):
+        """Missing relative.json -> fail."""
+        result = validate_valuation_reasonableness(tmp_path)
+        assert result.gate_pass is False
+        assert "error" in result.detail
+
+    def test_multiple_violations(self, tmp_path):
+        """Multiple metrics out of range -> multiple violations."""
+        self._write_relative(tmp_path, {"valuation_type": "relative", "per": 61.06, "pbr": 6.01, "ev_ebitda": 45.0})
+        result = validate_valuation_reasonableness(tmp_path)
+        assert result.gate_pass is False
+        assert len(result.violations) == 3
+
+    def test_custom_filename(self, tmp_path):
+        """Custom filename parameter works."""
+        (tmp_path / "custom_valuation.json").write_text(json.dumps({"per": 10.0, "pbr": 2.0, "ev_ebitda": 5.0}))
+        result = validate_valuation_reasonableness(tmp_path, filename="custom_valuation.json")
+        assert result.gate_pass is True
+
+
+class TestValuationReasonablenessRunAllGates:
+    """Tests for valuation_reasonableness gate type in run_all_gates."""
+
+    @staticmethod
+    def _write_relative(tmp_path, data):
+        (tmp_path / "relative.json").write_text(json.dumps(data))
+
+    def test_warn_severity_does_not_block_overall(self, tmp_path):
+        """valuation_reasonableness with severity:warn doesn't block overall_pass."""
+        self._write_relative(tmp_path, {"valuation_type": "relative", "per": 61.06, "pbr": 6.01, "ev_ebitda": 45.0})
+        gates_config = [{
+            "id": "val_reasonableness",
+            "type": "valuation_reasonableness",
+            "severity": "warn",
+            "params": {"file": "relative.json"},
+        }]
+        result = run_all_gates(gates_config, tmp_path)
+        assert result.overall_pass is True
+        assert "val_reasonableness" in result.warnings
+
+    def test_pass_case_via_run_all_gates(self, tmp_path):
+        """Normal values pass via run_all_gates."""
+        self._write_relative(tmp_path, {"valuation_type": "relative", "per": 15.0, "pbr": 2.0, "ev_ebitda": 10.0})
+        gates_config = [{
+            "id": "val_reasonableness",
+            "type": "valuation_reasonableness",
+            "severity": "warn",
+            "params": {"file": "relative.json"},
+        }]
+        result = run_all_gates(gates_config, tmp_path)
+        assert result.overall_pass is True
+        assert len(result.warnings) == 0

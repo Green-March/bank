@@ -161,6 +161,10 @@ log_step "STEP 3: tmux マウススクロール設定"
 
 TMUX_CONF="$HOME/.tmux.conf"
 TMUX_MOUSE_SETTING="set -g mouse on"
+DEV_TMUX_STYLE_CONF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.codex/tmux/dev-workspace-style.tmux"
+DEV_TMUX_STYLE_MARKER="# dev workspace tmux style (added by first_setup.sh)"
+
+touch "$TMUX_CONF"
 
 if [ -f "$TMUX_CONF" ] && grep -qF "$TMUX_MOUSE_SETTING" "$TMUX_CONF" 2>/dev/null; then
     log_info "tmux マウス設定は既に ~/.tmux.conf に存在します"
@@ -170,6 +174,18 @@ else
     echo "# マウススクロール有効化 (added by first_setup.sh)" >> "$TMUX_CONF"
     echo "$TMUX_MOUSE_SETTING" >> "$TMUX_CONF"
     log_success "tmux マウス設定を追加しました"
+fi
+
+if grep -qF "$DEV_TMUX_STYLE_MARKER" "$TMUX_CONF" 2>/dev/null; then
+    log_info "dev workspace 用 tmux 設定は既に ~/.tmux.conf に存在します"
+else
+    log_info "~/.tmux.conf に dev workspace 用 tmux 設定を追加中..."
+    {
+        echo ""
+        echo "$DEV_TMUX_STYLE_MARKER"
+        echo "if-shell '[ -f \"$DEV_TMUX_STYLE_CONF\" ]' 'source-file \"$DEV_TMUX_STYLE_CONF\"'"
+    } >> "$TMUX_CONF"
+    log_success "dev workspace 用 tmux 設定を追加しました"
 fi
 
 # tmux が起動中の場合は即反映

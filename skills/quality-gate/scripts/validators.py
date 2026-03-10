@@ -104,6 +104,15 @@ class ValuePresenceResult:
 
 
 @dataclass
+class ValuationReasonablenessResult:
+    """Result of valuation reasonableness validation."""
+
+    gate_pass: bool
+    violations: list[dict]
+    detail: dict[str, object]
+
+
+@dataclass
 class StepTypeConsistencyResult:
     """Result of step-to-step type consistency validation."""
 
@@ -549,6 +558,88 @@ def validate_value_presence(
 
 
 # ---------------------------------------------------------------------------
+# Valuation reasonableness validator
+# ---------------------------------------------------------------------------
+
+# Default thresholds for valuation metrics
+_VALUATION_DEFAULTS: dict[str, dict[str, float]] = {
+    "per": {"min": 0, "max": 50},
+    "pbr": {"min": 0, "max": 5.0},
+    "ev_ebitda": {"min": 0, "max": 40},
+}
+
+
+def validate_valuation_reasonableness(
+    data_dir: Path,
+    filename: str = "relative.json",
+    thresholds: dict[str, dict[str, float]] | None = None,
+) -> ValuationReasonablenessResult:
+    """Check that valuation metrics fall within reasonable ranges.
+
+    Args:
+        data_dir: Directory containing the JSON file.
+        filename: Name of the valuation JSON file (default: relative.json).
+        thresholds: Override thresholds per metric.
+            e.g. {"per": {"min": 0, "max": 100}, "pbr": {"min": 0, "max": 10}}
+            Missing metrics use defaults from _VALUATION_DEFAULTS.
+
+    Returns:
+        ValuationReasonablenessResult with violations for out-of-range values.
+        Null values are skipped (not violations).
+    """
+    merged = dict(_VALUATION_DEFAULTS)
+    if thresholds:
+        for key, val in thresholds.items():
+            merged[key] = {**merged.get(key, {}), **val}
+
+    json_path = data_dir / filename
+    if not json_path.exists():
+        return ValuationReasonablenessResult(
+            gate_pass=False,
+            violations=[],
+            detail={"error": f"{filename} not found"},
+        )
+
+    with json_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    violations: list[dict] = []
+    checked: list[str] = []
+
+    for metric, bounds in merged.items():
+        value = data.get(metric)
+        if value is None:
+            continue
+        if not isinstance(value, (int, float)):
+            continue
+
+        checked.append(metric)
+        min_val = bounds.get("min")
+        max_val = bounds.get("max")
+
+        if min_val is not None and value < min_val:
+            violations.append({
+                "metric": metric,
+                "value": value,
+                "bound": f"min={min_val}",
+                "reason": f"{metric}={value} < min {min_val}",
+            })
+        if max_val is not None and value > max_val:
+            violations.append({
+                "metric": metric,
+                "value": value,
+                "bound": f"max={max_val}",
+                "reason": f"{metric}={value} > max {max_val}",
+            })
+
+    return ValuationReasonablenessResult(
+        gate_pass=len(violations) == 0,
+        violations=violations,
+        detail={"json_file": str(json_path), "checked_metrics": checked},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Step type consistency mappings & validator
 # ---------------------------------------------------------------------------
 
@@ -971,6 +1062,21 @@ def run_all_gates(
                 "detail": {
                     "field_results": r.field_results,
                     **r.summary,
+                },
+            })
+
+        elif gate_type == "valuation_reasonableness":
+            filename = params.get("file", "relative.json")
+            thresholds = params.get("thresholds", None)
+            r = validate_valuation_reasonableness(data_dir, filename, thresholds)
+            results.append({
+                "id": gate_id,
+                "pass": r.gate_pass,
+                "severity": gate.get("severity", "warn"),
+                "detail": {
+                    "violations": r.violations,
+                    "violation_count": len(r.violations),
+                    **r.detail,
                 },
             })
 

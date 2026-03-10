@@ -1,46 +1,50 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_T3_mec_e2e_001"
-  task_id: "T3_mec_e2e"
+  request_id: "rev_T3_req069_002"
+  task_id: "T3_req069"
   junior_id: "junior3"
   status: pending
-  timestamp: "2026-03-02T15:35:00+09:00"
+  timestamp: "2026-03-10T17:42:00+09:00"
   payload:
-    summary: "4971メック フルパイプライン13ステップE2E完了。13/13 completed, 13/13 gates PASS。relative valuation全non-null、DCF per_share_value算出成功。"
+    summary: "9823 マミーマートHD relative valuation null 解消（修正版: バックアップ証跡・他銘柄比較証跡・原因分析事実/結論分離を追加）"
     outputs:
-      - "data/4971/pipeline_log.json"
-      - "data/4971/valuation/dcf.json"
-      - "data/4971/valuation/relative.json"
-      - "data/4971/risk/risk_analysis.json"
-      - "data/4971/reports/4971_report.md"
-      - "data/4971/reports/4971_report.html"
-      - "data/4971/inventory.md"
-    results:
-      steps: "13/13 completed"
-      gates: "13/13 PASS"
-      relative_valuation:
-        PER: 61.06
-        PBR: 6.01
-        EV_EBITDA: 28.59
-      dcf:
-        enterprise_value: 221009568726.49
-        per_share_value: 12103.0
-        shares_outstanding: 18260731.0
-      runtime_vars_persisted: true
-    diff_from_s39:
-      - "relative.json: 未存在 → PER=61.06/PBR=6.01/EV-EBITDA=28.59 (全non-null)"
-      - "DCF per_share_value: null → 12,103円 (shares_outstanding取得成功)"
-      - "runtime_vars: 新規永続化 (4フィールド)"
-    caveats:
-      - "PER=61.06は高水準 — 市場が高成長を織り込んでいる可能性"
-      - "net_debt=0前提でDCF算出（有利子負債情報の確認推奨）"
-    quality_criteria:
-      - "13/13 ステップ completed"
-      - "13/13 ゲート PASS"
-      - "relative valuation: PER/PBR/EV-EBITDA 全て non-null"
-      - "DCF per_share_value 算出 (12,103円)"
-      - "runtime_vars 永続化確認 (T1実地検証)"
+      - "data/9823/valuation/relative.json"
+      - "data/9823/parsed/metrics.json"
+    revision_note: "Reviewer 指摘3点を反映: (1)バックアップ実パスと内容記載 (2)他銘柄pre/postハッシュ比較の実出力記載 (3)原因分析のconfirmed_factsとconclusionを分離"
+    cause_analysis:
+      confirmed_facts:
+        - "変更前 metrics.json に equity/total_assets 欠落（バックアップで確認）"
+        - "4971/9716 の metrics.json には equity/total_assets 存在"
+        - "integrated_financials.json に total_equity=41,921,000,000 存在（元データ不足なし）"
+        - "現行コードで再実行 → metrics.json に equity/total_assets 追加"
+        - "変更前 relative.json の data_sources に market_cap 不在"
+        - "harmonized_financials.json に indicators.market_cap=94,418,000,000 存在"
+      conclusion: "旧バージョンの financial-calculator で処理されたため metrics.json に equity/total_assets 未出力 → PBR 計算不能、market_cap 未取得 → PER/EV-EBITDA も null"
+    diff:
+      before: "per=null, pbr=null, ev_ebitda=null"
+      after: "per=17.98, pbr=2.25, ev_ebitda=14.0"
+    backup:
+      valuation_dir: "/tmp/bank_regression_9823_20260310_164412/valuation"
+      metrics_backup: "/tmp/bank_regression_9823_20260310_164412/metrics.json.bak"
+    other_ticker_verification:
+      pre_snapshot_path: "/tmp/bank_regression_9823_pre_snapshot.json"
+      comparison:
+        - path: "data/4971/valuation/relative.json"
+          pre_hash: "534cbfca239f6e46743d8912c537f614b8c23a2b32861e244f33321bfc9288d2"
+          post_hash: "534cbfca239f6e46743d8912c537f614b8c23a2b32861e244f33321bfc9288d2"
+          status: "UNCHANGED"
+        - path: "data/9716/valuation/relative.json"
+          pre_hash: "a803a31fa5f1b7424ccdc7a8b78dd7c3b22ac83e367bb2d063e06c9945da5e5e"
+          post_hash: "a803a31fa5f1b7424ccdc7a8b78dd7c3b22ac83e367bb2d063e06c9945da5e5e"
+          status: "UNCHANGED"
+    acceptance_criteria:
+      - "原因切り分けで null 発生源が特定されていること"
+      - "relative.json の per, pbr, ev_ebitda が全て non-null"
+      - "他銘柄データが実行前スナップショットと一致していること"
+      - "タイムスタンプ付きバックアップが /tmp に作成されていること"
+      - "変更前後の diff が報告に含まれること"
+      - "全手順が permissions.yaml 許可コマンドのみで実施されていること"
 review_followup:
   request_id: null
   task_id: null
