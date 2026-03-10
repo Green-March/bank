@@ -24,6 +24,7 @@ gates:
 
   - id: valuation_range
     type: json_file_value_range
+    severity: warn
     params:
       file: "dcf.json"
       rules:

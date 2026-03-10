@@ -1,45 +1,44 @@
 queue:
-  - request_id: "req_067"
-    objective: "--from-step ダイヤモンドDAG安全バリデーション。--from-step=valuate 等で部分再実行時、report ステップが兄弟ステップ(valuate_relative, analyze_risk, inventory)に依存しているにもかかわらず、それらがスキップされて暗黙的に失敗する問題を修正する。兄弟自動包含またはバリデーションエラーを追加すること。"
+  - request_id: "req_070"
+    objective: "regression.py に --full-rerun モードを追加。ticker のみ指定でフルパイプライン再実行を可能にし、resolve_result.json がないレガシー銘柄 (2780/7685/9743) もスキップせず処理できるようにする"
     ticker: null
     universe: null
-    analysis_type: "pipeline_enhancement"
+    analysis_type: "feature_development"
     timeframe: null
-    output_format: ["md"]
+    output_format: ["test"]
     priority: "high"
     due_date: "2026-03-10"
     constraints:
-      - "pipeline-runner の _compute_exec_set() を修正対象とする"
-      - "ダイヤモンドDAG (calculate → {valuate, valuate_relative, analyze_risk, inventory} → report) で安全に動作すること"
-      - "既存テスト(147件)を壊さないこと"
-      - "新規テストを追加すること"
+      - "既存の regression.py dry-run / 通常モードに影響を与えない"
+      - "resolve_result.json がない銘柄でも ticker から resolve ステップを含むフル再実行が走ること"
+      - "テストを追加すること"
 
-  - request_id: "req_068"
-    objective: "バリュエーション妥当性ゲート valuation_reasonableness を quality-gate に追加。PER=61.06 等の極端な値が全ゲート PASS する現状を改善し、severity:warn の閾値ベースゲートで警告を出す。PER/PBR/EV-EBITDA の妥当範囲チェック。"
+  - request_id: "req_071"
+    objective: "valuation_reasonableness ゲートにバリュエーション閾値の業種別プロファイル (thresholds_profile) を追加。growth/value/financial/default の4プロファイルで閾値を切り替え可能にする"
     ticker: null
     universe: null
-    analysis_type: "quality_gate_enhancement"
+    analysis_type: "feature_development"
     timeframe: null
-    output_format: ["md"]
+    output_format: ["test"]
     priority: "medium"
     due_date: "2026-03-10"
     constraints:
-      - "severity: warn（パイプライン非停止）で実装"
-      - "閾値は設定可能にする (PER: 0-100, PBR: 0-30, EV/EBITDA: 0-50 等のデフォルト)"
-      - "既存テスト(142件)を壊さないこと"
-      - "新規テストを追加すること"
+      - "デフォルトプロファイルは現行閾値 (PER 0-50, PBR 0-5.0, EV-EBITDA 0-40) を維持"
+      - "growth プロファイルは PER/EV-EBITDA の上限を緩和"
+      - "financial プロファイルは PBR の上限を緩和"
+      - "YAML で profile 指定可能にすること"
+      - "テストを追加すること"
 
-  - request_id: "req_069"
-    objective: "regression.py を実データで実行し、9823 マミーマートHD の relative valuation null 問題を解消する。必要に応じて 9823 のフルパイプライン再実行も行う。"
-    ticker: "9823"
+  - request_id: "req_072"
+    objective: "レガシー銘柄 (2780 コメ兵HD, 7685 BuySell Technologies, 9743 丹青社) をフルパイプラインで再実行し、最新の13ステップパイプラインで統一された成果物を生成する"
+    ticker: "2780,7685,9743"
     universe: null
-    analysis_type: "regression_fix"
-    timeframe: null
+    analysis_type: "full_pipeline_rerun"
+    timeframe: "5y"
     output_format: ["md"]
     priority: "medium"
     due_date: "2026-03-10"
     constraints:
-      - "regression.py の dry-run ではなく実データ実行を行う"
-      - "relative.json の PER/PBR/EV-EBITDA が全て non-null になること"
-      - "既存の他銘柄データを破壊しないこと"
-      - "実行結果を報告すること"
+      - "req_070 の --full-rerun モード完成後に実行すること"
+      - "全13ステップが成功し、PER/PBR/EV-EBITDA が non-null であること"
+      - "regression.py で一括実行が望ましい"

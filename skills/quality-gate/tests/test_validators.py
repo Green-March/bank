@@ -1002,6 +1002,79 @@ class TestValuationReasonableness:
         assert result.gate_pass is True
 
 
+class TestValuationReasonablenessProfiles:
+    """Tests for thresholds_profile parameter."""
+
+    @staticmethod
+    def _write_relative(tmp_path, data):
+        (tmp_path / "relative.json").write_text(json.dumps(data))
+
+    def test_default_profile_same_as_before(self, tmp_path):
+        """default profile uses PER 0-50, PBR 0-5.0, EV-EBITDA 0-40."""
+        self._write_relative(tmp_path, {"per": 51.0, "pbr": 2.0, "ev_ebitda": 10.0})
+        result = validate_valuation_reasonableness(tmp_path, thresholds_profile="default")
+        assert result.gate_pass is False
+        assert any(v["metric"] == "per" for v in result.violations)
+
+    def test_growth_profile_per_relaxed(self, tmp_path):
+        """growth profile: PER=61.06 passes (max=100)."""
+        self._write_relative(tmp_path, {"per": 61.06, "pbr": 3.0, "ev_ebitda": 20.0})
+        result = validate_valuation_reasonableness(tmp_path, thresholds_profile="growth")
+        assert result.gate_pass is True
+        assert len(result.violations) == 0
+
+    def test_growth_profile_ev_ebitda_relaxed(self, tmp_path):
+        """growth profile: EV/EBITDA=60 passes (max=80)."""
+        self._write_relative(tmp_path, {"per": 30.0, "pbr": 5.0, "ev_ebitda": 60.0})
+        result = validate_valuation_reasonableness(tmp_path, thresholds_profile="growth")
+        assert result.gate_pass is True
+
+    def test_value_profile_stricter(self, tmp_path):
+        """value profile: PER=35 fails (max=30)."""
+        self._write_relative(tmp_path, {"per": 35.0, "pbr": 2.0, "ev_ebitda": 10.0})
+        result = validate_valuation_reasonableness(tmp_path, thresholds_profile="value")
+        assert result.gate_pass is False
+        assert any(v["metric"] == "per" for v in result.violations)
+
+    def test_financial_profile_pbr_relaxed(self, tmp_path):
+        """financial profile: PBR=8.0 passes (max=10.0)."""
+        self._write_relative(tmp_path, {"per": 20.0, "pbr": 8.0, "ev_ebitda": 15.0})
+        result = validate_valuation_reasonableness(tmp_path, thresholds_profile="financial")
+        assert result.gate_pass is True
+        assert len(result.violations) == 0
+
+    def test_unknown_profile_falls_back_to_default(self, tmp_path):
+        """Unknown profile name falls back to default thresholds."""
+        self._write_relative(tmp_path, {"per": 51.0, "pbr": 2.0, "ev_ebitda": 10.0})
+        result = validate_valuation_reasonableness(tmp_path, thresholds_profile="nonexistent")
+        assert result.gate_pass is False
+        assert any(v["metric"] == "per" for v in result.violations)
+
+    def test_profile_with_threshold_override(self, tmp_path):
+        """Profile base + per-metric override: growth base with custom PER max=50."""
+        self._write_relative(tmp_path, {"per": 61.06, "pbr": 5.0, "ev_ebitda": 20.0})
+        result = validate_valuation_reasonableness(
+            tmp_path,
+            thresholds={"per": {"max": 50}},
+            thresholds_profile="growth",
+        )
+        assert result.gate_pass is False
+        assert any(v["metric"] == "per" for v in result.violations)
+
+    def test_profile_via_run_all_gates(self, tmp_path):
+        """Profile parameter works through run_all_gates."""
+        self._write_relative(tmp_path, {"per": 61.06, "pbr": 3.0, "ev_ebitda": 20.0})
+        gates_config = [{
+            "id": "val_reasonableness",
+            "type": "valuation_reasonableness",
+            "severity": "warn",
+            "params": {"file": "relative.json", "profile": "growth"},
+        }]
+        result = run_all_gates(gates_config, tmp_path)
+        assert result.overall_pass is True
+        assert len(result.warnings) == 0
+
+
 class TestValuationReasonablenessRunAllGates:
     """Tests for valuation_reasonableness gate type in run_all_gates."""
 

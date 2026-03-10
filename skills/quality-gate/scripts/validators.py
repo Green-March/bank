@@ -568,11 +568,32 @@ _VALUATION_DEFAULTS: dict[str, dict[str, float]] = {
     "ev_ebitda": {"min": 0, "max": 40},
 }
 
+# Industry-specific threshold profiles
+_VALUATION_PROFILES: dict[str, dict[str, dict[str, float]]] = {
+    "default": _VALUATION_DEFAULTS,
+    "growth": {
+        "per": {"min": 0, "max": 100},
+        "pbr": {"min": 0, "max": 10.0},
+        "ev_ebitda": {"min": 0, "max": 80},
+    },
+    "value": {
+        "per": {"min": 0, "max": 30},
+        "pbr": {"min": 0, "max": 3.0},
+        "ev_ebitda": {"min": 0, "max": 25},
+    },
+    "financial": {
+        "per": {"min": 0, "max": 50},
+        "pbr": {"min": 0, "max": 10.0},
+        "ev_ebitda": {"min": 0, "max": 40},
+    },
+}
+
 
 def validate_valuation_reasonableness(
     data_dir: Path,
     filename: str = "relative.json",
     thresholds: dict[str, dict[str, float]] | None = None,
+    thresholds_profile: str = "default",
 ) -> ValuationReasonablenessResult:
     """Check that valuation metrics fall within reasonable ranges.
 
@@ -581,13 +602,16 @@ def validate_valuation_reasonableness(
         filename: Name of the valuation JSON file (default: relative.json).
         thresholds: Override thresholds per metric.
             e.g. {"per": {"min": 0, "max": 100}, "pbr": {"min": 0, "max": 10}}
-            Missing metrics use defaults from _VALUATION_DEFAULTS.
+            Missing metrics use the profile base.
+        thresholds_profile: Profile name ("default", "growth", "value", "financial").
+            Determines the base thresholds before per-metric overrides.
 
     Returns:
         ValuationReasonablenessResult with violations for out-of-range values.
         Null values are skipped (not violations).
     """
-    merged = dict(_VALUATION_DEFAULTS)
+    base = _VALUATION_PROFILES.get(thresholds_profile, _VALUATION_DEFAULTS)
+    merged = {k: dict(v) for k, v in base.items()}
     if thresholds:
         for key, val in thresholds.items():
             merged[key] = {**merged.get(key, {}), **val}
@@ -1068,7 +1092,10 @@ def run_all_gates(
         elif gate_type == "valuation_reasonableness":
             filename = params.get("file", "relative.json")
             thresholds = params.get("thresholds", None)
-            r = validate_valuation_reasonableness(data_dir, filename, thresholds)
+            profile = params.get("profile", "default")
+            r = validate_valuation_reasonableness(
+                data_dir, filename, thresholds, thresholds_profile=profile,
+            )
             results.append({
                 "id": gate_id,
                 "pass": r.gate_pass,

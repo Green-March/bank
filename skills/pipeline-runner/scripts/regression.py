@@ -269,6 +269,7 @@ def run_ticker(
     exec_set: set[str],
     output_dirs: dict[str, str],
     dry_run: bool = False,
+    full_rerun: bool = False,
 ) -> dict[str, Any]:
     """Orchestrate regression for a single ticker."""
     result: dict[str, Any] = {
@@ -279,15 +280,23 @@ def run_ticker(
         "errors": [],
     }
 
-    # --- Resolve vars ---
-    log_path = find_log(ticker)
-    runtime_vars, vars_source = resolve_vars(ticker, log_path)
-    result["vars_source"] = vars_source
+    if full_rerun:
+        # Full rerun: only ticker is needed, resolve step will populate vars
+        runtime_vars: dict[str, str] = {}
+        vars_source: str | None = "full_rerun"
+        log_path: Path | None = None
+    else:
+        # --- Resolve vars ---
+        log_path = find_log(ticker)
+        runtime_vars_opt, vars_source = resolve_vars(ticker, log_path)
 
-    if runtime_vars is None:
-        result["status"] = "skipped"
-        result["errors"].append("SKIPPED: insufficient data")
-        return result
+        if runtime_vars_opt is None:
+            result["status"] = "skipped"
+            result["errors"].append("SKIPPED: insufficient data")
+            return result
+        runtime_vars = runtime_vars_opt
+
+    result["vars_source"] = vars_source
 
     # --- Dry-run ---
     if dry_run:
@@ -311,7 +320,10 @@ def run_ticker(
     vars_parts = [f"ticker={ticker}"]
     use_log = log_path if vars_source == "pipeline_log" else None
 
-    if use_log:
+    if full_rerun:
+        # Full rerun: only ticker var, no --from-step (run all steps)
+        use_log = None
+    elif use_log:
         pass  # runtime_vars come from --log
     else:
         for k, v in runtime_vars.items():
@@ -321,8 +333,9 @@ def run_ticker(
         "python3", "skills/pipeline-runner/scripts/main.py", "run",
         "--pipeline", str(pipeline_path),
         "--vars", ",".join(vars_parts),
-        "--from-step", from_step,
     ]
+    if not full_rerun:
+        cmd.extend(["--from-step", from_step])
     if use_log:
         cmd.extend(["--log", str(use_log)])
 
@@ -478,6 +491,10 @@ def main() -> None:
         "--dry-run", action="store_true", dest="dry_run",
         help="Show what would be done without executing",
     )
+    parser.add_argument(
+        "--full-rerun", action="store_true", dest="full_rerun",
+        help="Full pipeline rerun from resolve step (no resolve_result.json needed)",
+    )
 
     args = parser.parse_args()
     tickers = [t.strip() for t in args.tickers.split(",")]
@@ -485,10 +502,17 @@ def main() -> None:
     # Load pipeline config
     config = PipelineConfig.load(args.pipeline)
 
-    # Compute exec set
-    exec_set = compute_exec_set(config, args.from_step)
+    # Full rerun forces from_step to resolve
+    from_step = args.from_step
+    if args.full_rerun:
+        from_step = "resolve"
 
-    print(f"Regression: from_step={args.from_step}")
+    # Compute exec set
+    exec_set = compute_exec_set(config, from_step)
+
+    print(f"Regression: from_step={from_step}")
+    if args.full_rerun:
+        print("Mode: full-rerun (resolve_result.json not required)")
     print(f"Exec set: {sorted(exec_set)}")
     print(f"Tickers: {tickers}")
 
@@ -502,8 +526,8 @@ def main() -> None:
         print(f"{'=' * 60}")
 
         r = run_ticker(
-            ticker, config, args.from_step, args.pipeline,
-            exec_set, output_dirs, args.dry_run,
+            ticker, config, from_step, args.pipeline,
+            exec_set, output_dirs, args.dry_run, args.full_rerun,
         )
         results.append(r)
 
@@ -517,7 +541,7 @@ def main() -> None:
 
     # Generate report
     report_path = args.report
-    generate_report(results, args.from_step, report_path)
+    generate_report(results, from_step, report_path)
     print(f"\nReport written to: {report_path}")
 
     # Summary

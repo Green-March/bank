@@ -441,3 +441,146 @@ class TestCollectJsonFiles:
     def test_nonexistent_dir_returns_empty(self) -> None:
         files = collect_json_files("/nonexistent/dir")
         assert files == {}
+
+
+# ---------------------------------------------------------------------------
+# 9. Full rerun mode (--full-rerun)
+# ---------------------------------------------------------------------------
+
+class TestFullRerun:
+    """Tests for --full-rerun mode."""
+
+    @patch("regression.subprocess.run")
+    def test_full_rerun_skips_resolve_vars(
+        self, mock_run: MagicMock, tmp_path: Path,
+        config: PipelineConfig, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """--full-rerun does not require resolve_result.json or pipeline_log."""
+        monkeypatch.chdir(tmp_path)
+        # No data at all for this ticker — normally would be skipped
+        (tmp_path / "data" / "2780").mkdir(parents=True)
+
+        mock_run.return_value = MagicMock(returncode=0, stderr="", stdout="ok")
+
+        exec_set = compute_exec_set(config, "step_a")
+        output_dirs = resolve_output_dirs(config, "2780", exec_set)
+
+        result = run_ticker(
+            "2780", config, "step_a", str(tmp_path / "pipeline.yaml"),
+            exec_set, output_dirs, dry_run=False, full_rerun=True,
+        )
+
+        assert result["status"] == "completed"
+        assert result["vars_source"] == "full_rerun"
+        mock_run.assert_called_once()
+
+    @patch("regression.subprocess.run")
+    def test_full_rerun_no_from_step_in_cmd(
+        self, mock_run: MagicMock, tmp_path: Path,
+        config: PipelineConfig, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """--full-rerun does not pass --from-step to pipeline CLI."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "data" / "7685").mkdir(parents=True)
+
+        mock_run.return_value = MagicMock(returncode=0, stderr="", stdout="ok")
+
+        exec_set = compute_exec_set(config, "step_a")
+        output_dirs = resolve_output_dirs(config, "7685", exec_set)
+
+        run_ticker(
+            "7685", config, "step_a", str(tmp_path / "pipeline.yaml"),
+            exec_set, output_dirs, dry_run=False, full_rerun=True,
+        )
+
+        cmd = mock_run.call_args[0][0]
+        assert "--from-step" not in cmd
+
+    @patch("regression.subprocess.run")
+    def test_full_rerun_only_ticker_var(
+        self, mock_run: MagicMock, tmp_path: Path,
+        config: PipelineConfig, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """--full-rerun passes only ticker= in --vars."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "data" / "9743").mkdir(parents=True)
+
+        mock_run.return_value = MagicMock(returncode=0, stderr="", stdout="ok")
+
+        exec_set = compute_exec_set(config, "step_a")
+        output_dirs = resolve_output_dirs(config, "9743", exec_set)
+
+        run_ticker(
+            "9743", config, "step_a", str(tmp_path / "pipeline.yaml"),
+            exec_set, output_dirs, dry_run=False, full_rerun=True,
+        )
+
+        cmd = mock_run.call_args[0][0]
+        vars_idx = cmd.index("--vars")
+        vars_val = cmd[vars_idx + 1]
+        assert vars_val == "ticker=9743"
+
+    def test_full_rerun_dry_run(
+        self, tmp_path: Path,
+        config: PipelineConfig, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """--full-rerun + --dry-run returns dry_run status with full_rerun source."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "data" / "2780").mkdir(parents=True)
+
+        exec_set = compute_exec_set(config, "step_a")
+        output_dirs = resolve_output_dirs(config, "2780", exec_set)
+
+        result = run_ticker(
+            "2780", config, "step_a", str(tmp_path / "pipeline.yaml"),
+            exec_set, output_dirs, dry_run=True, full_rerun=True,
+        )
+
+        assert result["status"] == "dry_run"
+        assert result["vars_source"] == "full_rerun"
+        assert result["vars"] == {"ticker": "2780"}
+
+    @patch("regression.subprocess.run")
+    def test_full_rerun_rollback_on_failure(
+        self, mock_run: MagicMock, tmp_path: Path,
+        config: PipelineConfig, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """--full-rerun rolls back on pipeline failure."""
+        monkeypatch.chdir(tmp_path)
+
+        # Create output dir with existing data
+        out_dir = tmp_path / "2780" / "out_a"
+        out_dir.mkdir(parents=True)
+        (out_dir / "data.json").write_text('{"original": true}')
+
+        mock_run.return_value = MagicMock(returncode=1, stderr="error", stdout="")
+
+        exec_set = compute_exec_set(config, "step_a")
+        output_dirs = resolve_output_dirs(config, "2780", exec_set)
+
+        result = run_ticker(
+            "2780", config, "step_a", str(tmp_path / "pipeline.yaml"),
+            exec_set, output_dirs, dry_run=False, full_rerun=True,
+        )
+
+        assert result["status"] == "rolled_back"
+        assert any("exit code" in e for e in result["errors"])
+
+    def test_normal_mode_still_skips_without_data(
+        self, tmp_path: Path,
+        config: PipelineConfig, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Normal mode (no --full-rerun) still skips tickers without data."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "data" / "2780").mkdir(parents=True)
+
+        exec_set = compute_exec_set(config, "step_a")
+        output_dirs = resolve_output_dirs(config, "2780", exec_set)
+
+        result = run_ticker(
+            "2780", config, "step_a", str(tmp_path / "pipeline.yaml"),
+            exec_set, output_dirs, dry_run=False, full_rerun=False,
+        )
+
+        assert result["status"] == "skipped"
+        assert "SKIPPED" in result["errors"][0]
