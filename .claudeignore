@@ -1,0 +1,15 @@
+data/
+output/
+logs/
+queue/
+__pycache__/
+*.pyc
+venv/
+.venv/
+build/
+dist/
+*.egg-info/
+.claude/hooks/logs/
+memory/
+.playwright-mcp/
+.codex/

@@ -3,6 +3,8 @@
 !.claude/settings.json
 !.claude/hooks/
 !.claude/hooks/sessionstart-clear-load-junior-context.sh
+!.claude/rules/
+!.claude/rules/*.md
 .mcp.json
 
 # OS files
