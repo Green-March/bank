@@ -51,6 +51,7 @@ task:
   priority: medium
   status: idle
   timestamp: ""
+  execution_command: null
 YAML
 
 mv "${tmp_file}" "${queue_file}"

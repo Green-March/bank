@@ -58,6 +58,7 @@ task:
   priority: medium
   status: idle
   timestamp: ""
+  execution_command: null
 ```
 
 Report (`queue/reports/junior{N}_report.yaml`):

@@ -1,18 +1,18 @@
 review_response:
   request_type: deliverable_review_response
   review_type: deliverable
-  request_id: 'rev_req_075_003'
-  task_id: 'req_075'
-  junior_id: 'junior3'
+  request_id: 'review_080_002'
+  task_id: 'task_080'
+  junior_id: 'junior1'
   verdict: 'ok'
   comments:
-    schema_conformance: 'レポートは .md に統一され、同一実行の一次証跡は regression_evidence 配下の構造化 JSON として提供されています。'
-    data_integrity: 'fullrerun_evidence.json と各 per-step gate JSON で、3銘柄それぞれ13ステップの overall_pass=true と valuation 判定が一貫しています。'
-    source_traceability: 'data/regression_evidence/fullrerun_evidence.json と 2780/7685/9743 の gate JSON が一次証跡として機能し、gates_valuation.yaml の定義とも追跡可能です。'
-    analytical_validity: '2780 の valuation_range pass=false severity=warn、7685/9743 の pass=true severity=error が構造化証跡で確認でき、検証結論は妥当です。'
-    clarity: 'regression_fullrerun_report.md は実行コマンド、13ステップ結果、valuation gate 結果、証跡ファイル参照を明確に整理しています。'
-    risk_disclosure: '市場価格の微変動による差分という前提を保ちつつ、warning を伴う 2780 の扱いも証跡付きで明示されており主要リスクは開示されています。'
-  e2e_check: '同一実行の構造化 JSON 証跡で 13/13 ステップ成功、2780 の warn ハンドリング、出典定義との整合、指標差分の追跡性を確認しました。'
+    schema_conformance: 'data/9622/pipeline_log.json に13ステップの status と gate_result が揃っており、relative.json に source_attribution が追加されて成果物構造が補完されています。'
+    data_integrity: 'pipeline_log.json では 13/13 completed かつ各 step の overall_pass=True を確認し、relative.json でも PER=17.01、PBR=1.37、EV/EBITDA=12.55 が non-null でした。'
+    source_traceability: 'integrated_financials.json の integration_metadata に加え、relative.json に EDINET 手動補完、J-Quants 未採用、market_data 由来、fye_confirmation が機械可読で保持されています。'
+    analytical_validity: 'regression_report.md に 9622 の full_rerun 完了記録があり、pipeline_log.json の gate 証跡と相対バリュエーション値が相互に整合しています。'
+    clarity: 'R2 では前回不足していたログ証跡と出典情報が明示的に補われ、E2E 完了条件を追跡しやすくなりました。'
+    risk_disclosure: '認証情報の露出や新たな外部アクセス設定は見当たらず、残留リスクは J-Quants parsed 未格納の前提が source_attribution に依存している点です。'
+  e2e_check: 'ステップ間データ整合性・欠損伝播・source_attribution 一貫性・数値精度保持を主要成果物で確認し、pipeline_log.json で 13ステップ全完了と全 gate pass を確認しました。'
   suggested_changes: []
   status: 'completed'
-  timestamp: '2026-03-11 10:29:43'
+  timestamp: '2026-03-11 13:07:41'

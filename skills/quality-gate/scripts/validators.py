@@ -936,6 +936,10 @@ def validate_step_type_consistency(
 # Gate runner
 # ---------------------------------------------------------------------------
 
+# Whitelist of keys allowed in ticker_overrides per-gate entries.
+# Keys not in this set are ignored with a warning log.
+ALLOWED_OVERRIDE_KEYS = {"severity"}
+
 
 def run_all_gates(
     gates_config: list[dict],
@@ -967,9 +971,18 @@ def run_all_gates(
         gate_type = gate["type"]
         params = gate.get("params", {})
 
-        # Apply per-ticker severity override if present
+        # Apply per-ticker severity override if present (whitelist-filtered)
         if gate_id in _gate_overrides:
-            gate = {**gate, **_gate_overrides[gate_id]}
+            raw_override = _gate_overrides[gate_id]
+            filtered = {k: v for k, v in raw_override.items() if k in ALLOWED_OVERRIDE_KEYS}
+            disallowed = set(raw_override.keys()) - ALLOWED_OVERRIDE_KEYS
+            if disallowed:
+                logger.warning(
+                    "ticker_overrides for gate '%s': ignoring disallowed keys %s",
+                    gate_id, sorted(disallowed),
+                )
+            if filtered:
+                gate = {**gate, **filtered}
 
         if gate_type == "null_rate":
             r = validate_null_rate(periods, threshold=params.get("threshold", 0.5))

@@ -1194,3 +1194,72 @@ class TestTickerOverrides:
         }]
         result = run_all_gates(gates_config, tmp_path, ticker="2780", ticker_overrides=None)
         assert result.overall_pass is True
+
+    def test_ticker_override_only_severity_allowed(self, tmp_path):
+        """Only 'severity' key from ticker_overrides is applied."""
+        self._write_dcf(tmp_path, {"enterprise_value": -100, "equity_value": -50, "assumptions": {}})
+        gates_config = [{
+            "id": "valuation_range",
+            "type": "json_file_value_range",
+            "severity": "error",
+            "params": {
+                "file": "dcf.json",
+                "rules": {"enterprise_value": {"min": 0}, "equity_value": {"min": 0}},
+            },
+        }]
+        ticker_overrides = {
+            "2780": {
+                "valuation_range": {"severity": "warn"},
+            },
+        }
+        result = run_all_gates(gates_config, tmp_path, ticker="2780", ticker_overrides=ticker_overrides)
+        # severity=warn is allowed, so violations don't block overall_pass
+        assert result.overall_pass is True
+        vr = [g for g in result.gates if g["id"] == "valuation_range"][0]
+        assert vr["severity"] == "warn"
+
+    def test_ticker_override_invalid_key_ignored(self, tmp_path):
+        """Disallowed keys (e.g. params, gate_type) in ticker_overrides are ignored."""
+        self._write_dcf(tmp_path, {"enterprise_value": -100, "equity_value": -50, "assumptions": {}})
+        gates_config = [{
+            "id": "valuation_range",
+            "type": "json_file_value_range",
+            "severity": "error",
+            "params": {
+                "file": "dcf.json",
+                "rules": {"enterprise_value": {"min": 0}, "equity_value": {"min": 0}},
+            },
+        }]
+        ticker_overrides = {
+            "2780": {
+                "valuation_range": {"severity": "warn", "params": {"file": "evil.json"}, "type": "null_rate"},
+            },
+        }
+        result = run_all_gates(gates_config, tmp_path, ticker="2780", ticker_overrides=ticker_overrides)
+        # severity=warn applied, but params/type overrides ignored
+        vr = [g for g in result.gates if g["id"] == "valuation_range"][0]
+        assert vr["severity"] == "warn"
+        # Violations still found from dcf.json (not evil.json), confirming params was not overridden
+        assert vr["detail"]["violation_count"] > 0
+
+    def test_ticker_override_invalid_key_warning_logged(self, tmp_path, caplog):
+        """Disallowed keys produce a warning log message."""
+        import logging
+        self._write_dcf(tmp_path, {"enterprise_value": 100, "equity_value": 50, "assumptions": {}})
+        gates_config = [{
+            "id": "valuation_range",
+            "type": "json_file_value_range",
+            "severity": "error",
+            "params": {
+                "file": "dcf.json",
+                "rules": {"enterprise_value": {"min": 0}},
+            },
+        }]
+        ticker_overrides = {
+            "2780": {
+                "valuation_range": {"severity": "warn", "params": {"file": "x.json"}},
+            },
+        }
+        with caplog.at_level(logging.WARNING, logger="validators"):
+            run_all_gates(gates_config, tmp_path, ticker="2780", ticker_overrides=ticker_overrides)
+        assert any("ignoring disallowed keys" in msg for msg in caplog.messages)

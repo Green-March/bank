@@ -77,6 +77,9 @@ workflow:
       - "120秒経過 → corrective message 送信（応答が null または acknowledgement-only の場合。verdict/comments/suggested_changes 出力形式と ./templates/reviewer_finalize.sh 使用を明示）"
       - "さらに120秒経過しても応答 YAML が null または acknowledgement-only → Senior 簡易レビュー実施"
       - "簡易レビューは verdict/comments/suggested_changes の出力形式を維持し、queue/review/reviewer_to_senior.yaml に書き込む"
+    minimum_review_criteria:
+      - "scope: 要求事項がすべてタスクに分解されているか"
+      - "feasibility: 利用可能なスキル・データソースで実行可能か"
     late_response_rule: "Senior 簡易レビュー実行後に Reviewer 遅延応答が到着 → Senior 簡易レビューの verdict を優先。遅延応答は無視。dashboard.md Action Required に「Reviewer 遅延応答検知」ログを記録。次回以降は通常フロー（Reviewer 優先）に復帰。"
   - step: 9
     action: receive_wakeup
@@ -94,6 +97,7 @@ workflow:
   - step: 12
     action: write_yaml
     target: "queue/tasks/junior{N}.yaml"
+    rule: "execution_command フィールドに具体的な実行手順（コマンド、ファイルパス、手順番号）を必ず記載すること。Junior の自己判断による非効率な実行方法選択を防止する。"
   - step: 13
     action: send_keys
     target: junior_pane_id_from_lookup
@@ -129,6 +133,9 @@ workflow:
       - "120秒経過 → corrective message 送信（応答が null または acknowledgement-only の場合。verdict/comments/suggested_changes 出力形式と ./templates/reviewer_finalize.sh 使用を明示）"
       - "さらに120秒経過しても応答 YAML が null または acknowledgement-only → Senior 簡易レビュー実施"
       - "簡易レビューは verdict/comments/suggested_changes の出力形式を維持し、queue/review/reviewer_to_junior.yaml に書き込む"
+    minimum_review_criteria:
+      - "schema_conformance: 出力スキーマ準拠（期待される YAML/JSON 構造と一致するか）"
+      - "data_integrity: データ整合性（欠損・null・型不一致がないか）"
     late_response_rule: "Senior 簡易レビュー実行後に Reviewer 遅延応答が到着 → Senior 簡易レビューの verdict を優先。遅延応答は無視（Junior への二重指示防止）。dashboard.md Action Required に「Reviewer 遅延応答検知」ログを記録。次回以降は通常フロー（Reviewer 優先）に復帰。"
   - step: 20
     action: receive_wakeup
@@ -368,8 +375,8 @@ Reviewer 通知後、`reviewer_timeout_seconds`（120秒）以内に応答 YAML 
 3. さらに120秒経過後、応答 YAML を再度読む。
 4. それでも null または acknowledgement-only の場合 → Senior が簡易レビューを実施する。
    - 簡易レビューは `verdict/comments/suggested_changes` の出力形式を維持する。
-   - Phase B: `queue/review/reviewer_to_senior.yaml` に書き込む。
-   - Phase D: `queue/review/reviewer_to_junior.yaml` に書き込む。
+   - Phase B: `queue/review/reviewer_to_senior.yaml` に書き込む。最低チェック観点: **scope**（スコープ網羅性）、**feasibility**（実現可能性）。
+   - Phase D: `queue/review/reviewer_to_junior.yaml` に書き込む。最低チェック観点: **schema_conformance**（出力スキーマ準拠）、**data_integrity**（データ整合性）。
    - `comments` に「Senior 簡易レビュー（Reviewer タイムアウト）」と明記する。
 5. 簡易レビュー完了後、通常のワークフロー（step 9 または step 20 以降）に進む。
 

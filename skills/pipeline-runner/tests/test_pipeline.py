@@ -105,6 +105,36 @@ def test_dag_validation_cycle(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# 3b. test_dag_validation_isolated_node
+# ---------------------------------------------------------------------------
+
+def test_dag_validation_isolated_node(tmp_path: Path) -> None:
+    """Isolated node (no deps and not depended upon) is detected."""
+    steps = [
+        {"id": "a", "skill": "s", "command": "echo a", "output_dir": "o/a"},
+        {"id": "b", "skill": "s", "command": "echo b", "output_dir": "o/b", "depends_on": ["a"]},
+        {"id": "orphan", "skill": "s", "command": "echo x", "output_dir": "o/x"},
+    ]
+    yaml_path = _write_pipeline_yaml(tmp_path, steps)
+    config = PipelineConfig.load(yaml_path)
+    errors = config.validate_dag()
+    assert any("isolated" in e and "orphan" in e for e in errors)
+
+
+def test_dag_validation_leaf_not_isolated(tmp_path: Path) -> None:
+    """Leaf node (has deps but not depended upon) is NOT isolated."""
+    steps = [
+        {"id": "a", "skill": "s", "command": "echo a", "output_dir": "o/a"},
+        {"id": "b", "skill": "s", "command": "echo b", "output_dir": "o/b", "depends_on": ["a"]},
+        {"id": "report", "skill": "s", "command": "echo r", "output_dir": "o/r", "depends_on": ["b"]},
+    ]
+    yaml_path = _write_pipeline_yaml(tmp_path, steps)
+    config = PipelineConfig.load(yaml_path)
+    errors = config.validate_dag()
+    assert errors == []
+
+
+# ---------------------------------------------------------------------------
 # 4. test_execution_order
 # ---------------------------------------------------------------------------
 

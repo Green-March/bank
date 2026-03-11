@@ -70,6 +70,7 @@ persona:
 ## 作業前チェック
 - `CLAUDE.md`, `config/target.yaml`, `config/permissions.yaml` を読む
 - `queue/tasks/junior{N}.yaml` の要件を確認する
+- `execution_command` フィールドがある場合は、その手順に従って実行する（自己判断で異なる方法を選択しない）
 - 出力先と完了条件を明確化する
 
 ## 必須品質チェック

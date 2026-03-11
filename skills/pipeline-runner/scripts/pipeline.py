@@ -258,6 +258,14 @@ class PipelineConfig:
                 if dep not in ids:
                     errors.append(f"step '{s.id}' depends on unknown step '{dep}'")
 
+        # Check for isolated nodes: nodes with no depends_on AND not depended
+        # upon by any other step.  Legitimate roots are depended upon by at
+        # least one downstream step; a truly isolated node is disconnected.
+        referenced = {dep for s in self.steps for dep in s.depends_on}
+        for s in self.steps:
+            if not s.depends_on and s.id not in referenced and len(ids) > 1:
+                errors.append(f"isolated node: '{s.id}' has no dependencies and is not depended upon")
+
         # Check for cycles using DFS
         if not errors:
             visited: set[str] = set()
