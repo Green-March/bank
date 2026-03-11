@@ -1,76 +1,104 @@
 plan_review_request:
+  request_id: plan_s46_001_r2
   request_type: senior_plan_review
   review_type: plan
   plan_scope: senior_master_plan
-  plan_id: "plan_s45_001"
-  timestamp: "2026-03-10T18:00:00+09:00"
-  objective: "3件のリクエスト (req_070, req_071, req_072) を2ウェーブで並列処理"
-  context:
-    session: 45
-    total_requests: 3
-    dependency: "req_072 は req_070 完了後に実行"
-  wave_1:
-    description: "並列実行 — 独立した2つの機能開発タスク"
-    tasks:
-      - task_id: "T1_req070"
-        request_id: "req_070"
-        assignee: "junior1"
-        description: "regression.py に --full-rerun モードを追加。ticker のみ指定でフルパイプライン再実行を可能にし、resolve_result.json がないレガシー銘柄もスキップせず処理できるようにする"
-        analysis_type: "feature_development"
-        priority: "high"
-        deliverables:
-          - "skills/pipeline-runner/regression.py に --full-rerun フラグ追加"
-          - "resolve_result.json なし銘柄でも resolve ステップからフル実行"
-          - "既存 dry-run / 通常モードへの影響なし"
-          - "テスト追加 (最低5件)"
-        acceptance_criteria:
-          - "--full-rerun フラグで ticker のみ指定のフル再実行が動作する"
-          - "resolve_result.json がない場合も resolve から全ステップ実行"
-          - "既存テスト全パス"
-          - "新規テスト追加・全パス"
-      - task_id: "T2_req071"
-        request_id: "req_071"
-        assignee: "junior2"
-        description: "valuation_reasonableness ゲートに業種別プロファイル (thresholds_profile) を追加。growth/value/financial/default の4プロファイル"
-        analysis_type: "feature_development"
-        priority: "medium"
-        deliverables:
-          - "quality-gate に thresholds_profile パラメータ追加"
-          - "4プロファイル定義: default(現行), growth(PER/EV-EBITDA緩和), value(現行), financial(PBR緩和)"
-          - "YAML で profile 指定可能"
-          - "テスト追加 (最低5件)"
-        acceptance_criteria:
-          - "default プロファイルは現行閾値を維持 (PER 0-50, PBR 0-5.0, EV-EBITDA 0-40)"
-          - "growth プロファイルで PER/EV-EBITDA 上限緩和"
-          - "financial プロファイルで PBR 上限緩和"
-          - "YAML 設定でプロファイル切替可能"
-          - "既存テスト全パス + 新規テスト追加・全パス"
-  wave_2:
-    description: "req_070 完了後に実行 — レガシー銘柄フルパイプライン再実行"
-    dependency: "wave_1 の T1_req070 完了後"
-    tasks:
-      - task_id: "T3_req072"
-        request_id: "req_072"
-        assignee: "junior3"
-        description: "レガシー銘柄 (2780/7685/9743) を --full-rerun モードで一括再実行し、13ステップパイプラインの成果物を生成"
-        analysis_type: "full_pipeline_rerun"
-        priority: "medium"
-        tickers: "2780,7685,9743"
-        deliverables:
-          - "3銘柄すべてで13ステップ成功"
-          - "PER/PBR/EV-EBITDA が全銘柄 non-null"
-          - "regression.py --full-rerun で一括実行"
-        acceptance_criteria:
-          - "3銘柄 x 13ステップ = 全成功"
-          - "バリュエーション指標 (PER/PBR/EV-EBITDA) 全non-null"
-          - "レポート .md 生成"
-  quality_criteria:
-    - "全既存テスト (2100+) がパスすること"
-    - "新規テスト追加: req_070 最低5件, req_071 最低5件"
-    - "コード品質: black / ruff / mypy チェック"
-    - "E2E: req_072 で3銘柄パイプライン完走"
-  risk_assessment:
-    - risk: "レガシー銘柄のEDINETデータが期限切れで取得失敗する可能性"
-      mitigation: "キャッシュ3層防御 + エラー時にログ出力して継続"
-    - risk: "req_070 の実装が遅延し req_072 がブロックされる"
-      mitigation: "req_071 を先に並列実行し、req_072 は req_070 完了確認後に開始"
+  plan_id: session46_3tasks_r2
+  timestamp: "2026-03-11T10:15:00+09:00"
+  objective: "S46 セッション — 3件のタスク (req_073, req_074, req_075) を実行する（R2: Reviewer 指摘2点反映）"
+  revision_note: "R1 verdict:revise に対応。req_073 に timeout 設定箇所の具体化と遅延応答競合解決ルールを追加。"
+
+  tasks:
+    - task_id: req_073
+      title: "Reviewer タイムアウト自動フォールバック"
+      assigned_to: junior1
+      description: |
+        instructions/senior.md のレビューフロー箇所に、Reviewer タイムアウト自動フォールバックを追加する。
+
+        ### タイムアウト設定の具体的な配置（R2 追加）
+        - 設定ファイル: instructions/senior.md の YAML フロントマター内
+        - キー名: reviewer_timeout_seconds（デフォルト値: 120）
+        - 参照箇所: instructions/senior.md の Phase B (step 8 周辺) および Phase D (step 19 周辺)
+        - .claude/rules/review-flow.md の「Reviewer stall recovery」セクションにも同一タイムアウト値を記載
+
+        ### フォールバックフロー
+        1. Reviewer 通知後、reviewer_timeout_seconds 秒経過 → corrective message 送信
+        2. さらに reviewer_timeout_seconds 秒経過しても応答 YAML が null → Senior 簡易レビュー実施
+        3. 簡易レビューでも verdict/comments/suggested_changes の出力形式を維持
+
+        ### 遅延応答の競合解決ルール（R2 追加）
+        - Senior 簡易レビューが実行され Junior に指示が送られた後に、Reviewer の遅延応答が到着した場合:
+          - Senior 簡易レビューの verdict を優先する（既に Junior への指示が発行済みのため巻き戻し不可）
+          - 遅延した Reviewer 応答は無視する（Junior への二重指示を防止）
+          - dashboard.md の Action Required に「Reviewer 遅延応答検知: request_id=XXX, Senior 簡易レビュー優先適用済み」とログを残す
+          - 次回以降のレビューサイクルは通常フロー（Reviewer 優先）に戻る
+      execution_command: "手動編集（instructions/senior.md および .claude/rules/review-flow.md）"
+      quality_criteria:
+        - "既存ワークフローステップと矛盾しない"
+        - "reviewer_timeout_seconds キーが instructions/senior.md フロントマターに定義されている"
+        - "簡易レビュー出力が verdict/comments/suggested_changes 形式"
+        - "review-flow.md の Reviewer stall recovery と整合"
+        - "遅延応答の競合解決ルールが明記されている"
+      dependencies: []
+      priority: high
+
+    - task_id: req_074
+      title: "銘柄別 severity オーバーライド"
+      assigned_to: junior2
+      description: |
+        quality-gate スキルに ticker 別 overrides セクションを追加する。
+        1. run_all_gates() に --ticker パラメータを追加（CLI + 関数引数）
+        2. gates YAML に ticker_overrides セクションを新設
+           例: ticker_overrides:
+                  "2780":
+                    valuation_range:
+                      severity: warn
+        3. run_all_gates() でゲート実行時に ticker_overrides があれば、
+           該当 gate の severity をオーバーライドする
+        4. gates_valuation.yaml の valuation_range を severity:error に原状復帰
+        5. 同ファイルに ticker_overrides で 2780 のみ severity:warn を設定
+        6. テスト追加: オーバーライド適用/未適用/不明ticker の3パターン
+      execution_command: |
+        編集: skills/quality-gate/scripts/main.py, skills/quality-gate/scripts/validators.py,
+              skills/quality-gate/references/gates_valuation.yaml
+        テスト: pytest skills/quality-gate/tests/ -v
+      quality_criteria:
+        - "既存テストが全パス"
+        - "新規テスト3件以上追加"
+        - "gates_valuation.yaml の valuation_range が severity:error に復帰"
+        - "2780 のみ severity:warn にオーバーライドされる"
+        - "ticker 未指定時は従来動作（オーバーライドなし）"
+      dependencies: []
+      priority: high
+
+    - task_id: req_075
+      title: "regression.py --full-rerun 実データ検証"
+      assigned_to: junior3
+      description: |
+        S45 で実装した --full-rerun モードを使って、レガシー3銘柄を regression.py 経由で一括再実行する。
+        - 実行コマンド: python skills/pipeline-runner/scripts/regression.py --full-rerun --tickers 2780 7685 9743
+        - 全銘柄で13ステップ全成功を確認
+        - 実行前後の出力 diff を記録
+        - req_074 で gates_valuation.yaml が原状復帰済みであることが前提
+      execution_command: "python skills/pipeline-runner/scripts/regression.py --full-rerun --tickers 2780 7685 9743"
+      quality_criteria:
+        - "全3銘柄で13ステップ全成功"
+        - "regression.py 経由での実行であること（個別 main.py run ではない）"
+        - "実行前後の diff が記録されている"
+        - "valuation ゲートが2780のみ severity:warn で通過"
+      dependencies:
+        - req_074
+      priority: medium
+
+  parallelization:
+    - group: [req_073, req_074]
+      strategy: parallel
+      note: "独立タスク、Junior1 と Junior2 に同時割り当て"
+    - group: [req_075]
+      strategy: sequential_after_req_074
+      note: "req_074 完了後に Junior3 に割り当て"
+
+  junior_load:
+    junior1: "req_073 (軽量・文書修正のみ)"
+    junior2: "req_074 (中量・コード変更+テスト)"
+    junior3: "req_075 (中量・パイプライン実行、req_074 完了待ち)"

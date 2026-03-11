@@ -545,7 +545,7 @@ class PipelineRunner:
                 self._process_output_vars(step, stdout, runtime_vars, vars_dict)
 
             if step.gates and step_log.status == "completed":
-                gate_log = self._run_gate(step)
+                gate_log = self._run_gate(step, ticker=runtime_vars.get("ticker"))
                 step_log_dict = pipeline_log["steps"][-1]
                 step_log_dict["gate_result"] = gate_log
 
@@ -635,7 +635,7 @@ class PipelineRunner:
                 step_log, stdout = self._run_step(step)
                 gate_log = None
                 if step.gates and step_log.status == "completed":
-                    gate_log = self._run_gate(step)
+                    gate_log = self._run_gate(step, ticker=runtime_vars.get("ticker"))
                     if gate_log and not gate_log.get("overall_pass", True):
                         step_log.status = "gate_failed"
                 return step.id, step_log, stdout, gate_log, concurrency
@@ -790,7 +790,7 @@ class PipelineRunner:
             if var_name not in user_vars:
                 runtime_vars[var_name] = str(data[json_key])
 
-    def _run_gate(self, step: PipelineStep) -> dict | None:
+    def _run_gate(self, step: PipelineStep, ticker: str | None = None) -> dict | None:
         if not step.gates:
             return None
 
@@ -806,6 +806,8 @@ class PipelineRunner:
             f"--data-dir {step.output_dir} "
             f"--output {output_path}"
         )
+        if ticker:
+            cmd += f" --ticker {ticker}"
 
         try:
             result = subprocess.run(

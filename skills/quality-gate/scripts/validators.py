@@ -940,13 +940,25 @@ def validate_step_type_consistency(
 def run_all_gates(
     gates_config: list[dict],
     data_dir: Path,
+    *,
+    ticker: str | None = None,
+    ticker_overrides: dict[str, dict] | None = None,
 ) -> GateResults:
     """Execute all gates defined in the configuration.
 
     Each gate dict has: {"id": str, "type": str, "params": dict}
+
+    Args:
+        ticker: Ticker code for per-ticker severity overrides.
+        ticker_overrides: Mapping of ticker -> {gate_id: {severity: ...}}.
     """
     financials = load_financials(data_dir)
     periods = extract_periods(financials) if financials else []
+
+    # Build per-gate override lookup for the given ticker
+    _gate_overrides: dict[str, dict] = {}
+    if ticker and ticker_overrides and ticker in ticker_overrides:
+        _gate_overrides = ticker_overrides[ticker]
 
     results: list[dict] = []
 
@@ -954,6 +966,10 @@ def run_all_gates(
         gate_id = gate["id"]
         gate_type = gate["type"]
         params = gate.get("params", {})
+
+        # Apply per-ticker severity override if present
+        if gate_id in _gate_overrides:
+            gate = {**gate, **_gate_overrides[gate_id]}
 
         if gate_type == "null_rate":
             r = validate_null_rate(periods, threshold=params.get("threshold", 0.5))

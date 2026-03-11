@@ -343,3 +343,94 @@ def test_validate_subcommand(tmp_path: Path) -> None:
         capture_output=True, text=True,
     )
     assert result.returncode == 1
+
+
+# ---------------------------------------------------------------------------
+# test_run_gate_passes_ticker
+# ---------------------------------------------------------------------------
+
+def test_run_gate_passes_ticker(tmp_path: Path) -> None:
+    """_run_gate appends --ticker when ticker is in runtime_vars."""
+    gate_file = tmp_path / "gates.yaml"
+    gate_file.write_text("gates: []")
+
+    steps = [
+        {
+            "id": "gated",
+            "skill": "s",
+            "command": "echo gated",
+            "output_dir": str(tmp_path / "out"),
+            "gates": str(gate_file),
+        },
+    ]
+    yaml_path = _write_pipeline_yaml(tmp_path, steps)
+    config = PipelineConfig.load(yaml_path)
+
+    step_result = MagicMock()
+    step_result.returncode = 0
+    step_result.stdout = ""
+    step_result.stderr = ""
+
+    gate_result_data = {"overall_pass": True, "gates_file": str(gate_file)}
+    gate_json_path = tmp_path / "gated_gate_results.json"
+
+    captured_cmds: list[str] = []
+
+    def mock_subprocess_run(cmd, **kwargs):
+        captured_cmds.append(cmd)
+        if "quality-gate" in cmd:
+            gate_json_path.write_text(json.dumps(gate_result_data))
+        return step_result
+
+    with patch("pipeline.subprocess.run", side_effect=mock_subprocess_run):
+        runner = PipelineRunner(working_dir=tmp_path)
+        log = runner.run(config, {"ticker": "2780"})
+
+    assert log["status"] == "completed"
+    # Find the gate command and verify --ticker was passed
+    gate_cmds = [c for c in captured_cmds if "quality-gate" in c]
+    assert len(gate_cmds) == 1
+    assert "--ticker 2780" in gate_cmds[0]
+
+
+def test_run_gate_no_ticker_when_absent(tmp_path: Path) -> None:
+    """_run_gate does not append --ticker when ticker is not in vars."""
+    gate_file = tmp_path / "gates.yaml"
+    gate_file.write_text("gates: []")
+
+    steps = [
+        {
+            "id": "gated",
+            "skill": "s",
+            "command": "echo gated",
+            "output_dir": str(tmp_path / "out"),
+            "gates": str(gate_file),
+        },
+    ]
+    yaml_path = _write_pipeline_yaml(tmp_path, steps)
+    config = PipelineConfig.load(yaml_path)
+
+    step_result = MagicMock()
+    step_result.returncode = 0
+    step_result.stdout = ""
+    step_result.stderr = ""
+
+    gate_result_data = {"overall_pass": True, "gates_file": str(gate_file)}
+    gate_json_path = tmp_path / "gated_gate_results.json"
+
+    captured_cmds: list[str] = []
+
+    def mock_subprocess_run(cmd, **kwargs):
+        captured_cmds.append(cmd)
+        if "quality-gate" in cmd:
+            gate_json_path.write_text(json.dumps(gate_result_data))
+        return step_result
+
+    with patch("pipeline.subprocess.run", side_effect=mock_subprocess_run):
+        runner = PipelineRunner(working_dir=tmp_path)
+        log = runner.run(config, {})
+
+    assert log["status"] == "completed"
+    gate_cmds = [c for c in captured_cmds if "quality-gate" in c]
+    assert len(gate_cmds) == 1
+    assert "--ticker" not in gate_cmds[0]

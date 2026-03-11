@@ -29,6 +29,21 @@
 
 ## Reviewer stall recovery (mandatory, Senior)
 
-- After notifying Reviewer, Senior performs a single verification read of the expected output YAML (no polling loop).
-- If output remains `null` and Reviewer gave only an acknowledgement, Senior sends a corrective message with explicit output contract (`verdict/comments/suggested_changes`), concise-output limits, and `./templates/reviewer_finalize.sh` usage.
-- If still unresolved, Senior logs an incident in `dashboard.md` (`Action Required`) and escalates to Manager.
+### タイムアウトフォールバックフロー
+Senior の `reviewer_timeout_seconds`（120秒、instructions/senior.md で定義）に基づく3段階リカバリ:
+
+1. **120秒後: verification read** — Reviewer 通知から120秒経過後、応答 YAML を1回読む（no polling loop）。
+2. **応答 null または acknowledgement-only → corrective message** — 応答が `null` または acknowledgement-only の場合、corrective message を送信。
+   - 明示する内容: `verdict/comments/suggested_changes` の出力形式、簡潔な出力制限、`./templates/reviewer_finalize.sh` の使用。
+3. **さらに120秒後: Senior 簡易レビュー** — 応答 YAML がまだ `null` または acknowledgement-only の場合、Senior 自身が簡易レビューを実施。
+   - 簡易レビューは `verdict/comments/suggested_changes` の出力形式を維持する。
+   - Plan review: `queue/review/reviewer_to_senior.yaml` に書き込む。
+   - Deliverable review: `queue/review/reviewer_to_junior.yaml` に書き込む。
+   - `comments` に「Senior 簡易レビュー（Reviewer タイムアウト）」と明記する。
+   - Manager へのエスカレーションは不要（Senior が自律的に解決する）。
+
+### 遅延応答の競合解決ルール
+- Senior 簡易レビュー実行後に Reviewer の遅延応答が到着した場合 → **Senior 簡易レビューの verdict を優先**する。
+- 遅延した Reviewer 応答は無視する（Junior への二重指示防止）。
+- `dashboard.md` の `Action Required` に「Reviewer 遅延応答検知」ログを記録する。
+- 次回以降のレビューサイクルは通常フロー（Reviewer 優先）に復帰する。

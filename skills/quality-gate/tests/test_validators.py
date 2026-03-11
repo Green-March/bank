@@ -1107,3 +1107,90 @@ class TestValuationReasonablenessRunAllGates:
         result = run_all_gates(gates_config, tmp_path)
         assert result.overall_pass is True
         assert len(result.warnings) == 0
+
+
+class TestTickerOverrides:
+    """Tests for per-ticker severity override in run_all_gates."""
+
+    def _write_dcf(self, tmp_path, data):
+        with (tmp_path / "dcf.json").open("w") as f:
+            json.dump(data, f)
+
+    def test_ticker_override_applies_warn(self, tmp_path):
+        """ticker='2780' overrides valuation_range severity from error to warn."""
+        self._write_dcf(tmp_path, {"enterprise_value": -100, "equity_value": -50, "assumptions": {}})
+        gates_config = [{
+            "id": "valuation_range",
+            "type": "json_file_value_range",
+            "severity": "error",
+            "params": {
+                "file": "dcf.json",
+                "rules": {"enterprise_value": {"min": 0}, "equity_value": {"min": 0}},
+            },
+        }]
+        ticker_overrides = {
+            "2780": {
+                "valuation_range": {"severity": "warn"},
+            },
+        }
+        result = run_all_gates(gates_config, tmp_path, ticker="2780", ticker_overrides=ticker_overrides)
+        # Violations exist but severity is warn, so overall_pass is True
+        assert result.overall_pass is True
+        assert "valuation_range" in result.warnings
+
+    def test_ticker_not_in_overrides_uses_default(self, tmp_path):
+        """ticker='9999' (not in overrides) keeps default severity=error."""
+        self._write_dcf(tmp_path, {"enterprise_value": -100, "equity_value": -50, "assumptions": {}})
+        gates_config = [{
+            "id": "valuation_range",
+            "type": "json_file_value_range",
+            "severity": "error",
+            "params": {
+                "file": "dcf.json",
+                "rules": {"enterprise_value": {"min": 0}, "equity_value": {"min": 0}},
+            },
+        }]
+        ticker_overrides = {
+            "2780": {
+                "valuation_range": {"severity": "warn"},
+            },
+        }
+        result = run_all_gates(gates_config, tmp_path, ticker="9999", ticker_overrides=ticker_overrides)
+        assert result.overall_pass is False
+        assert "valuation_range" not in result.warnings
+
+    def test_ticker_none_no_override(self, tmp_path):
+        """ticker=None means no overrides applied (default behavior)."""
+        self._write_dcf(tmp_path, {"enterprise_value": -100, "equity_value": -50, "assumptions": {}})
+        gates_config = [{
+            "id": "valuation_range",
+            "type": "json_file_value_range",
+            "severity": "error",
+            "params": {
+                "file": "dcf.json",
+                "rules": {"enterprise_value": {"min": 0}, "equity_value": {"min": 0}},
+            },
+        }]
+        ticker_overrides = {
+            "2780": {
+                "valuation_range": {"severity": "warn"},
+            },
+        }
+        result = run_all_gates(gates_config, tmp_path, ticker=None, ticker_overrides=ticker_overrides)
+        assert result.overall_pass is False
+        assert "valuation_range" not in result.warnings
+
+    def test_ticker_override_no_overrides_dict(self, tmp_path):
+        """ticker specified but ticker_overrides is None → no crash, default behavior."""
+        self._write_dcf(tmp_path, {"enterprise_value": 100, "equity_value": 50, "assumptions": {}})
+        gates_config = [{
+            "id": "valuation_range",
+            "type": "json_file_value_range",
+            "severity": "error",
+            "params": {
+                "file": "dcf.json",
+                "rules": {"enterprise_value": {"min": 0}, "equity_value": {"min": 0}},
+            },
+        }]
+        result = run_all_gates(gates_config, tmp_path, ticker="2780", ticker_overrides=None)
+        assert result.overall_pass is True

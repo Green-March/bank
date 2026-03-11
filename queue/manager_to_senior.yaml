@@ -1,44 +1,47 @@
 queue:
-  - request_id: "req_070"
-    objective: "regression.py に --full-rerun モードを追加。ticker のみ指定でフルパイプライン再実行を可能にし、resolve_result.json がないレガシー銘柄 (2780/7685/9743) もスキップせず処理できるようにする"
+  - request_id: "req_073"
+    objective: "Reviewer タイムアウト自動フォールバック — Senior が Reviewer 通知後2分経過しても応答 YAML が null の場合、corrective message を送信。さらに2分経過しても null なら Senior 自身が簡易レビューを実施するフローを instructions/senior.md に追加する。Manager 手動承認ボトルネックを解消する。"
     ticker: null
     universe: null
-    analysis_type: "feature_development"
+    analysis_type: "process_improvement"
     timeframe: null
-    output_format: ["test"]
+    output_format: ["md"]
     priority: "high"
-    due_date: "2026-03-10"
+    due_date: "2026-03-11"
     constraints:
-      - "既存の regression.py dry-run / 通常モードに影響を与えない"
-      - "resolve_result.json がない銘柄でも ticker から resolve ステップを含むフル再実行が走ること"
-      - "テストを追加すること"
+      - "instructions/senior.md のレビューフロー該当箇所を修正"
+      - "既存の review-flow.md ルールとの整合性を保つ"
+      - "タイムアウト値は設定可能にする（デフォルト2分）"
+      - "簡易レビューでも verdict/comments/suggested_changes の出力形式を維持"
+      - "テスト不要（プロトコル文書の修正のみ）"
 
-  - request_id: "req_071"
-    objective: "valuation_reasonableness ゲートにバリュエーション閾値の業種別プロファイル (thresholds_profile) を追加。growth/value/financial/default の4プロファイルで閾値を切り替え可能にする"
+  - request_id: "req_074"
+    objective: "銘柄別 severity オーバーライド — quality-gate スキルに ticker 別 overrides セクションを追加する。gates_valuation.yaml の valuation_range を severity:error に原状復帰し、2780 など特定銘柄のみ severity:warn にオーバーライドできるようにする。"
     ticker: null
     universe: null
-    analysis_type: "feature_development"
+    analysis_type: "skill_enhancement"
     timeframe: null
-    output_format: ["test"]
-    priority: "medium"
-    due_date: "2026-03-10"
+    output_format: ["md"]
+    priority: "high"
+    due_date: "2026-03-11"
     constraints:
-      - "デフォルトプロファイルは現行閾値 (PER 0-50, PBR 0-5.0, EV-EBITDA 0-40) を維持"
-      - "growth プロファイルは PER/EV-EBITDA の上限を緩和"
-      - "financial プロファイルは PBR の上限を緩和"
-      - "YAML で profile 指定可能にすること"
-      - "テストを追加すること"
+      - "quality-gate スキルの gates YAML に ticker_overrides セクションを追加"
+      - "gates_valuation.yaml の valuation_range を severity:error に戻す"
+      - "2780 のみ valuation_range を severity:warn にオーバーライド設定"
+      - "既存テストが壊れないこと"
+      - "新規テストを追加（オーバーライド適用/未適用/不明ticker）"
 
-  - request_id: "req_072"
-    objective: "レガシー銘柄 (2780 コメ兵HD, 7685 BuySell Technologies, 9743 丹青社) をフルパイプラインで再実行し、最新の13ステップパイプラインで統一された成果物を生成する"
+  - request_id: "req_075"
+    objective: "regression.py --full-rerun 実データ検証 — S45 で実装した --full-rerun モードを使って、レガシー3銘柄 (2780, 7685, 9743) を regression.py 経由で一括再実行し、動作を実証する。"
     ticker: "2780,7685,9743"
     universe: null
-    analysis_type: "full_pipeline_rerun"
-    timeframe: "5y"
+    analysis_type: "regression_test"
+    timeframe: null
     output_format: ["md"]
     priority: "medium"
-    due_date: "2026-03-10"
+    due_date: "2026-03-11"
     constraints:
-      - "req_070 の --full-rerun モード完成後に実行すること"
-      - "全13ステップが成功し、PER/PBR/EV-EBITDA が non-null であること"
-      - "regression.py で一括実行が望ましい"
+      - "python regression.py --full-rerun --tickers 2780 7685 9743 で実行すること"
+      - "全銘柄で13ステップ全成功を確認"
+      - "実行前後の出力 diff を記録"
+      - "req_074 の gates_valuation.yaml 原状復帰が先に完了していること（依存関係あり）"

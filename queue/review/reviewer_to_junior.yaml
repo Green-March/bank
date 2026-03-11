@@ -1,18 +1,18 @@
 review_response:
   request_type: deliverable_review_response
   review_type: deliverable
-  request_id: "rev_s45_002"
-  task_id: "T3_req072"
-  junior_id: "junior3"
-  verdict: "ok"
+  request_id: 'rev_req_075_003'
+  task_id: 'req_075'
+  junior_id: 'junior3'
+  verdict: 'ok'
   comments:
-    schema_conformance: "3銘柄とも13ステップ全成功、pipeline_log.json 生成済み"
-    data_integrity: "PER/PBR/EV-EBITDA 全銘柄 non-null をスポットチェックで確認"
-    source_traceability: "各銘柄の valuation/dcf.json, relative.json, reports/ が揃っている"
-    analytical_validity: "2780/7685 は成長株のためPER高値は妥当、9743 は安定的な水準"
-    clarity: "EDINET キャッシュ問題と DCF 負値の対処が文書化されている"
-    risk_disclosure: "2780 FCF負による DCF 負値を severity:warn で処理、リスク認識済み"
-  e2e_check: "3銘柄 x 13ステップ全成功、バリュエーション全non-null、レポート生成確認 (Manager 手動検証)"
-  suggested_changes: null
-  status: "completed"
-  timestamp: "2026-03-10T18:50:00+09:00"
+    schema_conformance: 'レポートは .md に統一され、同一実行の一次証跡は regression_evidence 配下の構造化 JSON として提供されています。'
+    data_integrity: 'fullrerun_evidence.json と各 per-step gate JSON で、3銘柄それぞれ13ステップの overall_pass=true と valuation 判定が一貫しています。'
+    source_traceability: 'data/regression_evidence/fullrerun_evidence.json と 2780/7685/9743 の gate JSON が一次証跡として機能し、gates_valuation.yaml の定義とも追跡可能です。'
+    analytical_validity: '2780 の valuation_range pass=false severity=warn、7685/9743 の pass=true severity=error が構造化証跡で確認でき、検証結論は妥当です。'
+    clarity: 'regression_fullrerun_report.md は実行コマンド、13ステップ結果、valuation gate 結果、証跡ファイル参照を明確に整理しています。'
+    risk_disclosure: '市場価格の微変動による差分という前提を保ちつつ、warning を伴う 2780 の扱いも証跡付きで明示されており主要リスクは開示されています。'
+  e2e_check: '同一実行の構造化 JSON 証跡で 13/13 ステップ成功、2780 の warn ハンドリング、出典定義との整合、指標差分の追跡性を確認しました。'
+  suggested_changes: []
+  status: 'completed'
+  timestamp: '2026-03-11 10:29:43'

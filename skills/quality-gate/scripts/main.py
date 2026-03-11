@@ -42,6 +42,12 @@ def main() -> int:
         default=None,
         help="Output path for gate_results.json (default: stdout).",
     )
+    parser.add_argument(
+        "--ticker",
+        type=str,
+        default=None,
+        help="Ticker code for per-ticker severity overrides.",
+    )
     args = parser.parse_args()
 
     gates_path = Path(args.gates)
@@ -62,7 +68,8 @@ def main() -> int:
         print("Error: no gates defined in config", file=sys.stderr)
         return 1
 
-    results = run_all_gates(gates_list, data_dir)
+    ticker_overrides = config.get("ticker_overrides", {})
+    results = run_all_gates(gates_list, data_dir, ticker=args.ticker, ticker_overrides=ticker_overrides)
 
     output = {
         "timestamp": datetime.now(UTC).isoformat(),

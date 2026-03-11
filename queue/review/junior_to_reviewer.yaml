@@ -1,43 +1,49 @@
 review_request:
   request_type: deliverable_review
   review_type: deliverable
-  request_id: "rev_s45_002"
-  task_id: "T3_req072"
-  junior_id: "junior3"
-  status: pending_review
-  timestamp: "2026-03-10T18:45:00+09:00"
+  request_id: rev_req_075_003
+  task_id: req_075
+  junior_id: junior3
+  status: pending
+  timestamp: "2026-03-11T11:35:00+09:00"
   payload:
-    summary: |
-      レガシー銘柄3銘柄のフルパイプライン13ステップ再実行完了。
-      - 9743 (丹青社): 13/13成功
-      - 2780 (コメ兵HD): 13/13成功
-      - 7685 (BuySell Technologies): 13/13成功
-      PER/PBR/EV-EBITDA 全銘柄 non-null。
+    summary: "regression.py --full-rerun 実データ検証（R3: 構造化JSON証跡を regression_evidence/ に保存、pipeline_log依存排除、7685 severity証跡差替え）"
     outputs:
-      - "data/2780/reports/2780_report.md"
-      - "data/2780/valuation/dcf.json"
-      - "data/2780/valuation/relative.json"
-      - "data/7685/reports/7685_report.md"
-      - "data/7685/valuation/dcf.json"
-      - "data/7685/valuation/relative.json"
-      - "data/9743/reports/9743_report.md"
-      - "data/9743/valuation/dcf.json"
-      - "data/9743/valuation/relative.json"
+      - "data/regression_fullrerun_report.md"
+      - "data/regression_evidence/fullrerun_evidence.json"
+      - "data/regression_evidence/2780_gate_*.json (13 files)"
+      - "data/regression_evidence/7685_gate_*.json (13 files)"
+      - "data/regression_evidence/9743_gate_*.json (13 files)"
     validation:
-      - "2780: 13/13 steps, PER=84.05, PBR=1.81, EV-EBITDA=32.44"
-      - "7685: 13/13 steps, PER=74.29, PBR=11.27, EV-EBITDA=42.78"
-      - "9743: 13/13 steps, PER=19.60, PBR=2.33, EV-EBITDA=14.76"
-    caveats:
-      - "2780 DCF値が負(FCF負) — severity:warn でパイプライン非停止化"
-      - "EDINET API リダイレクトエラー — 手動エントリ追加で対処"
+      - "全3銘柄 completed (failed=0, skipped=0)"
+      - "regression.py --full-rerun 経由で実行"
+      - "構造化ゲートチェック JSON で 13/13 ステップ全 overall_pass=true を確認"
+      - "2780: valuation_range pass=false, severity=warn (ticker_overrides), overall_pass=true"
+      - "7685: valuation_range pass=true, severity=error (default), overall_pass=true"
+      - "9743: valuation_range pass=true, severity=error (default), overall_pass=true"
+      - "7685 severity 証跡: gates_valuation.yaml L27 severity=error + 7685_gate_valuation.json severity=error 一致"
+    evidence_files:
+      - "data/regression_evidence/fullrerun_evidence.json"
+      - "data/regression_evidence/2780_gate_valuation.json"
+      - "data/regression_evidence/7685_gate_valuation.json"
+      - "data/regression_evidence/9743_gate_valuation.json"
+      - "skills/quality-gate/references/gates_valuation.yaml"
+    quality_criteria:
+      - "全3銘柄で13ステップ全成功"
+      - "regression.py 経由での実行であること"
+      - "実行前後の diff が記録されている"
+      - "valuation ゲートが 2780 のみ severity:warn で通過"
+      - "レポート形式とファイル拡張子が一致（.md）"
+      - "一次証跡が同一実行の構造化 JSON で提供されている"
+      - "7685 の severity=error が gates_valuation.yaml 定義と実行ログの両方で確認可能"
+    revision_history:
+      - "R1→R2: レポートを .json→.md に改名、pipeline step/gate results/evidence files セクション追加"
+      - "R2→R3: full-rerun 直後の構造化 JSON 証跡を regression_evidence/ に保存、pipeline_log 依存排除、7685 severity 証跡差替え"
     e2e_check:
-      - "3銘柄 x 13ステップ = 全成功"
-      - "バリュエーション指標 全non-null"
-      - "レポート .md/.html 全銘柄生成済み"
-    acceptance_criteria:
-      - "3銘柄 x 13ステップ全成功"
-      - "PER/PBR/EV-EBITDA 全銘柄 non-null"
-      - "レポート .md 全銘柄生成"
+      - "ステップ間データ整合性: 構造化 JSON で 13/13 ステップ全 overall_pass=true"
+      - "欠損伝播: 2780 DCF負値が severity:warn で適切にハンドリング"
+      - "source_attribution 一貫性: 同一実行の regression_evidence/ JSON が一次証跡"
+      - "数値精度: PER/PBR/EV-EBITDA が前回実行と同水準（市場価格微変動のみ）"
 review_followup:
   request_id: null
   task_id: null

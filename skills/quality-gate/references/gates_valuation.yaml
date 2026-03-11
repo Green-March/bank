@@ -24,7 +24,7 @@ gates:
 
   - id: valuation_range
     type: json_file_value_range
-    severity: warn
+    severity: error
     params:
       file: "dcf.json"
       rules:
@@ -38,3 +38,8 @@ gates:
     params:
       mapping_id: valuate_to_report
       file: dcf.json
+
+ticker_overrides:
+  "2780":
+    valuation_range:
+      severity: warn
